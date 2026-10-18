@@ -9,13 +9,13 @@ const ROLE_LABEL = {
   cashier: 'Cashier',
 };
 /** Steps already built. Anything later is shown with a "Soon" tag, never as a dead link. */
-export const CURRENT_STEP = 1;
+export const CURRENT_STEP = 2;
 /**
  * App shell: role-based sidebar on desktop, top bar + drawer on phones (the Principal approves
  * from a phone, so the mobile layout is a first-class path, not an afterthought).
  */
 export function AppShell() {
-  const { role, setDevRole } = useAuth();
+  const { user, role, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   if (!role) return null;
   const items = navForRole(role);
@@ -34,8 +34,11 @@ export function AppShell() {
   );
   const account = (
     <div className="mt-auto flex flex-col gap-2 border-t border-white/15 pt-4 text-sm text-white">
-      <p className="px-1">{ROLE_LABEL[role]}</p>
-      <Button variant="secondary" onClick={() => setDevRole(null)}>
+      <div className="px-1">
+        <p className="font-medium">{user.name}</p>
+        <p className="text-xs text-white/60">{ROLE_LABEL[role]}</p>
+      </div>
+      <Button variant="secondary" onClick={() => void signOut()}>
         Sign out
       </Button>
     </div>

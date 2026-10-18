@@ -1,13 +1,28 @@
 import { createApp } from './app.js';
 import { loadEnv } from './config/env.js';
+import { initFirebaseAuth } from './auth/firebase.js';
+import { createTokenVerifier } from './auth/tokenVerifier.js';
 import { connectDb, disconnectDb } from './db.js';
+import { makeAuditStore, makeUserStore } from './services/stores.js';
 import { createLogger } from './utils/logger.js';
 async function main() {
   const env = loadEnv(); // throws with a readable list if config is bad
   const logger = createLogger(env.LOG_LEVEL);
   await connectDb(env.MONGODB_URI, env.MONGODB_DB_NAME);
   logger.info('MongoDB connected');
-  const app = createApp(env, logger);
+  const firebaseAuth = initFirebaseAuth(env);
+  if (!firebaseAuth) {
+    logger.warn('Firebase is not configured: sign-in endpoints answer 503 until it is.');
+  }
+  const auth = firebaseAuth
+    ? {
+        verifyToken: createTokenVerifier(firebaseAuth),
+        userStore: makeUserStore(),
+        auditStore: makeAuditStore(),
+      }
+    : undefined;
+
+  const app = createApp(env, logger, auth);
   const server = app.listen(env.PORT, () => logger.info(`API listening on port ${env.PORT}`));
   const shutdown = (signal) => {
     logger.info(`${signal} received, shutting down`);

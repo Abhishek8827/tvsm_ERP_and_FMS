@@ -8,7 +8,7 @@ import { Badge, Card, ErrorState, Spinner } from '../components/ui';
  * Real dashboards (collection, dues, approvals) arrive with their steps.
  */
 export function Dashboard() {
-  const { role } = useAuth();
+  const { user } = useAuth();
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => api('/api/health'),
@@ -19,7 +19,9 @@ export function Dashboard() {
     <div className="flex max-w-3xl flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-ink-muted">Signed in as {role}.</p>
+        <p className="text-sm text-ink-muted">
+          Signed in as {user.name} ({user.role}).
+        </p>
       </div>
       <Card title="System status" subtitle="Live from the API">
         {health.isPending && <Spinner label="Checking the server" />}

@@ -1,18 +1,47 @@
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { navForRole } from '@erp/shared';
 import { useAuth } from './auth/AuthContext';
+import { ErrorState, Spinner } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
 import { Dashboard } from './pages/Dashboard';
-import { SignedOut } from './pages/SignedOut';
+import { Login } from './pages/Login';
+
+function FullPage({ children }) {
+  return <div className="mx-auto flex min-h-full max-w-md items-center p-6">{children}</div>;
+}
+
 /**
- * Frontend guards are UX only; backend RBAC (Step 2) is the real enforcement (TDD 12.2).
- * Routes are generated from the role's own navigation, so a role cannot even reach another
- * role's screen by typing the URL - it falls through to "/".
+ * Frontend guards are UX only; the API enforces roles on every request (Step 2 tests prove it).
+ * Routes come from the signed-in role's own navigation, so typing another role's URL falls
+ * through to "/".
  */
 export function App() {
-  const { role } = useAuth();
-  if (!role) return <SignedOut />;
+  const { status, role, loadError, retry } = useAuth();
+
+  if (status === 'unconfigured') {
+    return (
+      <FullPage>
+        <ErrorState message="Sign-in is not configured. Add the VITE_FIREBASE_* values to apps/web/.env.local and restart (see README)." />
+      </FullPage>
+    );
+  }
+  if (status === 'loading') {
+    return (
+      <FullPage>
+        <Spinner label="Checking sign-in" />
+      </FullPage>
+    );
+  }
+  if (status === 'error') {
+    return (
+      <FullPage>
+        <ErrorState message={loadError} onRetry={retry} />
+      </FullPage>
+    );
+  }
+  if (status === 'signedOut') return <Login />;
+
   const items = navForRole(role).filter((i) => i.path !== '/');
   return (
     <Routes>

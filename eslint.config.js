@@ -25,4 +25,9 @@ export default [
       'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
+  {
+    // Command-line scripts talk to the person running them, so console output is the point.
+    files: ['**/scripts/**/*.js'],
+    rules: { 'no-console': 'off' },
+  },
 ];

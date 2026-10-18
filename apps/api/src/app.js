@@ -5,8 +5,15 @@ import helmet from 'helmet';
 import { pinoHttp } from 'pino-http';
 import { createErrorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { requestId } from './middleware/requestId.js';
+import { createAuthenticate } from './middleware/authenticate.js';
+import { authRouter } from './routes/auth.js';
 import { healthRouter } from './routes/health.js';
-export function createApp(env, logger) {
+import { usersRouter } from './routes/users.js';
+/**
+ * `auth` = { verifyToken, userStore, auditStore } . When it is missing (Firebase not configured)
+ * protected routes answer 503 AUTH_NOT_CONFIGURED instead of pretending to work.
+ */
+export function createApp(env, logger, auth) {
   const app = express();
   // Railway/Vercel sit behind a proxy; needed so rate limiting sees the real client IP.
   app.set('trust proxy', 1);
@@ -34,6 +41,23 @@ export function createApp(env, logger) {
     rateLimit({ windowMs: 60_000, limit: 300, standardHeaders: 'draft-7', legacyHeaders: false }),
   );
   app.use('/api', healthRouter());
+
+  if (auth) {
+    const deps = { ...auth, logger, tenantId: env.DEFAULT_TENANT_ID };
+    const authenticate = createAuthenticate(deps);
+    app.use('/api', authRouter(deps, authenticate));
+    app.use('/api', usersRouter(deps, authenticate));
+  } else {
+    app.use(['/api/auth', '/api/users'], (req, res) => {
+      res.status(503).json({
+        error: {
+          code: 'AUTH_NOT_CONFIGURED',
+          message: 'Sign-in is not configured on the server yet.',
+          requestId: req.id,
+        },
+      });
+    });
+  }
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger, env.NODE_ENV === 'production'));
   return app;

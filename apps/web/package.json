@@ -11,6 +11,8 @@
   },
   "dependencies": {
     "@erp/shared": "workspace:*",
+    "@firebase/app": "^0.16.3",
+    "@firebase/auth": "^1.13.7",
     "@tanstack/react-query": "^5.104.4",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",

@@ -60,6 +60,18 @@ Any later change is appended with its date. Nothing here was invented by the dev
 - **[dev decision]** Step 1 sign-in is a development-only role picker, replaced by Firebase login in Step 2.
 - **[dev decision]** Vite 5 (not 6) to match the vitest 2 toolchain.
 
+## 2026-10-18 - Step 2 decisions
+
+- Language: **plain JavaScript (JSX)**, not TypeScript - the owner is new to TypeScript. MERN otherwise unchanged. Zod validation kept.
+- Always use the latest dependency versions (Express 5, Mongoose 9, React 19, Vite 8, Tailwind 4, Zod 4).
+- Database: MongoDB Atlas directly (no Docker). Code goes to GitHub; owner pulls and runs locally.
+- Idle logout after **10 minutes** of inactivity (shared counter PCs).
+- 4 accounts: 1 Admin, 1 Principal, 2 Cashier (same person, two accounts for faster entry). Each has one role.
+- **[dev decision]** The database role is the source of truth; the Firebase claim must match it or the token is treated as stale (401, client refreshes once).
+- **[dev decision]** Verified tokens are cached for 60 s (checkRevoked on) so a disabled account is cut off within a minute without a Firebase round-trip on every request.
+- **[dev decision]** Failed passwords are logged by Firebase, not by our server (they never reach it). Successful login, logout and idle logout are audited.
+- **[dev decision]** Passwords for seed accounts come only from environment variables, never from code or chat.
+
 ## Open items (blocking later steps)
 
 See the Step 1 report for the list with the step each one blocks.

@@ -9,7 +9,7 @@ const ROLE_LABEL = {
   cashier: 'Cashier',
 };
 /** Steps already built. Anything later is shown with a "Soon" tag, never as a dead link. */
-export const CURRENT_STEP = 2;
+export const CURRENT_STEP = 3;
 /**
  * App shell: role-based sidebar on desktop, top bar + drawer on phones (the Principal approves
  * from a phone, so the mobile layout is a first-class path, not an afterthought).
@@ -46,7 +46,10 @@ export function AppShell() {
   return (
     <div className="flex min-h-full flex-col md:flex-row">
       <header className="flex items-center justify-between bg-sidebar px-4 py-3 text-white md:hidden">
-        <span className="font-semibold">TVSM School ERP</span>
+        <span className="flex items-center gap-2 font-semibold">
+          <img src="/logo.jpg" alt="" className="h-8 w-auto rounded bg-white p-0.5" />
+          TVSM School ERP
+        </span>
         <button
           type="button"
           aria-expanded={open}
@@ -66,9 +69,16 @@ export function AppShell() {
       )}
 
       <aside className="hidden w-64 shrink-0 flex-col gap-6 bg-sidebar p-4 md:flex">
-        <div>
-          <p className="text-lg font-semibold text-white">TVSM School</p>
-          <p className="text-xs text-white/60">School ERP</p>
+        <div className="flex items-center gap-3">
+          <img
+            src="/logo.jpg"
+            alt="TVSM School logo"
+            className="h-14 w-auto rounded-lg bg-white p-1"
+          />
+          <div>
+            <p className="text-lg font-semibold text-white">TVSM School</p>
+            <p className="text-xs text-white/60">School ERP</p>
+          </div>
         </div>
         {nav}
         {account}

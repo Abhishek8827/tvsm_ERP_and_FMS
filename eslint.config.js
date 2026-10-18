@@ -1,17 +1,28 @@
 import js from '@eslint/js';
 import globals from 'globals';
-import tseslint from 'typescript-eslint';
+import react from 'eslint-plugin-react';
+import reactHooks from 'eslint-plugin-react-hooks';
 
-export default tseslint.config(
+export default [
   { ignores: ['**/dist/**', '**/node_modules/**', '**/coverage/**'] },
   js.configs.recommended,
-  ...tseslint.configs.recommended,
   {
-    languageOptions: { globals: { ...globals.node, ...globals.browser } },
+    files: ['**/*.{js,jsx}'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.browser },
+      parserOptions: { ecmaFeatures: { jsx: true } },
+    },
+    plugins: { react, 'react-hooks': reactHooks },
+    settings: { react: { version: 'detect' } },
     rules: {
-      // Rule 16 / self-verification: no stray console.log; use the logger.
+      ...reactHooks.configs.recommended.rules,
+      'react/jsx-uses-vars': 'error',
+      'react/jsx-uses-react': 'off',
+      // No stray console.log; use the logger (rule 16 / self-verification).
       'no-console': ['error', { allow: ['warn', 'error'] }],
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
+      'no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
     },
   },
-);
+];

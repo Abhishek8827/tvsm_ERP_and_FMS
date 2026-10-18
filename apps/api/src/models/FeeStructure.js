@@ -10,25 +10,30 @@ registerGlobalPlugins();
  * paise (rule 1). Fees of a year already billed do not change when the chart is edited later,
  * because charges copy the amount at the time they are posted.
  */
+// Sub-documents live inside the fee chart, so they do not carry their own tenantId
+// (only the top-level document does). `tenantScope: false` stops the global plugin adding it.
+const classFeeSchema = new mongoose.Schema(
+  {
+    classKey: { type: String, enum: CLASS_KEYS, required: true },
+    monthlyTuitionPaise: { type: Number, required: true, min: 0 },
+    admissionPaise: { type: Number, required: true, min: 0 },
+  },
+  { _id: false, tenantScope: false },
+);
+const villageSchema = new mongoose.Schema(
+  {
+    name: { type: String, required: true, trim: true, uppercase: true },
+    monthlyPaise: { type: Number, required: true, min: 0 },
+  },
+  { _id: false, tenantScope: false },
+);
+
 const feeStructureSchema = new mongoose.Schema(
   {
     fy: { type: String, required: true, match: /^\d{4}-\d{2}$/ },
-    classFees: [
-      {
-        _id: false,
-        classKey: { type: String, enum: CLASS_KEYS, required: true },
-        monthlyTuitionPaise: { type: Number, required: true, min: 0 },
-        admissionPaise: { type: Number, required: true, min: 0 },
-      },
-    ],
+    classFees: [classFeeSchema],
     formFeePaise: { type: Number, required: true, min: 0 },
-    villages: [
-      {
-        _id: false,
-        name: { type: String, required: true, trim: true, uppercase: true },
-        monthlyPaise: { type: Number, required: true, min: 0 },
-      },
-    ],
+    villages: [villageSchema],
     dueDay: { type: Number, default: 15 },
     graceDays: { type: Number, default: 10 },
     lateFeePaise: { type: Number, default: 10000 },

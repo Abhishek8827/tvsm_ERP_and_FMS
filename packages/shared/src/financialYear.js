@@ -46,3 +46,12 @@ export function financialYearRange(fy, startMonth = 4) {
   const nextStart = istStartOfDay(`${startYear + 1}-${String(startMonth).padStart(2, '0')}-01`);
   return { start, end: new Date(nextStart.getTime() - 1) };
 }
+
+/** "2026-06-15" + 10 days -> "2026-06-25" (pure calendar arithmetic, no time zones involved). */
+export function addDaysToDateString(dateString, days) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateString);
+  if (!match) throw new Error(`Invalid date string: ${dateString}`);
+  const d = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}

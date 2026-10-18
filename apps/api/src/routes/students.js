@@ -45,7 +45,6 @@ const studentFields = z.object({
   isRTE: z.boolean().default(false),
   usesTransport: z.boolean().default(false),
   village: text().optional(),
-  remark: text(200).optional(),
   status: z.enum(['active', 'inactive']).default('active'),
   inactiveReason: z.enum(['left_with_tc', 'left_without_tc']).nullish(),
 });
@@ -89,7 +88,6 @@ export function shapeStudent(s, role) {
     isRTE: !!s.isRTE,
     usesTransport: !!s.usesTransport,
     village: s.village ?? null,
-    remark: s.remark ?? null,
     status: s.status,
     inactiveReason: s.inactiveReason ?? null,
   };

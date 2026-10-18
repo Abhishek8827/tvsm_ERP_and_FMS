@@ -3,7 +3,12 @@ import { loadEnv } from './config/env.js';
 import { initFirebaseAuth } from './auth/firebase.js';
 import { createTokenVerifier } from './auth/tokenVerifier.js';
 import { connectDb, disconnectDb } from './db.js';
-import { makeAuditStore, makeUserStore } from './services/stores.js';
+import {
+  makeAuditStore,
+  makeFeeStore,
+  makeStudentStore,
+  makeUserStore,
+} from './services/stores.js';
 import { createLogger } from './utils/logger.js';
 async function main() {
   const env = loadEnv(); // throws with a readable list if config is bad
@@ -18,6 +23,8 @@ async function main() {
     ? {
         verifyToken: createTokenVerifier(firebaseAuth),
         userStore: makeUserStore(),
+        studentStore: makeStudentStore(),
+        feeStore: makeFeeStore(),
         auditStore: makeAuditStore(),
       }
     : undefined;

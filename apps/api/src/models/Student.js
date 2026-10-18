@@ -33,10 +33,9 @@ const studentSchema = new mongoose.Schema(
     ifsc: { type: String, trim: true, uppercase: true }, // Admin only
     formNo: { type: String, trim: true },
     isNewAdmission: { type: Boolean, default: false }, // admission fee is charged only if true
-    isRTE: { type: Boolean, default: false },
+    isRTE: { type: Boolean, default: false }, // Excel REMARK = "RTE" means true
     usesTransport: { type: Boolean, default: false },
     village: { type: String, trim: true }, // decides the bus fee
-    remark: { type: String, trim: true },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     // Only when inactive: did the student take a Transfer Certificate?
     inactiveReason: {

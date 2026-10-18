@@ -1,4 +1,5 @@
 import { AuditLog } from '../models/AuditLog.js';
+import { FeeStructure } from '../models/FeeStructure.js';
 import { Student } from '../models/Student.js';
 import { User } from '../models/User.js';
 
@@ -71,6 +72,18 @@ export function makeStudentStore() {
         { tenantId, _id: id },
         { $set: { ...data, ...(data.name ? { nameLower: data.name.toLowerCase() } : {}) } },
         { new: true, runValidators: true },
+      ).lean(),
+  };
+}
+
+export function makeFeeStore() {
+  return {
+    get: (tenantId, fy) => FeeStructure.findOne({ tenantId, fy }).lean(),
+    save: (tenantId, fy, data) =>
+      FeeStructure.findOneAndUpdate(
+        { tenantId, fy },
+        { $set: { ...data, fy } },
+        { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
       ).lean(),
   };
 }

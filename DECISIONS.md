@@ -75,3 +75,13 @@ Any later change is appended with its date. Nothing here was invented by the dev
 ## Open items (blocking later steps)
 
 See the Step 1 report for the list with the step each one blocks.
+
+## 2026-10-18 - Step 3 answers (fees and students)
+
+- Monthly fee due date: **15th of every month**, June to March (10 instalments). Transport follows the same schedule.
+- Admission fee and Form fee: charged **once** (one time in the year), not monthly.
+- Late fee: Rs 100 **once per overdue monthly instalment**, 10-day grace (so an instalment due on the 15th becomes late from the 26th). It does not repeat or compound for the same instalment.
+- Cashier concession: **no limit**, no approval. **[dev decision]** a reason is still mandatory and every concession is audited and listed in the Concession report so the Principal can review.
+- Classes now: Play Group to 10th. Class 11 and 12 (Arts, Commerce, Science) are added later when students are admitted; the 11th fee in the chart (1,800) is kept for then.
+- Receipt number: `FY2026-27/2054` style (4 digits). The next receipt is 2054; from 1 April 2027 it restarts as `FY2027-28/0001`.
+- Student Excel columns supplied: UNIQ. ID, STUDENT'S NAME, FATHER NAME, MOTHER NAME, CLASS, SEC, GENDER, D.O.B, AGE, CONTACT NO., ADDRESS, CATEGOURY, CAST, SAMAGRA, AADHAR, BANK, IFSC, FORM NO., STATUS, TRANSPORT, RTE, INACTIVE STATUS.

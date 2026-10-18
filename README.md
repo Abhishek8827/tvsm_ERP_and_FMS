@@ -10,13 +10,13 @@ You need Node 22.9 or newer, pnpm (`npm i -g pnpm`), a MongoDB Atlas cluster and
 
 1. Atlas > Database > Connect > Drivers > copy the connection string.
 2. Atlas > Network Access > add your current IP address.
-3. Put the string in `apps/api/.env` as `MONGODB_URI` (copy the API block from `.env.example` to `apps/api/.env`).
+3. Put the string in `apps/api/.env` as `MONGODB_URI` (copy `apps/api/.env.example` to `apps/api/.env`).
 
 ### 2. Firebase (free Spark plan is enough)
 
 1. console.firebase.google.com > Add project.
 2. Build > Authentication > Get started > Sign-in method > enable **Email/Password**.
-3. Project settings (gear) > General > Your apps > add a **Web app** > copy the config values into `apps/web/.env.local` (`VITE_FIREBASE_*`).
+3. Project settings (gear) > General > Your apps > add a **Web app** > copy the config values into `apps/web/.env.local` (copy `apps/web/.env.example` first; the file does not exist until you create it).
 4. Project settings > Service accounts > **Generate new private key**. Keep the downloaded JSON file OUT of the repo.
 5. Convert it to base64 and put the result in `apps/api/.env` as `FIREBASE_ADMIN_SA_JSON_B64`, and set `FIREBASE_PROJECT_ID`:
    - Windows PowerShell: `[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\path\key.json"))`
@@ -27,7 +27,7 @@ You need Node 22.9 or newer, pnpm (`npm i -g pnpm`), a MongoDB Atlas cluster and
 Fill the `SEED_*` values in `apps/api/.env` (choose new strong passwords), then:
 
 ```bash
-pnpm install
+pnpm install                      # run again after every git pull
 pnpm --filter @erp/api users:seed
 ```
 

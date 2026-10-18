@@ -5,6 +5,7 @@ import { createTokenVerifier } from './auth/tokenVerifier.js';
 import { connectDb, disconnectDb } from './db.js';
 import {
   makeAuditStore,
+  makeChargeStore,
   makeFeeStore,
   makeStudentStore,
   makeUserStore,
@@ -25,6 +26,7 @@ async function main() {
         userStore: makeUserStore(),
         studentStore: makeStudentStore(),
         feeStore: makeFeeStore(),
+        chargeStore: makeChargeStore(),
         auditStore: makeAuditStore(),
       }
     : undefined;

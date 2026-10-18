@@ -10,6 +10,7 @@ import { authRouter } from './routes/auth.js';
 import { feeStructureRouter } from './routes/feeStructure.js';
 import { healthRouter } from './routes/health.js';
 import { studentsRouter } from './routes/students.js';
+import { ledgerRouter } from './routes/ledger.js';
 import { usersRouter } from './routes/users.js';
 /**
  * `auth` = { verifyToken, userStore, auditStore } . When it is missing (Firebase not configured)
@@ -51,6 +52,7 @@ export function createApp(env, logger, auth) {
     app.use('/api', usersRouter(deps, authenticate));
     app.use('/api', studentsRouter(deps, authenticate));
     app.use('/api', feeStructureRouter(deps, authenticate));
+    app.use('/api', ledgerRouter(deps, authenticate));
   } else {
     app.use(['/api/auth', '/api/users', '/api/students', '/api/fee-structure'], (req, res) => {
       res.status(503).json({

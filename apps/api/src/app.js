@@ -9,6 +9,7 @@ import { createAuthenticate } from './middleware/authenticate.js';
 import { authRouter } from './routes/auth.js';
 import { healthRouter } from './routes/health.js';
 import { usersRouter } from './routes/users.js';
+import { studentsRouter } from './routes/students.js';
 /**
  * `auth` = { verifyToken, userStore, auditStore } . When it is missing (Firebase not configured)
  * protected routes answer 503 AUTH_NOT_CONFIGURED instead of pretending to work.
@@ -47,8 +48,9 @@ export function createApp(env, logger, auth) {
     const authenticate = createAuthenticate(deps);
     app.use('/api', authRouter(deps, authenticate));
     app.use('/api', usersRouter(deps, authenticate));
+    app.use('/api', studentsRouter(deps, authenticate));
   } else {
-    app.use(['/api/auth', '/api/users'], (req, res) => {
+    app.use(['/api/auth', '/api/users', '/api/students'], (req, res) => {
       res.status(503).json({
         error: {
           code: 'AUTH_NOT_CONFIGURED',
@@ -60,5 +62,6 @@ export function createApp(env, logger, auth) {
   }
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger, env.NODE_ENV === 'production'));
+
   return app;
 }

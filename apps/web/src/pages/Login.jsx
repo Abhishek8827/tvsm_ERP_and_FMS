@@ -35,7 +35,11 @@ export function Login() {
   return (
     <div className="grid min-h-full lg:grid-cols-2">
       <aside className="hidden flex-col justify-between bg-[#0c0b0a] p-12 text-white lg:flex">
-        <p className="text-sm tracking-wide text-white/60">TVSM School, Nepanagar</p>
+        <img
+          src="/logo.jpg"
+          alt="TVSM School logo"
+          className="h-28 w-auto self-start rounded-xl bg-white p-2"
+        />
         <div>
           <h1 className="text-4xl font-semibold leading-tight">
             Fees, receipts and accounts, in one place.

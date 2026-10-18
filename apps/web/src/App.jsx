@@ -6,6 +6,9 @@ import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
 import { Dashboard } from './pages/Dashboard';
 import { Login } from './pages/Login';
+import { StudentProfile } from './pages/StudentProfile';
+import { StudentForm } from './pages/StudentForm';
+import { Students } from './pages/Students';
 
 function FullPage({ children }) {
   return <div className="mx-auto flex min-h-full max-w-md items-center p-6">{children}</div>;
@@ -47,9 +50,15 @@ export function App() {
     <Routes>
       <Route element={<AppShell />}>
         <Route index element={<Dashboard />} />
-        {items.map((i) => (
-          <Route key={i.key} path={i.path} element={<ComingSoon />} />
-        ))}
+        {items
+          .filter((i) => i.key !== 'students')
+          .map((i) => (
+            <Route key={i.key} path={i.path} element={<ComingSoon />} />
+          ))}
+        <Route path="/students" element={<Students />} />
+        <Route path="/students/:id" element={<StudentProfile />} />
+        {role === 'admin' && <Route path="/students/new" element={<StudentForm />} />}
+        {role === 'admin' && <Route path="/students/:id/edit" element={<StudentForm />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

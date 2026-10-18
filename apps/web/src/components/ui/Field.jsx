@@ -1,9 +1,15 @@
 import { forwardRef, useId } from 'react';
-function FieldShell({ label, error, hint, id, children }) {
+function FieldShell({ label, error, hint, id, required, children }) {
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium text-ink">
         {label}
+        {required && (
+          <span className="text-danger" aria-hidden>
+            {' '}
+            *
+          </span>
+        )}
       </label>
       {children}
       {error ? (
@@ -26,7 +32,7 @@ export const Input = forwardRef(function Input(
   const auto = useId();
   const fieldId = id ?? auto;
   return (
-    <FieldShell label={label} error={error} hint={hint} id={fieldId}>
+    <FieldShell label={label} error={error} hint={hint} id={fieldId} required={rest.required}>
       <input
         ref={ref}
         id={fieldId}
@@ -45,7 +51,7 @@ export const Select = forwardRef(function Select(
   const auto = useId();
   const fieldId = id ?? auto;
   return (
-    <FieldShell label={label} error={error} id={fieldId}>
+    <FieldShell label={label} error={error} id={fieldId} required={rest.required}>
       <select
         ref={ref}
         id={fieldId}

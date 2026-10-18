@@ -1,4 +1,5 @@
 import { AuditLog } from '../models/AuditLog.js';
+import { Charge } from '../models/Charge.js';
 import { FeeStructure } from '../models/FeeStructure.js';
 import { Student } from '../models/Student.js';
 import { User } from '../models/User.js';
@@ -85,5 +86,28 @@ export function makeFeeStore() {
         { $set: { ...data, fy } },
         { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true },
       ).lean(),
+  };
+}
+
+export function makeChargeStore() {
+  return {
+    listForStudent: (tenantId, studentId, fy) =>
+      Charge.find({ tenantId, studentId, fy }).sort({ dueDate: 1 }).lean(),
+    // Adds only the charges that do not exist yet; returns how many were new.
+    async postMany(tenantId, studentId, fy, charges) {
+      const result = await Charge.bulkWrite(
+        charges.map((c) => ({
+          updateOne: {
+            filter: { tenantId, studentId, fy, head: c.head, period: c.period },
+            update: {
+              $setOnInsert: { tenantId, studentId, fy, ...c, amountPaise: c.amount },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
+      );
+      return result.upsertedCount;
+    },
   };
 }

@@ -32,7 +32,8 @@ export function newIdempotencyKey() {
 const BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 async function send(path, opts, forceRefresh) {
   const headers = { Accept: 'application/json' };
-  if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (opts.file) headers['Content-Type'] = 'application/octet-stream';
+  else if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
   if (tokenProvider) {
     const token = await tokenProvider(forceRefresh);
@@ -42,7 +43,8 @@ async function send(path, opts, forceRefresh) {
     return await fetch(`${BASE}${path}`, {
       method: opts.method ?? 'GET',
       headers,
-      body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+      // `file` = a File chosen by the user, sent as raw bytes (Excel import).
+      body: opts.file ?? (opts.body === undefined ? undefined : JSON.stringify(opts.body)),
       signal: opts.signal,
     });
   } catch (err) {
@@ -64,6 +66,8 @@ export async function api(path, opts = {}) {
       throw new ApiError('SESSION_EXPIRED', 401, 'Your session has expired. Please sign in again.');
     }
   }
+  // `blob` = download a file (e.g. the Excel template) instead of reading JSON.
+  if (opts.blob && res.ok) return res.blob();
   const text = await res.text();
   const data = text ? safeJson(text) : null;
   if (!res.ok) {

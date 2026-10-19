@@ -102,7 +102,7 @@ export const NAV_ITEMS = [
     label: 'Data Import',
     path: '/data-import',
     roles: ['admin'],
-    availableFromStep: 9,
+    availableFromStep: 3,
   },
   {
     key: 'users-settings',

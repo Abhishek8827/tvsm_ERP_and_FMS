@@ -64,6 +64,19 @@ export function makeStudentStore() {
       return { rows, total };
     },
     findById: (tenantId, id) => Student.findOne({ tenantId, _id: id }).lean(),
+    async existingAdmissionNos(tenantId, list) {
+      const found = await Student.find({ tenantId, admissionNo: { $in: list } })
+        .select('admissionNo')
+        .lean();
+      return new Set(found.map((s) => s.admissionNo));
+    },
+    async createMany(tenantId, docs) {
+      const made = await Student.insertMany(
+        docs.map((d) => ({ ...d, tenantId, nameLower: d.name.toLowerCase() })),
+        { ordered: false },
+      );
+      return made.length;
+    },
     async create(tenantId, data) {
       const doc = await Student.create({ ...data, tenantId, nameLower: data.name.toLowerCase() });
       return doc.toObject();

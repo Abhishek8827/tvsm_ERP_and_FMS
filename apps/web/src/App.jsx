@@ -1,10 +1,13 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
 import { navForRole } from '@erp/shared';
 import { useAuth } from './auth/AuthContext';
 import { ErrorState, Spinner } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
 import { Dashboard } from './pages/Dashboard';
+import { ImportStudents } from './pages/ImportStudents';
 import { Login } from './pages/Login';
 import { StudentProfile } from './pages/StudentProfile';
 import { StudentForm } from './pages/StudentForm';
@@ -21,6 +24,17 @@ function FullPage({ children }) {
  */
 export function App() {
   const { status, role, loadError, retry } = useAuth();
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  // After sign-out: forget everything the last person saw (so the next login never shows their
+  // cached data) and go back to the dashboard, so a new login always starts at "/".
+  useEffect(() => {
+    if (status === 'signedOut') {
+      queryClient.clear();
+      navigate('/', { replace: true });
+    }
+  }, [status, queryClient, navigate]);
 
   if (status === 'unconfigured') {
     return (
@@ -51,12 +65,13 @@ export function App() {
       <Route element={<AppShell />}>
         <Route index element={<Dashboard />} />
         {items
-          .filter((i) => i.key !== 'students')
+          .filter((i) => i.key !== 'students' && i.key !== 'data-import')
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
           ))}
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />
+        {role === 'admin' && <Route path="/data-import" element={<ImportStudents />} />}
         {role === 'admin' && <Route path="/students/new" element={<StudentForm />} />}
         {role === 'admin' && <Route path="/students/:id/edit" element={<StudentForm />} />}
         <Route path="*" element={<Navigate to="/" replace />} />

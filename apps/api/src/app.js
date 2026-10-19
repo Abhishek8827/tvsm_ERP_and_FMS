@@ -9,6 +9,7 @@ import { createAuthenticate } from './middleware/authenticate.js';
 import { authRouter } from './routes/auth.js';
 import { feeStructureRouter } from './routes/feeStructure.js';
 import { healthRouter } from './routes/health.js';
+import { studentImportRouter } from './routes/studentImport.js';
 import { studentsRouter } from './routes/students.js';
 import { ledgerRouter } from './routes/ledger.js';
 import { usersRouter } from './routes/users.js';
@@ -50,6 +51,8 @@ export function createApp(env, logger, auth) {
     const authenticate = createAuthenticate(deps);
     app.use('/api', authRouter(deps, authenticate));
     app.use('/api', usersRouter(deps, authenticate));
+    // Import must be mounted first: /students/import-template would otherwise match /students/:id.
+    app.use('/api', studentImportRouter(deps, authenticate));
     app.use('/api', studentsRouter(deps, authenticate));
     app.use('/api', feeStructureRouter(deps, authenticate));
     app.use('/api', ledgerRouter(deps, authenticate));

@@ -27,6 +27,7 @@ export const AUDIT_ACTIONS = [
   'export',
   'role_change',
   'deactivate',
+  'delete',
 ];
 
 const auditSchema = new mongoose.Schema(

@@ -101,7 +101,7 @@ describe('Students list', () => {
     await userEvent.type(within(dialog).getByLabelText('Reason (required)'), 'duplicate entry');
     await userEvent.type(within(dialog).getByLabelText('Type DELETE to confirm'), 'DELETE');
     await userEvent.click(confirm);
-    await screen.findByText('1 students deleted.');
+    await screen.findByText('1 students permanently deleted.');
     const call = api.mock.calls.find((c) => String(c[0]).includes('bulk-delete'));
     expect(call[1].body).toEqual({ ids: ['1'], reason: 'duplicate entry' });
   });

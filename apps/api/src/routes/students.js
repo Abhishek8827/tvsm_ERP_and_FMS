@@ -138,8 +138,10 @@ export function studentsRouter(deps, authenticate) {
     }
   });
 
-  // Admin only. Soft delete: students are hidden, not erased (rule 18). One audit entry per student,
-  // written BEFORE the change so a failed audit stops the delete (critical).
+  // Admin only. PERMANENT delete (Admin decision), so the scholar number becomes free again.
+  // One audit entry per student is written BEFORE anything is removed (critical: if the audit
+  // cannot be saved, nothing is deleted). Step 4 must also refuse to delete a student who has
+  // receipts, because receipts are immutable.
   router.post('/students/bulk-delete', ...write, async (req, res, next) => {
     try {
       const { ids, reason } = bulkDeleteBody.parse(req.body);
@@ -151,21 +153,24 @@ export function studentsRouter(deps, authenticate) {
           deps,
           req,
           {
-            action: 'deactivate',
+            action: 'delete',
             entity: 'student',
             entityId: String(s._id),
-            oldValue: { admissionNo: s.admissionNo, name: s.name, classKey: s.classKey },
-            newValue: { deleted: true },
+            oldValue: {
+              admissionNo: s.admissionNo,
+              name: s.name,
+              classKey: s.classKey,
+              status: s.status,
+            },
             reason,
           },
           { critical: true },
         );
       }
-      const deleted = await deps.studentStore.softDeleteMany(
-        tenantId,
-        found.map((s) => s._id),
-        { reason, userId: String(req.user.id) },
-      );
+      const foundIds = found.map((s) => s._id);
+      await deps.chargeStore.deleteForStudents(tenantId, foundIds);
+      const deleted = await deps.studentStore.deleteMany(tenantId, foundIds);
+      deps.logger.info({ requestId: req.id, deleted }, 'Students permanently deleted');
       res.json({ deleted, requested: ids.length });
     } catch (err) {
       next(err);

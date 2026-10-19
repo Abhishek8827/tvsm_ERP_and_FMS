@@ -8,7 +8,7 @@ registerGlobalPlugins();
 /**
  * One student. Admission number ("SCH." / "UNIQ. no" in the school Excel) is the unique ID.
  * AGE is NOT stored: it is calculated from dateOfBirth so it never goes stale.
- * Soft delete only (rule 18): a leaver becomes status "inactive" with a reason, never removed.
+ * A leaver becomes status "inactive" with a reason. Only the Admin can delete a student for good (bulk delete); every delete is written to the audit log first.
  */
 const studentSchema = new mongoose.Schema(
   {
@@ -37,11 +37,6 @@ const studentSchema = new mongoose.Schema(
     usesTransport: { type: Boolean, default: false },
     village: { type: String, trim: true }, // decides the bus fee
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
-    // Soft delete (rule 18): hidden everywhere, kept for the audit trail.
-    isDeleted: { type: Boolean, default: false },
-    deletedAt: { type: Date },
-    deleteReason: { type: String },
-    deletedBy: { type: String },
     // Only when inactive: did the student take a Transfer Certificate?
     inactiveReason: {
       type: String,

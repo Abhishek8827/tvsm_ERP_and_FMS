@@ -90,9 +90,10 @@ export function Students() {
       setConfirmOpen(false);
       setSelected([]);
       await queryClient.invalidateQueries({ queryKey: ['students'] });
-      notify(`${res.deleted} students deleted.`, 'success');
+      notify(`${res.deleted} students permanently deleted.`, 'success');
     },
-    onError: (e) => notify(e.message, 'error'),
+    // The reference number lets us find the exact request in the server log if it ever fails.
+    onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
   });
 
   // Any change of what is on screen clears the ticks, so nobody deletes rows they cannot see.
@@ -300,8 +301,8 @@ export function Students() {
       <ConfirmDialog
         open={confirmOpen}
         tone="danger"
-        title={`Delete ${selected.length} students?`}
-        description="They will be hidden from all lists. Their records stay in the system for the audit trail, and their scholar numbers cannot be used again."
+        title={`Permanently delete ${selected.length} students?`}
+        description="This cannot be undone. The students and their unpaid fee plan are removed for good and their scholar numbers become free again. The audit log keeps a record of who deleted them and why."
         confirmLabel="Delete students"
         typeToConfirm="DELETE"
         requireReason

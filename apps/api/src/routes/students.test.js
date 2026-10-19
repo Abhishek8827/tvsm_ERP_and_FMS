@@ -29,24 +29,24 @@ function build() {
   const audit = [];
   const db = [];
   let lastList = {};
+  const removedCharges = [];
   const studentStore = {
     list: async ({ page, pageSize, sort, dir }) => {
       lastList = { sort, dir };
-      const live = db.filter((s) => !s.isDeleted);
       return {
-        rows: live.slice((page - 1) * pageSize, page * pageSize),
-        total: live.length,
-        counts: { active: live.length, inactive: 0, total: live.length },
+        rows: db.slice((page - 1) * pageSize, page * pageSize),
+        total: db.length,
+        counts: { active: db.length, inactive: 0, total: db.length },
         sections: ['A', 'B'],
       };
     },
-    findById: async (_t, id) => db.find((s) => String(s._id) === id && !s.isDeleted) ?? null,
-    findManyByIds: async (_t, ids) => db.filter((s) => ids.includes(String(s._id)) && !s.isDeleted),
-    softDeleteMany: async (_t, ids) => {
+    findById: async (_t, id) => db.find((s) => String(s._id) === id) ?? null,
+    findManyByIds: async (_t, ids) => db.filter((s) => ids.includes(String(s._id))),
+    deleteMany: async (_t, ids) => {
       let n = 0;
-      for (const s of db)
-        if (ids.includes(String(s._id)) && !s.isDeleted) {
-          s.isDeleted = true;
+      for (let i = db.length - 1; i >= 0; i -= 1)
+        if (ids.includes(String(db[i]._id))) {
+          db.splice(i, 1);
           n += 1;
         }
       return n;
@@ -72,8 +72,19 @@ function build() {
     },
     auditStore: { append: async (e) => audit.push(e) },
     studentStore,
+    chargeStore: {
+      deleteForStudents: async (_t, ids) => {
+        removedCharges.push(...ids);
+      },
+    },
   };
-  return { app: createApp(env, createLogger('silent'), auth), audit, db, lastList: () => lastList };
+  return {
+    app: createApp(env, createLogger('silent'), auth),
+    audit,
+    db,
+    removedCharges,
+    lastList: () => lastList,
+  };
 }
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 const valid = {
@@ -197,8 +208,8 @@ describe('students API', () => {
     expect(badId.status).toBe(400);
   });
 
-  it('bulk delete hides the students, writes one audit entry each with the reason, and is safe to repeat', async () => {
-    const { app, audit, db } = build();
+  it('bulk delete removes the students for good, frees the scholar number, audits each one first, and is safe to repeat', async () => {
+    const { app, audit, db, removedCharges } = build();
     await request(app).post('/api/students').set(as('admin')).send(valid);
     await request(app)
       .post('/api/students')
@@ -212,12 +223,22 @@ describe('students API', () => {
       .set(as('admin'))
       .send({ ids, reason: 'duplicate entry' });
     expect(res.body).toEqual({ deleted: 2, requested: 2 });
-    const entries = audit.filter((a) => a.action === 'deactivate');
+    const entries = audit.filter((a) => a.action === 'delete');
     expect(entries).toHaveLength(2);
-    expect(entries[0]).toMatchObject({ entity: 'student', reason: 'duplicate entry' });
+    expect(entries[0]).toMatchObject({
+      entity: 'student',
+      reason: 'duplicate entry',
+      oldValue: { admissionNo: '1053', name: 'Aarav Sharma' },
+    });
+    expect(removedCharges).toEqual(ids);
+    expect(db).toHaveLength(0);
     expect((await request(app).get('/api/students').set(as('admin'))).body.total).toBe(0);
     expect((await request(app).get(`/api/students/${ids[0]}`).set(as('admin'))).status).toBe(404);
-    // second time: nothing left to delete
+    // the same scholar number can be used again
+    expect((await request(app).post('/api/students').set(as('admin')).send(valid)).status).toBe(
+      201,
+    );
+    // asking again for the old ids: nothing left to delete
     expect(
       (
         await request(app)

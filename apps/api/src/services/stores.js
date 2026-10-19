@@ -37,8 +37,6 @@ export function makeAuditStore() {
 }
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-// Deleted students stay in the database (rule 18) but never show up anywhere.
-const NOT_DELETED = { isDeleted: { $ne: true } };
 // "2" before "10": compare scholar numbers as numbers, not as text.
 const NUMERIC = { locale: 'en', numericOrdering: true };
 
@@ -46,7 +44,7 @@ export function makeStudentStore() {
   return {
     // Search: exact admission number, or name starting with the text (uses the nameLower index).
     async list({ tenantId, page, pageSize, q, classKey, section, status, sort, dir }) {
-      const base = { tenantId, ...NOT_DELETED };
+      const base = { tenantId };
       if (classKey) base.classKey = classKey;
       if (section) base.section = section;
       if (q) {
@@ -73,7 +71,6 @@ export function makeStudentStore() {
         Student.countDocuments({ ...base, status: 'inactive' }),
         Student.distinct('section', {
           tenantId,
-          ...NOT_DELETED,
           ...(classKey ? { classKey } : {}),
         }),
       ]);
@@ -84,22 +81,17 @@ export function makeStudentStore() {
         sections: sections.filter(Boolean).sort(),
       };
     },
-    findById: (tenantId, id) => Student.findOne({ tenantId, _id: id, ...NOT_DELETED }).lean(),
+    findById: (tenantId, id) => Student.findOne({ tenantId, _id: id }).lean(),
     findManyByIds: (tenantId, ids) =>
-      Student.find({ tenantId, _id: { $in: ids }, ...NOT_DELETED })
+      Student.find({ tenantId, _id: { $in: ids } })
         .select('admissionNo name classKey')
         .lean(),
-    // WHY soft delete: payments and certificates will point at the student, so a row is hidden, never removed.
-    async softDeleteMany(tenantId, ids, { reason, userId }) {
-      const res = await Student.updateMany(
-        { tenantId, _id: { $in: ids }, ...NOT_DELETED },
-        {
-          $set: { isDeleted: true, deletedAt: new Date(), deleteReason: reason, deletedBy: userId },
-        },
-      );
-      return res.modifiedCount;
+    // Permanent delete (Admin decision): the row is removed and its scholar number is free again.
+    // The audit log keeps who deleted it, when, why, and the student's number and name.
+    async deleteMany(tenantId, ids) {
+      const res = await Student.deleteMany({ tenantId, _id: { $in: ids } });
+      return res.deletedCount;
     },
-    // Counts deleted students too: a scholar number is never reused.
     async existingAdmissionNos(tenantId, list) {
       const found = await Student.find({ tenantId, admissionNo: { $in: list } })
         .select('admissionNo')
@@ -119,7 +111,7 @@ export function makeStudentStore() {
     },
     update: (tenantId, id, data) =>
       Student.findOneAndUpdate(
-        { tenantId, _id: id, ...NOT_DELETED },
+        { tenantId, _id: id },
         { $set: { ...data, ...(data.name ? { nameLower: data.name.toLowerCase() } : {}) } },
         { new: true, runValidators: true },
       ).lean(),
@@ -140,6 +132,9 @@ export function makeFeeStore() {
 
 export function makeChargeStore() {
   return {
+    // Used only when students are permanently deleted: their unpaid fee plan goes with them.
+    deleteForStudents: (tenantId, studentIds) =>
+      Charge.deleteMany({ tenantId, studentId: { $in: studentIds } }),
     listForStudent: (tenantId, studentId, fy) =>
       Charge.find({ tenantId, studentId, fy }).sort({ dueDate: 1 }).lean(),
     // Adds only the charges that do not exist yet; returns how many were new.

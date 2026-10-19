@@ -1,3 +1,4 @@
+import { CLASS_KEYS } from '@erp/shared';
 import { AuditLog } from '../models/AuditLog.js';
 import { Charge } from '../models/Charge.js';
 import { FeeStructure } from '../models/FeeStructure.js';
@@ -57,14 +58,35 @@ export function makeStudentStore() {
       }
       const filter = status ? { ...base, status } : base;
       const way = dir === 'desc' ? -1 : 1;
-      const byName = sort === 'name';
-      const query = Student.find(filter)
-        .sort(byName ? { nameLower: way, admissionNo: 1 } : { admissionNo: way })
-        .skip((page - 1) * pageSize)
-        .limit(pageSize);
-      if (!byName) query.collation(NUMERIC);
+      // Every sort ends with the scholar number so the order is stable between pages.
+      const SORTS = {
+        admissionNo: { admissionNo: way },
+        name: { nameLower: way, admissionNo: 1 },
+        section: { section: way, admissionNo: 1 },
+        village: { village: way, admissionNo: 1 },
+        status: { status: way, admissionNo: 1 },
+      };
+      let rowsPromise;
+      if (sort === 'class') {
+        // Class order is the school order (PG, Nursery, LKG ... 12th), not alphabetical, so we
+        // rank each row by its position in CLASS_KEYS before sorting.
+        rowsPromise = Student.aggregate([
+          { $match: filter },
+          { $addFields: { classRank: { $indexOfArray: [CLASS_KEYS, '$classKey'] } } },
+          { $sort: { classRank: way, section: 1, admissionNo: 1 } },
+          { $skip: (page - 1) * pageSize },
+          { $limit: pageSize },
+        ]).collation(NUMERIC);
+      } else {
+        rowsPromise = Student.find(filter)
+          .sort(SORTS[sort] ?? SORTS.admissionNo)
+          .collation(NUMERIC)
+          .skip((page - 1) * pageSize)
+          .limit(pageSize)
+          .lean();
+      }
       const [rows, total, active, inactive, sections] = await Promise.all([
-        query.lean(),
+        rowsPromise,
         Student.countDocuments(filter),
         // Totals ignore the Status filter, so the cards always show active + inactive = total.
         Student.countDocuments({ ...base, status: 'active' }),

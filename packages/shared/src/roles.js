@@ -38,7 +38,8 @@ export const NAV_ITEMS = [
     key: 'fee-structure',
     label: 'Fee Structure',
     path: '/fee-structure',
-    roles: ['admin'],
+    // Cashier and Principal can only LOOK at the chart; only Admin can change it.
+    roles: ['admin', 'principal', 'cashier'],
     availableFromStep: 3,
   },
   {

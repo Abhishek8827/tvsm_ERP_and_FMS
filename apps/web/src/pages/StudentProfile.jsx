@@ -109,6 +109,13 @@ export function StudentProfile() {
           <Row label="Category" value={s.category} />
           <Row label="Samagra ID" value={s.samagraId} />
           <Row label="Form no" value={s.formNo} />
+          {role === 'admin' && (
+            <>
+              <Row label="Aadhaar" value={s.aadhaar} />
+              <Row label="Bank account" value={s.bankAccount} />
+              <Row label="IFSC" value={s.ifsc} />
+            </>
+          )}
         </dl>
       </Card>
 

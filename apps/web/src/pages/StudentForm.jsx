@@ -79,9 +79,6 @@ export function StudentForm() {
         ...EMPTY,
         ...Object.fromEntries(Object.entries(s).filter(([, v]) => v !== null)),
         dateOfBirth: s.dateOfBirth ? s.dateOfBirth.slice(0, 10) : '',
-        aadhaar: '',
-        bankAccount: '',
-        ifsc: '',
       });
     }
   }
@@ -245,18 +242,12 @@ export function StudentForm() {
             value={form.aadhaar}
             onChange={set('aadhaar')}
             error={err('aadhaar')}
-            hint={
-              editing && student.data.aadhaarLast4
-                ? 'Already saved. Leave empty to keep it.'
-                : undefined
-            }
           />
           <Input
             label="Bank account"
             value={form.bankAccount}
             onChange={set('bankAccount')}
             error={err('bankAccount')}
-            hint={editing ? 'Leave empty to keep the saved one.' : undefined}
           />
           <Input label="IFSC" value={form.ifsc} onChange={set('ifsc')} error={err('ifsc')} />
         </div>

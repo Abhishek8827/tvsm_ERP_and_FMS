@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -40,7 +40,7 @@ describe('StudentForm', () => {
     expect(api).not.toHaveBeenCalledWith('/api/students', expect.anything());
   });
 
-  it('editing never shows the saved Aadhaar or bank number', async () => {
+  it('Admin editing sees the saved Aadhaar and bank details', async () => {
     api.mockImplementation(async (path) => {
       if (path === '/api/students/s1')
         return {
@@ -49,15 +49,15 @@ describe('StudentForm', () => {
           name: 'Asha',
           classKey: '1',
           status: 'active',
-          aadhaarLast4: '9876',
+          aadhaar: '123412349876',
           bankAccount: '55556666',
           ifsc: 'SBIN0001',
         };
       throw new Error('no fee chart');
     });
-    const { container } = show('/students/s1/edit');
-    expect(await screen.findByDisplayValue('Asha')).toBeInTheDocument();
-    await waitFor(() => expect(screen.getByText(/Already saved/)).toBeInTheDocument());
-    expect(container.textContent).not.toMatch(/9876|55556666|SBIN0001/);
+    show('/students/s1/edit');
+    expect(await screen.findByDisplayValue('123412349876')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('55556666')).toBeInTheDocument();
+    expect(screen.getByDisplayValue('SBIN0001')).toBeInTheDocument();
   });
 });

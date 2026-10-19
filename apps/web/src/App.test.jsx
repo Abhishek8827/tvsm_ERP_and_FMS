@@ -163,6 +163,20 @@ describe('sign-in', () => {
   });
 });
 
+describe('sign-out and next login', () => {
+  it('after sign out, the next login always lands on the dashboard (not the old page)', async () => {
+    mockApi({ me: USERS.admin });
+    renderApp(fakeService({ signedIn: true }), { path: '/audit-log' });
+    expect(await screen.findByText('Coming soon')).toBeInTheDocument();
+    await userEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]);
+    await screen.findByRole('heading', { name: 'Sign in' });
+    await userEvent.type(screen.getByLabelText('Email'), 'x@x.com');
+    await userEvent.type(screen.getByLabelText('Password'), 'a-long-password');
+    await userEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+  });
+});
+
 describe('signed-in shell', () => {
   beforeEach(() => mockApi({ me: USERS.cashier }));
 

@@ -117,11 +117,12 @@ describe('students API', () => {
     const admin = (await request(app).get('/api/students/s1').set(as('admin'))).body;
     const principal = (await request(app).get('/api/students/s1').set(as('principal'))).body;
     const cashier = (await request(app).get('/api/students/s1').set(as('cashier'))).body;
-    expect(admin).toMatchObject({ aadhaarLast4: '1234', bankAccount: '9988776655' });
+    expect(admin).toMatchObject({ aadhaar: '123412341234', bankAccount: '9988776655' });
     expect(principal.aadhaarLast4).toBe('1234');
     expect(principal.bankAccount).toBeUndefined();
     expect(cashier.aadhaarLast4).toBeUndefined();
-    expect(JSON.stringify([admin, principal, cashier])).not.toContain('123412341234');
+    // Only the Admin response may contain the full numbers.
+    expect(JSON.stringify([principal, cashier])).not.toMatch(/123412341234|9988776655/);
   });
   it('Admin edit: audit has no Aadhaar/bank, clearing inactive clears reason', async () => {
     const { app, audit } = build();

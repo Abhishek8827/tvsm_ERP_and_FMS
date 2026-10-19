@@ -63,8 +63,8 @@ function checkRules(d) {
 
 /**
  * Shape sent to the browser. WHY here: hiding sensitive fields only in the UI is not safe (rule 12).
- *  - Aadhaar: last 4 digits only, and never for the Cashier.
- *  - Bank account / IFSC: Admin only.
+ *  - Admin sees Aadhaar, bank account and IFSC in full (Admin's decision).
+ *  - Principal sees only the last 4 Aadhaar digits. Cashier sees none of these.
  */
 export function shapeStudent(s, role) {
   const out = {
@@ -91,10 +91,12 @@ export function shapeStudent(s, role) {
     status: s.status,
     inactiveReason: s.inactiveReason ?? null,
   };
-  if (role !== 'cashier' && s.aadhaar) out.aadhaarLast4 = s.aadhaar.slice(-4);
   if (role === 'admin') {
+    out.aadhaar = s.aadhaar ?? null;
     out.bankAccount = s.bankAccount ?? null;
     out.ifsc = s.ifsc ?? null;
+  } else if (role === 'principal' && s.aadhaar) {
+    out.aadhaarLast4 = s.aadhaar.slice(-4);
   }
   return out;
 }

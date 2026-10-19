@@ -176,6 +176,12 @@ describe('students API', () => {
     expect(lastList()).toMatchObject({ sort: 'admissionNo', dir: 'asc' });
     await request(app).get('/api/students?sort=name&dir=desc').set(as('cashier'));
     expect(lastList()).toMatchObject({ sort: 'name', dir: 'desc' });
+    for (const field of ['class', 'section', 'village', 'status']) {
+      expect(
+        (await request(app).get(`/api/students?sort=${field}`).set(as('cashier'))).status,
+      ).toBe(200);
+      expect(lastList()).toMatchObject({ sort: field });
+    }
     expect((await request(app).get('/api/students?sort=salary').set(as('cashier'))).status).toBe(
       400,
     );

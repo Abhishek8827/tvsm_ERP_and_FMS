@@ -160,8 +160,18 @@ export function Students() {
     },
     {
       key: 'class',
-      header: 'Class',
-      render: (s) => `${classLabel(s.classKey)}${s.section ? ` - ${s.section}` : ''}`,
+      header: <SortHeader label="Class" field="class" sort={sort} dir={dir} onSort={onSort} />,
+      render: (s) => classLabel(s.classKey),
+    },
+    {
+      key: 'section',
+      header: <SortHeader label="Section" field="section" sort={sort} dir={dir} onSort={onSort} />,
+      render: (s) => s.section ?? '-',
+    },
+    {
+      key: 'village',
+      header: <SortHeader label="Village" field="village" sort={sort} dir={dir} onSort={onSort} />,
+      render: (s) => s.village ?? '-',
     },
     { key: 'contact', header: 'Contact', render: (s) => s.contactNo ?? '-' },
     { key: 'address', header: 'Address', render: (s) => s.address ?? '-' },
@@ -178,7 +188,7 @@ export function Students() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: <SortHeader label="Status" field="status" sort={sort} dir={dir} onSort={onSort} />,
       render: (s) =>
         s.status === 'active' ? (
           <Badge tone="success">Active</Badge>

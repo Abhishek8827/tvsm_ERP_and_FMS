@@ -13,7 +13,9 @@ const listQuery = z.object({
   status: z.enum(['active', 'inactive']).optional(),
   section: z.string().trim().max(5).optional(),
   // Default order: scholar number, smallest first. Name sorts A to Z.
-  sort: z.enum(['admissionNo', 'name']).default('admissionNo'),
+  sort: z
+    .enum(['admissionNo', 'name', 'class', 'section', 'village', 'status'])
+    .default('admissionNo'),
   dir: z.enum(['asc', 'desc']).default('asc'),
 });
 const bulkDeleteBody = z.object({

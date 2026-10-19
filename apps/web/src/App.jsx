@@ -7,6 +7,7 @@ import { ErrorState, Spinner } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
 import { Dashboard } from './pages/Dashboard';
+import { FeeStructure } from './pages/FeeStructure';
 import { ImportStudents } from './pages/ImportStudents';
 import { Login } from './pages/Login';
 import { StudentProfile } from './pages/StudentProfile';
@@ -65,12 +66,15 @@ export function App() {
       <Route element={<AppShell />}>
         <Route index element={<Dashboard />} />
         {items
-          .filter((i) => i.key !== 'students' && i.key !== 'data-import')
+          .filter(
+            (i) => i.key !== 'students' && i.key !== 'data-import' && i.key !== 'fee-structure',
+          )
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
           ))}
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />
+        {role === 'admin' && <Route path="/fee-structure" element={<FeeStructure />} />}
         {role === 'admin' && <Route path="/data-import" element={<ImportStudents />} />}
         {role === 'admin' && <Route path="/students/new" element={<StudentForm />} />}
         {role === 'admin' && <Route path="/students/:id/edit" element={<StudentForm />} />}

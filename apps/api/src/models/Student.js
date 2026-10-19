@@ -37,6 +37,11 @@ const studentSchema = new mongoose.Schema(
     usesTransport: { type: Boolean, default: false },
     village: { type: String, trim: true }, // decides the bus fee
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    // Soft delete (rule 18): hidden everywhere, kept for the audit trail.
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
+    deleteReason: { type: String },
+    deletedBy: { type: String },
     // Only when inactive: did the student take a Transfer Certificate?
     inactiveReason: {
       type: String,
@@ -51,5 +56,11 @@ studentSchema.index({ tenantId: 1, admissionNo: 1 }, { unique: true });
 studentSchema.index({ tenantId: 1, nameLower: 1 });
 studentSchema.index({ tenantId: 1, classKey: 1, section: 1, status: 1 });
 studentSchema.index({ tenantId: 1, contactNo: 1 });
+studentSchema.index({ tenantId: 1, status: 1 });
+// Same "numbers as numbers" ordering the list uses, so the default order is served by an index.
+studentSchema.index(
+  { tenantId: 1, admissionNo: 1 },
+  { name: 'tenant_admissionNo_numeric', collation: { locale: 'en', numericOrdering: true } },
+);
 
 export const Student = mongoose.models.Student ?? mongoose.model('Student', studentSchema);

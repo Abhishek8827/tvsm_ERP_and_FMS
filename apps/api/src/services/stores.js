@@ -37,33 +37,69 @@ export function makeAuditStore() {
 }
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+// Deleted students stay in the database (rule 18) but never show up anywhere.
+const NOT_DELETED = { isDeleted: { $ne: true } };
+// "2" before "10": compare scholar numbers as numbers, not as text.
+const NUMERIC = { locale: 'en', numericOrdering: true };
 
 export function makeStudentStore() {
   return {
     // Search: exact admission number, or name starting with the text (uses the nameLower index).
-    async list({ tenantId, page, pageSize, q, classKey, status }) {
-      const filter = { tenantId };
-      if (classKey) filter.classKey = classKey;
-      if (status) filter.status = status;
+    async list({ tenantId, page, pageSize, q, classKey, section, status, sort, dir }) {
+      const base = { tenantId, ...NOT_DELETED };
+      if (classKey) base.classKey = classKey;
+      if (section) base.section = section;
       if (q) {
         const text = q.trim().toLowerCase();
-        filter.$or = [
+        base.$or = [
           { admissionNo: q.trim() },
           { nameLower: { $regex: `^${escapeRegex(text)}` } },
           ...(/^\d{10}$/.test(text) ? [{ contactNo: text }] : []),
         ];
       }
-      const [rows, total] = await Promise.all([
-        Student.find(filter)
-          .sort({ classKey: 1, nameLower: 1 })
-          .skip((page - 1) * pageSize)
-          .limit(pageSize)
-          .lean(),
+      const filter = status ? { ...base, status } : base;
+      const way = dir === 'desc' ? -1 : 1;
+      const byName = sort === 'name';
+      const query = Student.find(filter)
+        .sort(byName ? { nameLower: way, admissionNo: 1 } : { admissionNo: way })
+        .skip((page - 1) * pageSize)
+        .limit(pageSize);
+      if (!byName) query.collation(NUMERIC);
+      const [rows, total, active, inactive, sections] = await Promise.all([
+        query.lean(),
         Student.countDocuments(filter),
+        // Totals ignore the Status filter, so the cards always show active + inactive = total.
+        Student.countDocuments({ ...base, status: 'active' }),
+        Student.countDocuments({ ...base, status: 'inactive' }),
+        Student.distinct('section', {
+          tenantId,
+          ...NOT_DELETED,
+          ...(classKey ? { classKey } : {}),
+        }),
       ]);
-      return { rows, total };
+      return {
+        rows,
+        total,
+        counts: { active, inactive, total: active + inactive },
+        sections: sections.filter(Boolean).sort(),
+      };
     },
-    findById: (tenantId, id) => Student.findOne({ tenantId, _id: id }).lean(),
+    findById: (tenantId, id) => Student.findOne({ tenantId, _id: id, ...NOT_DELETED }).lean(),
+    findManyByIds: (tenantId, ids) =>
+      Student.find({ tenantId, _id: { $in: ids }, ...NOT_DELETED })
+        .select('admissionNo name classKey')
+        .lean(),
+    // WHY soft delete: payments and certificates will point at the student, so a row is hidden, never removed.
+    async softDeleteMany(tenantId, ids, { reason, userId }) {
+      const res = await Student.updateMany(
+        { tenantId, _id: { $in: ids }, ...NOT_DELETED },
+        {
+          $set: { isDeleted: true, deletedAt: new Date(), deleteReason: reason, deletedBy: userId },
+        },
+      );
+      return res.modifiedCount;
+    },
+    // Counts deleted students too: a scholar number is never reused.
     async existingAdmissionNos(tenantId, list) {
       const found = await Student.find({ tenantId, admissionNo: { $in: list } })
         .select('admissionNo')
@@ -83,7 +119,7 @@ export function makeStudentStore() {
     },
     update: (tenantId, id, data) =>
       Student.findOneAndUpdate(
-        { tenantId, _id: id },
+        { tenantId, _id: id, ...NOT_DELETED },
         { $set: { ...data, ...(data.name ? { nameLower: data.name.toLowerCase() } : {}) } },
         { new: true, runValidators: true },
       ).lean(),

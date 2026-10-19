@@ -11,6 +11,17 @@ const listQuery = z.object({
   q: z.string().trim().max(60).optional(),
   classKey: z.enum(CLASS_KEYS).optional(),
   status: z.enum(['active', 'inactive']).optional(),
+  section: z.string().trim().max(5).optional(),
+  // Default order: scholar number, smallest first. Name sorts A to Z.
+  sort: z.enum(['admissionNo', 'name']).default('admissionNo'),
+  dir: z.enum(['asc', 'desc']).default('asc'),
+});
+const bulkDeleteBody = z.object({
+  ids: z
+    .array(z.string().regex(/^[a-f\d]{24}$/i, 'Invalid student id'))
+    .min(1)
+    .max(100),
+  reason: z.string().trim().min(3, 'Please give a reason').max(200),
 });
 
 const text = (max = 100) => z.string().trim().max(max);
@@ -110,7 +121,7 @@ export function studentsRouter(deps, authenticate) {
   router.get('/students', ...read, async (req, res, next) => {
     try {
       const query = listQuery.parse(req.query);
-      const { rows, total } = await deps.studentStore.list({
+      const { rows, total, counts, sections } = await deps.studentStore.list({
         tenantId: req.user.tenantId,
         ...query,
       });
@@ -118,8 +129,44 @@ export function studentsRouter(deps, authenticate) {
         page: query.page,
         pageSize: query.pageSize,
         total,
+        counts,
+        sections,
         rows: rows.map((s) => shapeStudent(s, req.user.role)),
       });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Admin only. Soft delete: students are hidden, not erased (rule 18). One audit entry per student,
+  // written BEFORE the change so a failed audit stops the delete (critical).
+  router.post('/students/bulk-delete', ...write, async (req, res, next) => {
+    try {
+      const { ids, reason } = bulkDeleteBody.parse(req.body);
+      const tenantId = req.user.tenantId;
+      const found = await deps.studentStore.findManyByIds(tenantId, ids);
+      if (found.length === 0) throw notFound('Students');
+      for (const s of found) {
+        await recordAudit(
+          deps,
+          req,
+          {
+            action: 'deactivate',
+            entity: 'student',
+            entityId: String(s._id),
+            oldValue: { admissionNo: s.admissionNo, name: s.name, classKey: s.classKey },
+            newValue: { deleted: true },
+            reason,
+          },
+          { critical: true },
+        );
+      }
+      const deleted = await deps.studentStore.softDeleteMany(
+        tenantId,
+        found.map((s) => s._id),
+        { reason, userId: String(req.user.id) },
+      );
+      res.json({ deleted, requested: ids.length });
     } catch (err) {
       next(err);
     }

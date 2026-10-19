@@ -1,10 +1,21 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CLASSES, classLabel } from '@erp/shared';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { Badge, FilterBar, Input, Pagination, Select, Table } from '../components/ui';
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  FilterBar,
+  Input,
+  Pagination,
+  Select,
+  StatCard,
+  Table,
+  useToast,
+} from '../components/ui';
 
 const CLASS_OPTIONS = [{ value: '', label: 'All classes' }].concat(
   CLASSES.map((c) => ({ value: c.key, label: c.label })),
@@ -15,15 +26,40 @@ const STATUS_OPTIONS = [
   { value: 'inactive', label: 'Inactive' },
 ];
 
-/** Students list: server-side search, filters and pages (stays fast with 1,500+ students). */
+/** Column title that sorts when clicked (first click A to Z / small to big, second click reverses). */
+function SortHeader({ label, field, sort, dir, onSort }) {
+  const active = sort === field;
+  return (
+    <button
+      type="button"
+      onClick={() => onSort(field)}
+      className="inline-flex items-center gap-1 font-medium uppercase hover:text-ink"
+      aria-label={`Sort by ${label}`}
+    >
+      {label}
+      <span aria-hidden>{active ? (dir === 'asc' ? '▲' : '▼') : '↕'}</span>
+    </button>
+  );
+}
+
+/** Students list: server-side search, filters, sorting and pages (stays fast with 1,500+ students). */
 export function Students() {
   const { role } = useAuth();
+  const { notify } = useToast();
+  const queryClient = useQueryClient();
+  const isAdmin = role === 'admin';
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
   const [classKey, setClassKey] = useState('');
+  const [section, setSection] = useState('');
   const [status, setStatus] = useState('active');
+  const [sort, setSort] = useState('admissionNo');
+  const [dir, setDir] = useState('asc');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [selected, setSelected] = useState([]);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [reason, setReason] = useState('');
 
   // Wait until typing pauses so we do not call the server on every keystroke.
   useEffect(() => {
@@ -35,22 +71,83 @@ export function Students() {
   }, [search]);
 
   const query = useQuery({
-    queryKey: ['students', { q, classKey, status, page, pageSize }],
+    queryKey: ['students', { q, classKey, section, status, sort, dir, page, pageSize }],
     queryFn: () => {
-      const params = new URLSearchParams({ page, pageSize });
+      const params = new URLSearchParams({ page, pageSize, sort, dir });
       if (q) params.set('q', q);
       if (classKey) params.set('classKey', classKey);
+      if (section) params.set('section', section);
       if (status) params.set('status', status);
       return api(`/api/students?${params}`);
     },
     placeholderData: keepPreviousData,
   });
 
-  const columns = [
-    { key: 'adm', header: 'Adm. no', render: (s) => s.admissionNo },
+  const bulkDelete = useMutation({
+    mutationFn: () =>
+      api('/api/students/bulk-delete', { method: 'POST', body: { ids: selected, reason } }),
+    onSuccess: async (res) => {
+      setConfirmOpen(false);
+      setSelected([]);
+      await queryClient.invalidateQueries({ queryKey: ['students'] });
+      notify(`${res.deleted} students deleted.`, 'success');
+    },
+    onError: (e) => notify(e.message, 'error'),
+  });
+
+  // Any change of what is on screen clears the ticks, so nobody deletes rows they cannot see.
+  function change(setter) {
+    return (value) => {
+      setter(value);
+      setPage(1);
+      setSelected([]);
+    };
+  }
+  function onSort(field) {
+    setDir(sort === field && dir === 'asc' ? 'desc' : 'asc');
+    setSort(field);
+    setPage(1);
+    setSelected([]);
+  }
+
+  const data = query.data;
+  const rows = data?.rows ?? [];
+  const allTicked = rows.length > 0 && rows.every((s) => selected.includes(s.id));
+  const toggle = (id) =>
+    setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+
+  const columns = [];
+  if (isAdmin)
+    columns.push({
+      key: 'pick',
+      header: (
+        <input
+          type="checkbox"
+          aria-label="Select all students on this page"
+          checked={allTicked}
+          onChange={() => setSelected(allTicked ? [] : rows.map((s) => s.id))}
+        />
+      ),
+      render: (s) => (
+        <input
+          type="checkbox"
+          aria-label={`Select ${s.name}`}
+          checked={selected.includes(s.id)}
+          onChange={() => toggle(s.id)}
+        />
+      ),
+    });
+  columns.push(
+    {
+      key: 'adm',
+      header: (
+        <SortHeader label="Adm. no" field="admissionNo" sort={sort} dir={dir} onSort={onSort} />
+      ),
+      render: (s) => s.admissionNo,
+    },
     {
       key: 'name',
-      header: 'Student',
+      header: <SortHeader label="Student" field="name" sort={sort} dir={dir} onSort={onSort} />,
       render: (s) => (
         <div>
           <Link className="font-medium text-brand hover:underline" to={`/students/${s.id}`}>
@@ -66,6 +163,7 @@ export function Students() {
       render: (s) => `${classLabel(s.classKey)}${s.section ? ` - ${s.section}` : ''}`,
     },
     { key: 'contact', header: 'Contact', render: (s) => s.contactNo ?? '-' },
+    { key: 'address', header: 'Address', render: (s) => s.address ?? '-' },
     {
       key: 'tags',
       header: 'Tags',
@@ -89,8 +187,8 @@ export function Students() {
           </Badge>
         ),
     },
-  ];
-  if (role === 'admin')
+  );
+  if (isAdmin)
     columns.push({
       key: 'edit',
       header: '',
@@ -101,20 +199,43 @@ export function Students() {
       ),
     });
 
-  const data = query.data;
+  const sectionOptions = [{ value: '', label: 'All sections' }].concat(
+    (data?.sections ?? []).map((s) => ({ value: s, label: s })),
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-ink">Students</h1>
-        {role === 'admin' && (
-          <Link
-            to="/students/new"
-            className="inline-flex min-h-10 items-center rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark"
-          >
-            Add student
-          </Link>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          {isAdmin && selected.length > 0 && (
+            <Button variant="danger" onClick={() => setConfirmOpen(true)}>
+              Delete selected ({selected.length})
+            </Button>
+          )}
+          {isAdmin && (
+            <Link
+              to="/students/new"
+              className="inline-flex min-h-10 items-center rounded-lg bg-brand px-4 text-sm font-medium text-white hover:bg-brand-dark"
+            >
+              Add student
+            </Link>
+          )}
+        </div>
       </div>
+
+      {data && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard label="Active students" value={data.counts.active} />
+          <StatCard label="Inactive students" value={data.counts.inactive} />
+          <StatCard
+            label="Grand total"
+            value={data.counts.total}
+            caption={classKey || section ? 'For the selected class / section' : 'Whole school'}
+          />
+        </div>
+      )}
+
       <FilterBar>
         <Input
           label="Search"
@@ -127,30 +248,34 @@ export function Students() {
           options={CLASS_OPTIONS}
           value={classKey}
           onChange={(e) => {
-            setClassKey(e.target.value);
-            setPage(1);
+            change(setClassKey)(e.target.value);
+            setSection('');
           }}
+        />
+        <Select
+          label="Section"
+          options={sectionOptions}
+          value={section}
+          onChange={(e) => change(setSection)(e.target.value)}
         />
         <Select
           label="Status"
           options={STATUS_OPTIONS}
           value={status}
-          onChange={(e) => {
-            setStatus(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => change(setStatus)(e.target.value)}
         />
       </FilterBar>
+
       <Table
         columns={columns}
-        rows={data?.rows}
+        rows={rows}
         rowKey={(s) => s.id}
         loading={query.isPending}
         error={query.isError ? query.error.message : undefined}
         onRetry={() => void query.refetch()}
         emptyTitle="No students found"
         emptyDescription={
-          q || classKey || status !== 'active'
+          q || classKey || section || status !== 'active'
             ? 'Try a different search or filter.'
             : 'Students will appear here once they are added.'
         }
@@ -160,13 +285,31 @@ export function Students() {
           page={page}
           pageSize={pageSize}
           total={data.total}
-          onPageChange={setPage}
+          onPageChange={(p) => {
+            setPage(p);
+            setSelected([]);
+          }}
           onPageSizeChange={(n) => {
             setPageSize(n);
             setPage(1);
+            setSelected([]);
           }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        tone="danger"
+        title={`Delete ${selected.length} students?`}
+        description="They will be hidden from all lists. Their records stay in the system for the audit trail, and their scholar numbers cannot be used again."
+        confirmLabel="Delete students"
+        typeToConfirm="DELETE"
+        requireReason
+        onReasonChange={setReason}
+        loading={bulkDelete.isPending}
+        onConfirm={() => bulkDelete.mutate()}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

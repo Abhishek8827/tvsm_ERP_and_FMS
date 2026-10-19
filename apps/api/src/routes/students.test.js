@@ -28,12 +28,29 @@ const users = {
 function build() {
   const audit = [];
   const db = [];
+  let lastList = {};
   const studentStore = {
-    list: async ({ page, pageSize }) => ({
-      rows: db.slice((page - 1) * pageSize, page * pageSize),
-      total: db.length,
-    }),
-    findById: async (_t, id) => db.find((s) => String(s._id) === id) ?? null,
+    list: async ({ page, pageSize, sort, dir }) => {
+      lastList = { sort, dir };
+      const live = db.filter((s) => !s.isDeleted);
+      return {
+        rows: live.slice((page - 1) * pageSize, page * pageSize),
+        total: live.length,
+        counts: { active: live.length, inactive: 0, total: live.length },
+        sections: ['A', 'B'],
+      };
+    },
+    findById: async (_t, id) => db.find((s) => String(s._id) === id && !s.isDeleted) ?? null,
+    findManyByIds: async (_t, ids) => db.filter((s) => ids.includes(String(s._id)) && !s.isDeleted),
+    softDeleteMany: async (_t, ids) => {
+      let n = 0;
+      for (const s of db)
+        if (ids.includes(String(s._id)) && !s.isDeleted) {
+          s.isDeleted = true;
+          n += 1;
+        }
+      return n;
+    },
     create: async (_t, data) => {
       if (db.some((s) => s.admissionNo === data.admissionNo))
         throw Object.assign(new Error('dup'), { code: 11000 });
@@ -56,7 +73,7 @@ function build() {
     auditStore: { append: async (e) => audit.push(e) },
     studentStore,
   };
-  return { app: createApp(env, createLogger('silent'), auth), audit, db };
+  return { app: createApp(env, createLogger('silent'), auth), audit, db, lastList: () => lastList };
 }
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 const valid = {
@@ -138,5 +155,76 @@ describe('students API', () => {
       .set(as('admin'))
       .send({ status: 'active' });
     expect(back.body.inactiveReason).toBeNull();
+  });
+  it('list returns active / inactive / total counts and the sections, default sort is scholar number', async () => {
+    const { app, lastList } = build();
+    await request(app).post('/api/students').set(as('admin')).send(valid);
+    const res = await request(app).get('/api/students').set(as('cashier'));
+    expect(res.body.counts).toMatchObject({ active: 1, inactive: 0, total: 1 });
+    expect(res.body.sections).toEqual(['A', 'B']);
+    expect(lastList()).toMatchObject({ sort: 'admissionNo', dir: 'asc' });
+    await request(app).get('/api/students?sort=name&dir=desc').set(as('cashier'));
+    expect(lastList()).toMatchObject({ sort: 'name', dir: 'desc' });
+    expect((await request(app).get('/api/students?sort=salary').set(as('cashier'))).status).toBe(
+      400,
+    );
+  });
+
+  it('bulk delete: 403 for Principal and Cashier', async () => {
+    const { app } = build();
+    for (const r of ['principal', 'cashier'])
+      expect(
+        (
+          await request(app)
+            .post('/api/students/bulk-delete')
+            .set(as(r))
+            .send({ ids: ['a'.repeat(24)], reason: 'test' })
+        ).status,
+      ).toBe(403);
+  });
+
+  it('bulk delete needs a reason and valid ids', async () => {
+    const { app } = build();
+    const noReason = await request(app)
+      .post('/api/students/bulk-delete')
+      .set(as('admin'))
+      .send({ ids: ['a'.repeat(24)] });
+    expect(noReason.status).toBe(400);
+    const badId = await request(app)
+      .post('/api/students/bulk-delete')
+      .set(as('admin'))
+      .send({ ids: ['x'], reason: 'duplicate entry' });
+    expect(badId.status).toBe(400);
+  });
+
+  it('bulk delete hides the students, writes one audit entry each with the reason, and is safe to repeat', async () => {
+    const { app, audit, db } = build();
+    await request(app).post('/api/students').set(as('admin')).send(valid);
+    await request(app)
+      .post('/api/students')
+      .set(as('admin'))
+      .send({ ...valid, admissionNo: '1054', name: 'Bhumi' });
+    db[0]._id = 'a'.repeat(24);
+    db[1]._id = 'b'.repeat(24);
+    const ids = [db[0]._id, db[1]._id];
+    const res = await request(app)
+      .post('/api/students/bulk-delete')
+      .set(as('admin'))
+      .send({ ids, reason: 'duplicate entry' });
+    expect(res.body).toEqual({ deleted: 2, requested: 2 });
+    const entries = audit.filter((a) => a.action === 'deactivate');
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({ entity: 'student', reason: 'duplicate entry' });
+    expect((await request(app).get('/api/students').set(as('admin'))).body.total).toBe(0);
+    expect((await request(app).get(`/api/students/${ids[0]}`).set(as('admin'))).status).toBe(404);
+    // second time: nothing left to delete
+    expect(
+      (
+        await request(app)
+          .post('/api/students/bulk-delete')
+          .set(as('admin'))
+          .send({ ids, reason: 'again' })
+      ).status,
+    ).toBe(404);
   });
 });

@@ -5,13 +5,19 @@ import { Input } from './Field';
 export function Dialog({ open, title, onClose, children, footer }) {
   const titleId = useId();
   const panelRef = useRef(null);
+  // WHY a ref: parents often pass a new onClose function on every render. If the effect depended
+  // on it, focus would jump back to the dialog on every keystroke typed inside it.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => e.key === 'Escape' && onClose();
+    const onKey = (e) => e.key === 'Escape' && onCloseRef.current();
     document.addEventListener('keydown', onKey);
     panelRef.current?.focus();
     return () => document.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
+  }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">

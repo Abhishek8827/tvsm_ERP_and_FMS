@@ -74,7 +74,7 @@ export function App() {
           ))}
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />
-        {role === 'admin' && <Route path="/fee-structure" element={<FeeStructure />} />}
+        <Route path="/fee-structure" element={<FeeStructure />} />
         {role === 'admin' && <Route path="/data-import" element={<ImportStudents />} />}
         {role === 'admin' && <Route path="/students/new" element={<StudentForm />} />}
         {role === 'admin' && <Route path="/students/:id/edit" element={<StudentForm />} />}

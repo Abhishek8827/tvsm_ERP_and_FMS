@@ -48,13 +48,26 @@ export function makeStudentStore() {
       const base = { tenantId };
       if (classKey) base.classKey = classKey;
       if (section) base.section = section;
-      if (q) {
-        const text = q.trim().toLowerCase();
-        base.$or = [
-          { admissionNo: q.trim() },
-          { nameLower: { $regex: `^${escapeRegex(text)}` } },
-          ...(/^\d{10}$/.test(text) ? [{ contactNo: text }] : []),
-        ];
+      if (q && q.trim()) {
+        // Every word typed must match somewhere (AND), and a word can match ANY part of the
+        // name, father's name, mother's name, admission number, mobile number, address or
+        // village (so "sha", "rajesh", "9876", "siwal" all work). Tenant + index narrow the
+        // scan first, and one school has a few thousand students at most.
+        const words = q.trim().toLowerCase().split(/\s+/).slice(0, 5);
+        base.$and = words.map((w) => {
+          const rx = { $regex: escapeRegex(w), $options: 'i' };
+          return {
+            $or: [
+              { nameLower: { $regex: escapeRegex(w) } },
+              { fatherName: rx },
+              { motherName: rx },
+              { admissionNo: rx },
+              { contactNo: rx },
+              { address: rx },
+              { village: rx },
+            ],
+          };
+        });
       }
       const filter = status ? { ...base, status } : base;
       const way = dir === 'desc' ? -1 : 1;
@@ -63,7 +76,7 @@ export function makeStudentStore() {
         admissionNo: { admissionNo: way },
         name: { nameLower: way, admissionNo: 1 },
         section: { section: way, admissionNo: 1 },
-        village: { village: way, admissionNo: 1 },
+        address: { address: way, admissionNo: 1 },
         status: { status: way, admissionNo: 1 },
       };
       let rowsPromise;

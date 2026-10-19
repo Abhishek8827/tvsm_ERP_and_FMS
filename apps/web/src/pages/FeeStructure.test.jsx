@@ -6,7 +6,10 @@ import { ToastProvider } from '../components/ui';
 import { FeeStructure } from './FeeStructure';
 
 vi.mock('../api/client', () => ({ api: vi.fn() }));
+vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ role: mockRole }) }));
 import { api } from '../api/client';
+
+let mockRole = 'admin';
 
 const chart = {
   classFees: [{ classKey: '1', monthlyTuitionPaise: 100000, admissionPaise: 200000 }],
@@ -31,6 +34,7 @@ function show() {
 describe('Fee structure screen', () => {
   beforeEach(() => {
     api.mockReset();
+    mockRole = 'admin';
   });
 
   it('shows the chart in rupees and saves edits as integer paise', async () => {
@@ -79,5 +83,16 @@ describe('Fee structure screen', () => {
     show();
     expect(await screen.findByText('server down')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('Cashier and Principal see the chart read-only: no Save button, fields disabled', async () => {
+    mockRole = 'principal';
+    api.mockResolvedValue(chart);
+    show();
+    const tuition = await screen.findByLabelText(/monthly tuition/);
+    expect(tuition).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add village' })).toBeNull();
+    expect(screen.getByText(/View only/)).toBeInTheDocument();
   });
 });

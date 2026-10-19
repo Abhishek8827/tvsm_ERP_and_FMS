@@ -14,7 +14,7 @@ const listQuery = z.object({
   section: z.string().trim().max(5).optional(),
   // Default order: scholar number, smallest first. Name sorts A to Z.
   sort: z
-    .enum(['admissionNo', 'name', 'class', 'section', 'village', 'status'])
+    .enum(['admissionNo', 'name', 'class', 'section', 'address', 'status'])
     .default('admissionNo'),
   dir: z.enum(['asc', 'desc']).default('asc'),
 });

@@ -168,13 +168,12 @@ export function Students() {
       header: <SortHeader label="Section" field="section" sort={sort} dir={dir} onSort={onSort} />,
       render: (s) => s.section ?? '-',
     },
-    {
-      key: 'village',
-      header: <SortHeader label="Village" field="village" sort={sort} dir={dir} onSort={onSort} />,
-      render: (s) => s.village ?? '-',
-    },
     { key: 'contact', header: 'Contact', render: (s) => s.contactNo ?? '-' },
-    { key: 'address', header: 'Address', render: (s) => s.address ?? '-' },
+    {
+      key: 'address',
+      header: <SortHeader label="Address" field="address" sort={sort} dir={dir} onSort={onSort} />,
+      render: (s) => s.address ?? '-',
+    },
     {
       key: 'tags',
       header: 'Tags',
@@ -250,7 +249,7 @@ export function Students() {
       <FilterBar>
         <Input
           label="Search"
-          placeholder="Name, admission no or mobile"
+          placeholder="Name, father, mobile, admission no, address"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />

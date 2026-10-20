@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ToastProvider } from '../components/ui';
 import { ImportStudents } from './ImportStudents';
@@ -15,7 +16,9 @@ function show() {
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <ToastProvider>
-        <ImportStudents />
+        <MemoryRouter>
+          <ImportStudents />
+        </MemoryRouter>
       </ToastProvider>
     </QueryClientProvider>,
   );

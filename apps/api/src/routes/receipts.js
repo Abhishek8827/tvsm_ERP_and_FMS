@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import writeXlsxFile from 'write-excel-file/node';
 import rateLimit from 'express-rate-limit';
 import { z } from 'zod';
 import {
@@ -6,6 +7,7 @@ import {
   MODULES,
   ReceiptRuleError,
   getFinancialYear,
+  istDateString,
   moduleDues,
   planReceipt,
   todayIst,
@@ -40,6 +42,28 @@ const idemKey = z
   .string({ error: 'Idempotency-Key header is required' })
   .regex(/^[\w-]{8,100}$/, 'Idempotency-Key must be 8-100 letters, digits, - or _');
 
+const statusOf = (c) =>
+  c?.status === 'cancelled'
+    ? 'cancelled'
+    : c?.status === 'requested'
+      ? 'cancel_requested'
+      : 'valid';
+
+const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-06-30');
+const listQuery = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+  from: dateField.optional(),
+  to: dateField.optional(),
+  kind: kindField.optional(),
+  mode: z.enum(['cash', 'upi', 'qr']).optional(),
+  q: z.string().trim().max(60).optional(),
+  status: z.enum(['valid', 'cancelled']).optional(),
+});
+const cancelBody = z.object({ reason: z.string().trim().min(3, 'Please give a reason').max(200) });
+const EXPORT_LIMIT = 20_000;
+const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
 const shapeReceipt = (r, extra = {}) => ({
   id: String(r._id),
   number: r.number,
@@ -56,10 +80,21 @@ const shapeReceipt = (r, extra = {}) => ({
   totalPaise: r.totalPaise,
   monthLabel: r.monthLabel,
   dueAfterPaise: r.dueAfterPaise,
+  dueAfterOldPaise: r.dueAfterOldPaise ?? 0,
+  dueAfterNewPaise: r.dueAfterNewPaise ?? r.dueAfterPaise,
   mode: r.mode,
   reference: r.reference ?? null,
   cashierName: r.cashierName ?? null,
   issuedAt: r.issuedAt,
+  status: r.status ?? statusOf(r.cancellation),
+  cancellation: r.cancellation
+    ? {
+        status: r.cancellation.status,
+        reason: r.cancellation.reason,
+        requestedByName: r.cancellation.requestedByName ?? null,
+        decidedByName: r.cancellation.decidedByName ?? null,
+      }
+    : null,
   ...extra,
 });
 
@@ -196,6 +231,8 @@ export function receiptsRouter(deps, authenticate) {
               totalPaise: plan.totalPaise,
               monthLabel: plan.monthLabel,
               dueAfterPaise: plan.dueAfterPaise,
+              dueAfterOldPaise: plan.dueAfterOldPaise,
+              dueAfterNewPaise: plan.dueAfterNewPaise,
               mode: body.mode,
               reference: body.mode === 'cash' ? undefined : body.reference,
               cashierId: String(req.user.id),
@@ -254,6 +291,113 @@ export function receiptsRouter(deps, authenticate) {
     },
   );
 
+  // List + totals for the Receipts / Fees & Receipts screens and the Cashier dashboard.
+  router.get('/receipts', ...look, async (req, res, next) => {
+    try {
+      const f = listQuery.parse(req.query);
+      const out = await deps.receiptStore.list({ tenantId: req.user.tenantId, ...f });
+      const totals = { paise: 0, count: 0, byKind: {}, byMode: {} };
+      for (const g of out.groups) {
+        totals.paise += g.paise;
+        totals.count += g.count;
+        totals.byKind[g.kind] = (totals.byKind[g.kind] ?? 0) + g.paise;
+        totals.byMode[g.mode] = (totals.byMode[g.mode] ?? 0) + g.paise;
+      }
+      res.json({
+        rows: out.rows.map((r) => shapeReceipt(r)),
+        total: out.total,
+        page: f.page,
+        pageSize: f.pageSize,
+        totals, // only receipts that still count (cancelled ones are left out)
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // Admin only. Must stay above /receipts/:id.
+  router.get('/receipts/export', authenticate, requireRole('admin'), async (req, res, next) => {
+    try {
+      const f = listQuery.omit({ page: true, pageSize: true }).parse(req.query);
+      const rows = await deps.receiptStore.listAll({
+        tenantId: req.user.tenantId,
+        ...f,
+        limit: EXPORT_LIMIT + 1,
+      });
+      if (rows.length > EXPORT_LIMIT)
+        throw new AppError(
+          'TOO_MANY_ROWS',
+          413,
+          `More than ${EXPORT_LIMIT} receipts match. Narrow the dates and export again.`,
+        );
+      const head = [
+        'Receipt No',
+        'Date (IST)',
+        'Type',
+        'Sch. No',
+        'Student',
+        'Class',
+        'Month',
+        'Old Fees',
+        'Tuition/Transport',
+        'Admission',
+        'Form',
+        'Late Fee',
+        'T.C.',
+        'Other',
+        'Total (₹)',
+        'Mode',
+        'Reference',
+        'Cashier',
+        'Status',
+      ];
+      const rupees = (paise) => paise / 100;
+      const sum = (r, heads) =>
+        rupees(
+          r.lines.filter((l) => heads.includes(l.head)).reduce((a, l) => a + l.amountPaise, 0),
+        );
+      const body = rows.map((r) => [
+        r.number,
+        istDateString(r.issuedAt),
+        r.kind === 'school' ? 'School' : 'Transport',
+        r.student?.admissionNo ?? '',
+        r.student?.name ?? '',
+        r.student?.classKey ?? '',
+        r.monthLabel ?? '',
+        sum(r, ['old_fees', 'transport_old']),
+        sum(r, ['tuition', 'transport']),
+        sum(r, ['admission']),
+        sum(r, ['form']),
+        sum(r, ['late']),
+        sum(r, ['tc']),
+        sum(r, ['other']),
+        rupees(r.totalPaise),
+        r.mode.toUpperCase(),
+        r.reference ?? '',
+        r.cashierName ?? '',
+        r.status === 'cancelled' ? 'Cancelled' : 'Valid',
+      ]);
+      const buffer = await writeXlsxFile([
+        head.map((value) => ({ value, fontWeight: 'bold' })),
+        ...body,
+      ]).toBuffer();
+      await recordAudit(deps, req, {
+        action: 'export',
+        entity: 'receipts',
+        newValue: { rows: rows.length, filters: f },
+      });
+      res
+        .set('Content-Type', XLSX)
+        .set(
+          'Content-Disposition',
+          `attachment; filename="receipts-${istDateString(new Date())}.xlsx"`,
+        )
+        .send(buffer);
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.get('/receipts/:id', ...look, async (req, res, next) => {
     try {
       const r = await deps.receiptStore.findById(req.user.tenantId, objectId.parse(req.params.id));
@@ -287,6 +431,90 @@ export function receiptsRouter(deps, authenticate) {
           { critical: true },
         );
         res.json(shapeReceipt(r, { duplicate: true }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // The Cashier asks for a receipt to be cancelled. Approval is built in Step 8.
+  router.post(
+    '/receipts/:id/cancel-request',
+    authenticate,
+    requireRole('cashier'),
+    async (req, res, next) => {
+      try {
+        const { reason } = cancelBody.parse(req.body);
+        const tenantId = req.user.tenantId;
+        const r = await deps.receiptStore.findById(tenantId, objectId.parse(req.params.id));
+        if (!r) throw notFound('Receipt');
+        const made = await deps.receiptStore.requestCancel({
+          tenantId,
+          receipt: r,
+          reason,
+          user: req.user,
+          audit: (saved, session) =>
+            recordAudit(
+              deps,
+              req,
+              {
+                action: 'create',
+                entity: 'receipt_cancellation',
+                entityId: String(saved._id),
+                newValue: { receiptId: String(r._id), number: r.number, status: 'requested' },
+                reason,
+              },
+              { critical: true, session },
+            ),
+        });
+        if (!made)
+          throw new AppError(
+            'ALREADY_CANCELLING',
+            409,
+            'This receipt is already cancelled or already has a cancellation request.',
+          );
+        res.status(201).json({ id: String(made._id), status: 'cancel_requested' });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  // The Admin cancels directly, without Principal approval. The receipt itself is never edited;
+  // its payments simply stop counting, so the fees become payable again.
+  router.post(
+    '/receipts/:id/cancel',
+    authenticate,
+    requireRole('admin'),
+    async (req, res, next) => {
+      try {
+        const { reason } = cancelBody.parse(req.body);
+        const tenantId = req.user.tenantId;
+        const r = await deps.receiptStore.findById(tenantId, objectId.parse(req.params.id));
+        if (!r) throw notFound('Receipt');
+        const done = await deps.receiptStore.cancelDirect({
+          tenantId,
+          receipt: r,
+          reason,
+          user: req.user,
+          audit: (saved, session) =>
+            recordAudit(
+              deps,
+              req,
+              {
+                action: 'cancel',
+                entity: 'receipt',
+                entityId: String(r._id),
+                oldValue: { number: r.number, totalPaise: r.totalPaise },
+                newValue: { status: 'cancelled' },
+                reason,
+              },
+              { critical: true, session },
+            ),
+        });
+        if (!done)
+          throw new AppError('ALREADY_CANCELLED', 409, 'This receipt is already cancelled.');
+        res.json({ id: String(r._id), status: 'cancelled' });
       } catch (err) {
         next(err);
       }

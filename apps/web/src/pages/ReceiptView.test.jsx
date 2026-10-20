@@ -7,7 +7,8 @@ import { ToastProvider } from '../components/ui';
 import { ReceiptView } from './ReceiptView';
 
 vi.mock('../api/client', () => ({ api: vi.fn() }));
-vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ role: 'cashier' }) }));
+let role = 'cashier';
+vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ role }) }));
 import { api } from '../api/client';
 
 const receipt = {
@@ -29,6 +30,9 @@ const receipt = {
   totalPaise: 150000,
   monthLabel: 'June',
   dueAfterPaise: 0,
+  dueAfterOldPaise: 0,
+  dueAfterNewPaise: 0,
+  status: 'valid',
   mode: 'upi',
   reference: 'UPI998877',
   cashierName: 'Ramesh',
@@ -53,6 +57,7 @@ function show(state) {
 describe('Receipt view', () => {
   beforeEach(() => {
     api.mockReset();
+    role = 'cashier';
     window.print = vi.fn();
   });
 
@@ -93,5 +98,44 @@ describe('Receipt view', () => {
     api.mockRejectedValue(new Error('Receipt not found.'));
     show({ fresh: true });
     expect(await screen.findByText('Receipt not found.')).toBeInTheDocument();
+  });
+
+  it('shows old dues and new dues separately, and village with the address', async () => {
+    api.mockResolvedValue({
+      ...receipt,
+      dueAfterOldPaise: 50000,
+      dueAfterNewPaise: 70000,
+      student: { ...receipt.student, address: 'Ward 4', village: 'Khakner' },
+    });
+    show();
+    expect((await screen.findAllByText(/Old Dues/)).length).toBe(2);
+    expect(screen.getAllByText(/New Dues/).length).toBe(2);
+    expect(screen.getAllByText(/Ward 4, Khakner/).length).toBe(2);
+  });
+
+  it('cashier requests cancellation with a reason; admin cancels directly', async () => {
+    api.mockResolvedValue(receipt);
+    show();
+    await userEvent.click(await screen.findByRole('button', { name: 'Request cancellation' }));
+    await userEvent.type(screen.getByRole('textbox'), 'Wrong student');
+    await userEvent.click(screen.getByRole('button', { name: 'Send request' }));
+    await vi.waitFor(() =>
+      expect(api).toHaveBeenCalledWith(
+        '/api/receipts/r1/cancel-request',
+        expect.objectContaining({ method: 'POST', body: { reason: 'Wrong student' } }),
+      ),
+    );
+  });
+
+  it('a cancelled receipt shows the CANCELLED stamp and no cancel button', async () => {
+    role = 'admin';
+    api.mockResolvedValue({
+      ...receipt,
+      status: 'cancelled',
+      cancellation: { reason: 'Duplicate entry' },
+    });
+    show();
+    expect((await screen.findAllByText('CANCELLED')).length).toBe(2);
+    expect(screen.queryByRole('button', { name: 'Cancel receipt' })).not.toBeInTheDocument();
   });
 });

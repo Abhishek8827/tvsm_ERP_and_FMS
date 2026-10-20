@@ -111,4 +111,26 @@ describe.skipIf(!haveDb)('receipt store on a real database', () => {
     ).rejects.toThrow(/immutable/);
     await expect(Receipt.deleteMany({ tenantId: T }).exec()).rejects.toThrow(/immutable/);
   });
+
+  it('a cancelled receipt stops counting; a request can become the Admin cancellation; no double cancel', async () => {
+    const sid = new mongoose.Types.ObjectId();
+    const { receipt } = await issue(sid, 'school', 'k-cancel');
+    const user = { id: 'u1', name: 'Cashier' };
+    const asked = await store.requestCancel({ tenantId: T, receipt, reason: 'Wrong amount', user });
+    expect(asked.status).toBe('requested');
+    expect(await store.requestCancel({ tenantId: T, receipt, reason: 'again', user })).toBeNull();
+    expect((await store.findById(T, receipt._id)).cancellation.status).toBe('requested');
+    expect(await store.listForStudent(T, sid, FY)).toHaveLength(1); // still counts until cancelled
+    const done = await store.cancelDirect({
+      tenantId: T,
+      receipt,
+      reason: 'Wrong amount',
+      user: { id: 'a1', name: 'Admin' },
+    });
+    expect(done.status).toBe('cancelled');
+    expect(await store.cancelDirect({ tenantId: T, receipt, reason: 'again', user })).toBeNull();
+    expect(await store.listForStudent(T, sid, FY)).toHaveLength(0);
+    const list = await store.list({ tenantId: T, status: 'cancelled', page: 1, pageSize: 50 });
+    expect(list.rows.some((r) => String(r._id) === String(receipt._id))).toBe(true);
+  });
 });

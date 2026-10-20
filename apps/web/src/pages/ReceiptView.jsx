@@ -1,10 +1,10 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { SCHOOL, classLabel, formatINR, rupeesInWords } from '@erp/shared';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
-import { Button, ErrorState, Spinner, useToast } from '../components/ui';
+import { Badge, Button, ConfirmDialog, ErrorState, Spinner, useToast } from '../components/ui';
 
 const TITLE = { school: 'SCHOOL FEES RECEIPT', transport: 'TRANSPORT FEES RECEIPT' };
 // Rows printed on the receipt, in the order of the school's paper receipt book.
@@ -36,7 +36,7 @@ const when = (iso) =>
   });
 
 /** One quarter-A4 copy (Student copy or Office copy). */
-function Copy({ r, copyName, duplicate }) {
+function Copy({ r, copyName, duplicate, cancelled }) {
   const rows = ROWS[r.kind];
   const amountOf = (heads) => {
     const lines = r.lines.filter((l) => heads.includes(l.head));
@@ -48,7 +48,7 @@ function Copy({ r, copyName, duplicate }) {
     <div className="copy">
       <div className="head">
         <img src="/logo.jpg" alt="" />
-        <div>
+        <div style={{ textAlign: 'center' }}>
           <strong>{SCHOOL.name}</strong>
           <div>{SCHOOL.addressLine}</div>
           <div>
@@ -60,6 +60,7 @@ function Copy({ r, copyName, duplicate }) {
       <div className="title">{TITLE[r.kind]}</div>
       <div className="tags">
         <span>{copyName}</span>
+        {cancelled && <span className="dup">CANCELLED</span>}
         {duplicate && <span className="dup">DUPLICATE</span>}
       </div>
       <div className="line">
@@ -84,14 +85,10 @@ function Copy({ r, copyName, duplicate }) {
         <span>Session: {r.fy}</span>
       </div>
       {s.fatherName && <div className="line">Father: {s.fatherName}</div>}
-      {r.kind === 'transport' ? (
-        <div className="line">Village: {s.village ?? '-'}</div>
-      ) : (
-        <div className="line">
-          <span>Add.: {s.address ?? ''}</span>
-          <span>Mob.: {s.contactNo ?? ''}</span>
-        </div>
-      )}
+      <div className="line">
+        <span>Add.: {[s.address, s.village].filter(Boolean).join(', ') || '-'}</span>
+        <span>Mob.: {s.contactNo ?? ''}</span>
+      </div>
       <div className="line">Month: {r.monthLabel || '-'}</div>
       <table>
         <thead>
@@ -124,7 +121,15 @@ function Copy({ r, copyName, duplicate }) {
       </div>
       <div className="words">{rupeesInWords(r.totalPaise)}</div>
       <div className="line">
-        <span>Fees Due: {formatINR(r.dueAfterPaise, { hideZeroPaise: true })}</span>
+        <span>
+          Old Dues: <b>{formatINR(r.dueAfterOldPaise ?? 0, { hideZeroPaise: true })}</b>
+        </span>
+        <span>
+          New Dues: <b>{formatINR(r.dueAfterNewPaise ?? 0, { hideZeroPaise: true })}</b>
+        </span>
+      </div>
+      <div className="line">
+        <span />
         <span>
           Mode: {MODE_LABEL[r.mode]}
           {r.reference ? ` · Ref: ${r.reference}` : ''}
@@ -146,7 +151,7 @@ const PRINT_CSS = `
 .sheet{display:flex;width:210mm;height:148.5mm;background:#fff;color:#000;font-size:8.5pt;line-height:1.25}
 .copy{width:105mm;height:148.5mm;padding:5mm;box-sizing:border-box;border-right:1px dashed #666;display:flex;flex-direction:column;gap:1.4mm}
 .copy:last-child{border-right:0}
-.head{display:flex;gap:2mm;align-items:center;font-size:7.5pt;text-align:left}
+.head{display:flex;gap:2mm;align-items:center;justify-content:center;font-size:7.5pt;text-align:center}
 .head img{height:11mm;width:auto}
 .head strong{font-size:9pt}
 .title{text-align:center;font-weight:700;font-size:10pt;border:1px solid #000;padding:1mm 0;letter-spacing:.3px}
@@ -181,6 +186,9 @@ export function ReceiptView() {
   const location = useLocation();
   const { role } = useAuth();
   const { notify } = useToast();
+  const queryClient = useQueryClient();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [reason, setReason] = useState('');
   const [printedOnce, setPrintedOnce] = useState(false);
   const [duplicate, setDuplicate] = useState(false);
   const fresh = Boolean(location.state?.fresh);
@@ -199,12 +207,31 @@ export function ReceiptView() {
     onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
   });
 
+  const cancelMutation = useMutation({
+    mutationFn: () =>
+      api(role === 'admin' ? `/api/receipts/${id}/cancel` : `/api/receipts/${id}/cancel-request`, {
+        method: 'POST',
+        body: { reason },
+      }),
+    onSuccess: async () => {
+      setCancelOpen(false);
+      await queryClient.invalidateQueries({ queryKey: ['receipt', id] });
+      await queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      notify(
+        role === 'admin' ? 'Receipt cancelled.' : 'Cancellation request sent for approval.',
+        'success',
+      );
+    },
+    onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
+  });
+
   if (receipt.isPending) return <Spinner label="Loading receipt" />;
   if (receipt.isError)
     return <ErrorState message={receipt.error.message} onRetry={() => receipt.refetch()} />;
   const r = receipt.data;
 
-  const original = fresh && !printedOnce;
+  const cancelled = r.status === 'cancelled';
+  const original = fresh && !printedOnce && !cancelled;
   const canReprint = role === 'cashier' || role === 'admin';
   const phone = r.student.contactNo ? `91${r.student.contactNo}` : null;
   const message = `TVSM School: fee receipt ${r.number} of ${formatINR(r.totalPaise, { hideZeroPaise: true })} received for ${r.student.name} (Sch. ${r.student.admissionNo}) on ${when(r.issuedAt)}. Thank you.`;
@@ -245,6 +272,11 @@ export function ReceiptView() {
               Send on WhatsApp
             </Button>
           )}
+          {r.status === 'valid' && (role === 'admin' || role === 'cashier') && (
+            <Button variant="danger" onClick={() => setCancelOpen(true)}>
+              {role === 'admin' ? 'Cancel receipt' : 'Request cancellation'}
+            </Button>
+          )}
           {role === 'cashier' && (
             <Link
               to="/collect-fee"
@@ -255,6 +287,23 @@ export function ReceiptView() {
           )}
         </div>
       </div>
+      {cancelled && (
+        <div className="no-print flex items-center gap-2">
+          <Badge tone="danger">Cancelled</Badge>
+          <span className="text-sm text-ink-muted">
+            {r.cancellation?.reason}
+            {r.cancellation?.decidedByName ? ` (by ${r.cancellation.decidedByName})` : ''}
+          </span>
+        </div>
+      )}
+      {r.status === 'cancel_requested' && (
+        <div className="no-print flex items-center gap-2">
+          <Badge tone="warning">Cancellation requested</Badge>
+          <span className="text-sm text-ink-muted">
+            Waiting for approval: {r.cancellation?.reason}
+          </span>
+        </div>
+      )}
       <p className="no-print text-sm text-ink-muted">
         {original
           ? 'Print once now: this is the original receipt. Any later print is marked DUPLICATE.'
@@ -263,10 +312,26 @@ export function ReceiptView() {
       </p>
       <div className="overflow-x-auto">
         <div className="sheet border border-line">
-          <Copy r={r} copyName="STUDENT COPY" duplicate={duplicate} />
-          <Copy r={r} copyName="OFFICE COPY" duplicate={duplicate} />
+          <Copy r={r} copyName="STUDENT COPY" duplicate={duplicate} cancelled={cancelled} />
+          <Copy r={r} copyName="OFFICE COPY" duplicate={duplicate} cancelled={cancelled} />
         </div>
       </div>
+      <ConfirmDialog
+        open={cancelOpen}
+        tone="danger"
+        title={role === 'admin' ? 'Cancel this receipt?' : 'Request cancellation?'}
+        description={
+          role === 'admin'
+            ? 'The receipt stays on record, marked CANCELLED, and its payments stop counting, so those fees become payable again. This is written to the audit log.'
+            : 'The receipt stays valid until it is approved. The reason is written to the audit log.'
+        }
+        confirmLabel={role === 'admin' ? 'Cancel receipt' : 'Send request'}
+        requireReason
+        onReasonChange={setReason}
+        loading={cancelMutation.isPending}
+        onConfirm={() => cancelMutation.mutate()}
+        onCancel={() => setCancelOpen(false)}
+      />
     </div>
   );
 }

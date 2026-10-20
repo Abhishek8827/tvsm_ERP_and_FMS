@@ -47,6 +47,9 @@ const receiptSchema = new mongoose.Schema(
     totalPaise: { type: Number, required: true, min: 1 },
     monthLabel: { type: String, default: '' },
     dueAfterPaise: { type: Number, required: true, min: 0 },
+    // Split of dueAfterPaise for the printed receipt (older receipts do not have it).
+    dueAfterOldPaise: { type: Number, min: 0 },
+    dueAfterNewPaise: { type: Number, min: 0 },
     mode: { type: String, enum: ['cash', 'upi', 'qr'], required: true },
     reference: { type: String },
     cashierId: { type: String, required: true },

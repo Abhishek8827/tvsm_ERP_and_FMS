@@ -7,7 +7,10 @@ import { ErrorState, Spinner } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
 import { Dashboard } from './pages/Dashboard';
+import { CollectFee } from './pages/CollectFee';
 import { FeeStructure } from './pages/FeeStructure';
+import { ImportOldFees } from './pages/ImportOldFees';
+import { ReceiptView } from './pages/ReceiptView';
 import { ImportStudents } from './pages/ImportStudents';
 import { Login } from './pages/Login';
 import { StudentProfile } from './pages/StudentProfile';
@@ -67,7 +70,11 @@ export function App() {
         <Route index element={<Dashboard />} />
         {items
           .filter(
-            (i) => i.key !== 'students' && i.key !== 'data-import' && i.key !== 'fee-structure',
+            (i) =>
+              i.key !== 'students' &&
+              i.key !== 'data-import' &&
+              i.key !== 'fee-structure' &&
+              i.key !== 'collect-fee',
           )
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
@@ -75,7 +82,10 @@ export function App() {
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />
         <Route path="/fee-structure" element={<FeeStructure />} />
+        <Route path="/receipts/:id" element={<ReceiptView />} />
+        {role === 'cashier' && <Route path="/collect-fee" element={<CollectFee />} />}
         {role === 'admin' && <Route path="/data-import" element={<ImportStudents />} />}
+        {role === 'admin' && <Route path="/data-import/old-fees" element={<ImportOldFees />} />}
         {role === 'admin' && <Route path="/students/new" element={<StudentForm />} />}
         {role === 'admin' && <Route path="/students/:id/edit" element={<StudentForm />} />}
         <Route path="*" element={<Navigate to="/" replace />} />

@@ -191,7 +191,7 @@ describe('signed-in shell', () => {
   });
 
   it('screens not built yet say "Coming soon" instead of being dead', async () => {
-    renderApp(fakeService({ signedIn: true }), { path: '/collect-fee' });
+    renderApp(fakeService({ signedIn: true }), { path: '/expenses' });
     expect(await screen.findByText('Coming soon')).toBeInTheDocument();
   });
 });

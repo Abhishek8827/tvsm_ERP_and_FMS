@@ -7,6 +7,7 @@ import {
   makeAuditStore,
   makeChargeStore,
   makeFeeStore,
+  makeReceiptStore,
   makeStudentStore,
   makeUserStore,
 } from './services/stores.js';
@@ -27,6 +28,7 @@ async function main() {
         studentStore: makeStudentStore(),
         feeStore: makeFeeStore(),
         chargeStore: makeChargeStore(),
+        receiptStore: makeReceiptStore(),
         auditStore: makeAuditStore(),
       }
     : undefined;

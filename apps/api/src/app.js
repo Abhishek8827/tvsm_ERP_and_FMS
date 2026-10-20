@@ -12,6 +12,8 @@ import { healthRouter } from './routes/health.js';
 import { studentImportRouter } from './routes/studentImport.js';
 import { studentsRouter } from './routes/students.js';
 import { ledgerRouter } from './routes/ledger.js';
+import { oldDuesImportRouter } from './routes/oldDuesImport.js';
+import { receiptsRouter } from './routes/receipts.js';
 import { usersRouter } from './routes/users.js';
 /**
  * `auth` = { verifyToken, userStore, auditStore } . When it is missing (Firebase not configured)
@@ -56,16 +58,28 @@ export function createApp(env, logger, auth) {
     app.use('/api', studentsRouter(deps, authenticate));
     app.use('/api', feeStructureRouter(deps, authenticate));
     app.use('/api', ledgerRouter(deps, authenticate));
+    app.use('/api', oldDuesImportRouter(deps, authenticate));
+    app.use('/api', receiptsRouter(deps, authenticate));
   } else {
-    app.use(['/api/auth', '/api/users', '/api/students', '/api/fee-structure'], (req, res) => {
-      res.status(503).json({
-        error: {
-          code: 'AUTH_NOT_CONFIGURED',
-          message: 'Sign-in is not configured on the server yet.',
-          requestId: req.id,
-        },
-      });
-    });
+    app.use(
+      [
+        '/api/auth',
+        '/api/users',
+        '/api/students',
+        '/api/fee-structure',
+        '/api/receipts',
+        '/api/old-dues',
+      ],
+      (req, res) => {
+        res.status(503).json({
+          error: {
+            code: 'AUTH_NOT_CONFIGURED',
+            message: 'Sign-in is not configured on the server yet.',
+            requestId: req.id,
+          },
+        });
+      },
+    );
   }
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger, env.NODE_ENV === 'production'));

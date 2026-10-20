@@ -1,10 +1,11 @@
 import mongoose from 'mongoose';
-import { CLASS_KEYS, receiptNumber } from '@erp/shared';
+import { CLASS_KEYS, addDaysToDateString, istStartOfDay, receiptNumber } from '@erp/shared';
 import { AuditLog } from '../models/AuditLog.js';
 import { Charge } from '../models/Charge.js';
 import { Counter } from '../models/Counter.js';
 import { FeeStructure } from '../models/FeeStructure.js';
 import { Receipt } from '../models/Receipt.js';
+import { ReceiptCancellation } from '../models/ReceiptCancellation.js';
 import { Student } from '../models/Student.js';
 import { User } from '../models/User.js';
 
@@ -200,14 +201,9 @@ export function makeChargeStore() {
           updateOne: {
             filter: { tenantId, studentId: c.studentId, fy, head: c.head, period: c.period },
             update: {
-              $setOnInsert: {
-                studentId: c.studentId,
-                fy,
-                head: c.head,
-                period: c.period,
-                dueDate: c.dueDate,
-                amountPaise: c.amountPaise,
-              },
+              // WHY only these: the filter's equality fields are copied into the new document by
+              // Mongo itself; repeating them here is a path conflict.
+              $setOnInsert: { dueDate: c.dueDate, amountPaise: c.amountPaise },
             },
             upsert: true,
           },
@@ -225,7 +221,10 @@ export function makeChargeStore() {
           updateOne: {
             filter: { tenantId, studentId, fy, head: c.head, period: c.period },
             update: {
-              $setOnInsert: { studentId, fy, ...c, amountPaise: c.amount },
+              $setOnInsert: (({ head: _h, period: _p, amount, ...rest }) => ({
+                ...rest,
+                amountPaise: amount,
+              }))(c),
             },
             upsert: true,
           },
@@ -235,6 +234,15 @@ export function makeChargeStore() {
       return result.upsertedCount;
     },
   };
+}
+
+// Receipts that were cancelled no longer count as payments (their money is not "paid").
+async function cancelledReceiptIds(tenantId, extra = {}, session = null) {
+  const rows = await ReceiptCancellation.find({ tenantId, status: 'cancelled', ...extra })
+    .select('receiptId')
+    .session(session)
+    .lean();
+  return rows.map((r) => r.receiptId);
 }
 
 const isDuplicateKey = (err) => err?.code === 11000;
@@ -316,8 +324,192 @@ export function makeReceiptStore() {
       }
       throw lastError;
     },
-    findById: (tenantId, id) => Receipt.findOne({ tenantId, _id: id }).lean(),
-    listForStudent: (tenantId, studentId, fy) =>
-      Receipt.find({ tenantId, studentId, fy }).sort({ issuedAt: 1 }).lean(),
+    async findById(tenantId, id) {
+      const receipt = await Receipt.findOne({ tenantId, _id: id }).lean();
+      if (!receipt) return null;
+      const c = await ReceiptCancellation.findOne({
+        tenantId,
+        receiptId: id,
+        status: { $in: ['requested', 'cancelled'] },
+      }).lean();
+      return { ...receipt, cancellation: c ?? null };
+    },
+    // Only receipts that still count (cancelled ones are left out), used for dues and ledgers.
+    async listForStudent(tenantId, studentId, fy) {
+      const gone = await cancelledReceiptIds(tenantId, { studentId });
+      return Receipt.find({ tenantId, studentId, fy, _id: { $nin: gone } })
+        .sort({ issuedAt: 1 })
+        .lean();
+    },
+    /** Filtered, paginated list for the Receipts screens, plus totals of the receipts that count. */
+    async list({ tenantId, from, to, kind, mode, q, status, page, pageSize }) {
+      const match = { tenantId };
+      if (from || to) {
+        match.issuedAt = {};
+        if (from) match.issuedAt.$gte = istStartOfDay(from);
+        if (to) match.issuedAt.$lt = istStartOfDay(addDaysToDateString(to, 1));
+      }
+      if (kind) match.kind = kind;
+      if (mode) match.mode = mode;
+      if (q?.trim()) {
+        const rx = { $regex: escapeRegex(q.trim()), $options: 'i' };
+        match.$or = [{ number: rx }, { 'student.name': rx }, { 'student.admissionNo': rx }];
+      }
+      const cancelled = await cancelledReceiptIds(tenantId);
+      const pendingRows = await ReceiptCancellation.find({ tenantId, status: 'requested' })
+        .select('receiptId')
+        .lean();
+      const rowMatch = { ...match };
+      if (status === 'cancelled') rowMatch._id = { $in: cancelled };
+      else if (status === 'valid') rowMatch._id = { $nin: cancelled };
+      const [rows, total, groups] = await Promise.all([
+        Receipt.find(rowMatch)
+          .sort({ issuedAt: -1, seq: -1 })
+          .skip((page - 1) * pageSize)
+          .limit(pageSize)
+          .lean(),
+        Receipt.countDocuments(rowMatch),
+        Receipt.aggregate([
+          { $match: { ...match, _id: { $nin: cancelled } } },
+          {
+            $group: {
+              _id: { kind: '$kind', mode: '$mode' },
+              paise: { $sum: '$totalPaise' },
+              count: { $sum: 1 },
+            },
+          },
+        ]),
+      ]);
+      const cancelledSet = new Set(cancelled.map(String));
+      const pendingSet = new Set(pendingRows.map((r) => String(r.receiptId)));
+      return {
+        rows: rows.map((r) => ({
+          ...r,
+          status: cancelledSet.has(String(r._id))
+            ? 'cancelled'
+            : pendingSet.has(String(r._id))
+              ? 'cancel_requested'
+              : 'valid',
+        })),
+        total,
+        groups: groups.map((g) => ({ ...g._id, paise: g.paise, count: g.count })),
+      };
+    },
+    /** All rows for the Excel export (same filters, newest first), capped by the caller. */
+    async listAll({ tenantId, from, to, kind, mode, q, status, limit }) {
+      const out = await this.list({
+        tenantId,
+        from,
+        to,
+        kind,
+        mode,
+        q,
+        status,
+        page: 1,
+        pageSize: limit,
+      });
+      return out.rows;
+    },
+    /**
+     * A Cashier asks for a receipt to be cancelled (waits for approval, built in Step 8).
+     * Returns null when the receipt is already cancelled or already has an open request.
+     */
+    async requestCancel({ tenantId, receipt, reason, user, audit }) {
+      const session = await mongoose.startSession();
+      try {
+        let result = null;
+        await session.withTransaction(async () => {
+          const live = await ReceiptCancellation.findOne({
+            tenantId,
+            receiptId: receipt._id,
+            status: { $in: ['requested', 'cancelled'] },
+          })
+            .session(session)
+            .lean();
+          if (live) {
+            result = null;
+            return;
+          }
+          const [created] = await ReceiptCancellation.create(
+            [
+              {
+                tenantId,
+                receiptId: receipt._id,
+                studentId: receipt.studentId,
+                receiptNumber: receipt.number,
+                status: 'requested',
+                reason,
+                requestedBy: user.id,
+                requestedByName: user.name,
+                requestedAt: new Date(),
+              },
+            ],
+            { session },
+          );
+          if (audit) await audit(created.toObject(), session);
+          result = created.toObject();
+        });
+        return result;
+      } finally {
+        await session.endSession();
+      }
+    },
+    /**
+     * The Admin cancels directly (no Principal approval). If the Cashier had already asked, that
+     * request is the one that becomes "cancelled". Returns null if it is already cancelled.
+     */
+    async cancelDirect({ tenantId, receipt, reason, user, audit }) {
+      const session = await mongoose.startSession();
+      try {
+        let result = null;
+        await session.withTransaction(async () => {
+          const live = await ReceiptCancellation.findOne({
+            tenantId,
+            receiptId: receipt._id,
+            status: { $in: ['requested', 'cancelled'] },
+          })
+            .session(session)
+            .lean();
+          if (live?.status === 'cancelled') {
+            result = null;
+            return;
+          }
+          const decided = {
+            status: 'cancelled',
+            decidedBy: user.id,
+            decidedByName: user.name,
+            decidedAt: new Date(),
+          };
+          let saved;
+          if (live) {
+            saved = await ReceiptCancellation.findOneAndUpdate(
+              { tenantId, _id: live._id },
+              { $set: { ...decided, decisionNote: reason } },
+              { returnDocument: 'after', session },
+            ).lean();
+          } else {
+            const [created] = await ReceiptCancellation.create(
+              [
+                {
+                  tenantId,
+                  receiptId: receipt._id,
+                  studentId: receipt.studentId,
+                  receiptNumber: receipt.number,
+                  reason,
+                  ...decided,
+                },
+              ],
+              { session },
+            );
+            saved = created.toObject();
+          }
+          if (audit) await audit(saved, session);
+          result = saved;
+        });
+        return result;
+      } finally {
+        await session.endSession();
+      }
+    },
   };
 }

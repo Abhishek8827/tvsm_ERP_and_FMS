@@ -5,7 +5,8 @@ import { assertPaise } from './money.js';
  * Fee collection rules (confirmed by the school). The server runs this on every payment; the
  * browser only shows the result. All money is integer paise.
  *
- * Two separate modules, each with its own receipts and receipt numbers:
+ * Two separate modules, each with its own receipts and receipt numbers (late fee is shared: one
+ * Rs 100 per overdue month for the student, not one per module):
  *  - school:    old fees, tuition, admission, form, late fee, T.C., other
  *  - transport: old transport fees, transport (new), late fee
  * Rules:
@@ -64,9 +65,13 @@ export function creditsFromReceipts(receipts) {
   return credits;
 }
 
-/** Periods whose late fee was already dealt with on an earlier receipt of the same module. */
-export function lateSettledFromReceipts(receipts, kind) {
-  return receipts.filter((r) => r.kind === kind).flatMap((r) => r.lateFee?.periods ?? []);
+/**
+ * Months whose late fee was already dealt with on an earlier receipt. WHY both kinds together:
+ * the school decided it is ONE Rs 100 per overdue month for the student, whichever receipt
+ * (school or transport) is made first. (`_kind` is kept so callers need not change.)
+ */
+export function lateSettledFromReceipts(receipts, _kind) {
+  return receipts.flatMap((r) => r.lateFee?.periods ?? []);
 }
 
 /** What a student owes in ONE module, charge by charge. */
@@ -210,11 +215,16 @@ export function planReceipt({ kind, charges, receipts, asOf = todayIst(), config
   // "Fees due" printed on the receipt = what is due till today after this payment.
   const afterCredits = [...receipts, { kind, lines: lines.filter((l) => l.chargeId) }];
   const after = moduleDues({ kind, charges, receipts: afterCredits, asOf, config });
+  // Old dues and new dues are printed separately. Advance months (not yet due) are in neither.
+  const dueItems = after.instalments.filter((i) => i.isDue).flatMap((i) => i.items);
+  const dueAfterOldPaise = dueItems.filter((x) => x.head === h.old).reduce((a, x) => a + x.due, 0);
   return {
     lines,
     lateFee,
     totalPaise,
     monthLabel: monthLabel(allocations),
     dueAfterPaise: after.totals.dueNow,
+    dueAfterOldPaise,
+    dueAfterNewPaise: after.totals.dueNow - dueAfterOldPaise,
   };
 }

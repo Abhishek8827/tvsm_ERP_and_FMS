@@ -6,6 +6,5 @@ export const SCHOOL = {
   name: 'THAKUR VIRENDRA SINGH MEMORIAL SCHOOL',
   addressLine: 'NEPANAGAR, Dist. Burhanpur (M.P.) 450221',
   affiliationNo: '572078',
-  // schoolCode: 'null',
   schoolCode: '23480513302',
 };

@@ -11,6 +11,7 @@ import { CollectFee } from './pages/CollectFee';
 import { FeeStructure } from './pages/FeeStructure';
 import { ImportOldFees } from './pages/ImportOldFees';
 import { ReceiptView } from './pages/ReceiptView';
+import { Receipts } from './pages/Receipts';
 import { ImportStudents } from './pages/ImportStudents';
 import { Login } from './pages/Login';
 import { StudentProfile } from './pages/StudentProfile';
@@ -74,7 +75,9 @@ export function App() {
               i.key !== 'students' &&
               i.key !== 'data-import' &&
               i.key !== 'fee-structure' &&
-              i.key !== 'collect-fee',
+              i.key !== 'collect-fee' &&
+              i.key !== 'receipts' &&
+              i.key !== 'fees-receipts',
           )
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
@@ -83,6 +86,8 @@ export function App() {
         <Route path="/students/:id" element={<StudentProfile />} />
         <Route path="/fee-structure" element={<FeeStructure />} />
         <Route path="/receipts/:id" element={<ReceiptView />} />
+        {role === 'cashier' && <Route path="/receipts" element={<Receipts />} />}
+        {role === 'admin' && <Route path="/fees-receipts" element={<Receipts />} />}
         {role === 'cashier' && <Route path="/collect-fee" element={<CollectFee />} />}
         {role === 'admin' && <Route path="/data-import" element={<ImportStudents />} />}
         {role === 'admin' && <Route path="/data-import/old-fees" element={<ImportOldFees />} />}

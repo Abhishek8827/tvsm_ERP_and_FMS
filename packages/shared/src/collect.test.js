@@ -131,4 +131,51 @@ describe('planReceipt', () => {
     });
     expect(r.dueAfterPaise).toBe(rs(1000)); // July is due, June paid
   });
+
+  it('late fee is ONE Rs 100 per overdue month for both kinds: a school receipt settles the bus late fee too', () => {
+    const asOf = '2026-07-01';
+    const school = planReceipt({
+      ...base,
+      asOf,
+      input: { newPaise: rs(1000), lateFeePaise: rs(100) },
+    });
+    const busBase = { kind: 'transport', charges: bus, asOf };
+    const first = planReceipt({
+      ...busBase,
+      receipts: [],
+      input: { newPaise: rs(700), lateFeePaise: rs(100) },
+    });
+    expect(first.lateFee.calculatedPaise).toBe(rs(100));
+    const second = planReceipt({
+      ...busBase,
+      receipts: [
+        { kind: 'school', lines: school.lines.filter((l) => l.chargeId), lateFee: school.lateFee },
+      ],
+      input: { newPaise: rs(700) },
+    });
+    expect(second.lateFee.calculatedPaise).toBe(0);
+  });
+});
+
+describe('advance payment and old/new dues split', () => {
+  const base = { kind: 'school', charges: [...old, ...tuition], receipts: [], asOf: '2026-06-20' };
+
+  it('advance goes to the NEW fees of future months and leaves old fees untouched', () => {
+    // Old fees cleared first, then 3 months paid (June due, July and Aug in advance).
+    const first = planReceipt({ ...base, input: { oldPaise: rs(2000), newPaise: rs(3000) } });
+    const oldLines = first.lines.filter((l) => l.head === 'old_fees');
+    expect(oldLines.reduce((a, l) => a + l.amountPaise, 0)).toBe(rs(2000));
+    const tuitionLines = first.lines.filter((l) => l.head === 'tuition');
+    expect(tuitionLines.map((l) => l.period)).toEqual(['2026-06', '2026-07', '2026-08']);
+    expect(first.monthLabel).toBe('June - August');
+    // Nothing is due till today after that: advance months are in neither bucket.
+    expect(first.dueAfterOldPaise).toBe(0);
+    expect(first.dueAfterNewPaise).toBe(0);
+  });
+
+  it('prints old dues and new dues separately', () => {
+    const r = planReceipt({ ...base, input: { oldPaise: rs(500), newPaise: 0 } });
+    expect(r.dueAfterOldPaise).toBe(rs(1500));
+    expect(r.dueAfterNewPaise).toBe(rs(1000)); // June tuition fell due on the 15th
+  });
 });

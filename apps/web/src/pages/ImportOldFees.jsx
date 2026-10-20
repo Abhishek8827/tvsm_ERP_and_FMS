@@ -26,8 +26,7 @@ export function ImportOldFees() {
         notify(`${res.created} old fee entries imported.`, 'success');
       }
     },
-    onError: (e) =>
-      notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
+    onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
   });
 
   async function downloadTemplate() {

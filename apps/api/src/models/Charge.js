@@ -14,8 +14,13 @@ const chargeSchema = new mongoose.Schema(
   {
     studentId: { type: mongoose.Schema.Types.ObjectId, required: true },
     fy: { type: String, required: true },
-    head: { type: String, enum: ['tuition', 'transport', 'admission', 'form'], required: true },
-    period: { type: String, required: true }, // '2026-06' or 'once'
+    head: {
+      type: String,
+      // old_fees / transport_old: unpaid amounts brought from before this system (Excel import).
+      enum: ['tuition', 'transport', 'admission', 'form', 'old_fees', 'transport_old'],
+      required: true,
+    },
+    period: { type: String, required: true }, // '2026-06', 'once' or 'opening' (old fees)
     dueDate: { type: String, required: true }, // IST date 'YYYY-MM-DD'
     amountPaise: { type: Number, required: true, min: 1 },
   },

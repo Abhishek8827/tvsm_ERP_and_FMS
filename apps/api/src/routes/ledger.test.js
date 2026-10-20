@@ -71,6 +71,7 @@ function build() {
     auditStore: { append: async (e) => audit.push(e) },
     studentStore: { findById: async (_t, id) => students[id] ?? null },
     feeStore: { get: async () => chart },
+    receiptStore: { listForStudent: async () => [] },
     chargeStore: {
       listForStudent: async (_t, id) =>
         rows

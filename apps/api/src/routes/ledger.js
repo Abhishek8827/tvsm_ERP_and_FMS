@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { buildCharges, computeDues, todayIst } from '@erp/shared';
+import { buildCharges, computeDues, creditsFromReceipts, moduleDues, todayIst } from '@erp/shared';
 import { requireRole } from '../middleware/requireRole.js';
 import { recordAudit } from '../services/audit.js';
 import { AppError, notFound } from '../utils/errors.js';
@@ -94,7 +94,10 @@ export function ledgerRouter(deps, authenticate) {
         const student = await deps.studentStore.findById(tenantId, req.params.id);
         if (!student) throw notFound('Student');
         const chart = await deps.feeStore.get(tenantId, fy);
-        const rows = await deps.chargeStore.listForStudent(tenantId, student._id, fy);
+        const [rows, receipts] = await Promise.all([
+          deps.chargeStore.listForStudent(tenantId, student._id, fy),
+          deps.receiptStore.listForStudent(tenantId, student._id, fy),
+        ]);
         const charges = rows.map((c) => ({
           id: String(c._id),
           head: c.head,
@@ -102,13 +105,17 @@ export function ledgerRouter(deps, authenticate) {
           dueDate: c.dueDate,
           amount: c.amountPaise,
         }));
-        // Payments and concessions arrive in Step 4, so credits are empty for now.
+        const day = asOf ?? todayIst();
+        const config = chart ?? undefined;
         const dues = computeDues({
           charges,
-          credits: [],
-          asOf: asOf ?? todayIst(),
-          config: chart ?? undefined,
+          credits: creditsFromReceipts(receipts),
+          asOf: day,
+          config,
         });
+        // School and transport have separate receipts and separate late fees.
+        const school = moduleDues({ kind: 'school', charges, receipts, asOf: day, config });
+        const transport = moduleDues({ kind: 'transport', charges, receipts, asOf: day, config });
         res.json({
           fy,
           student: {
@@ -117,6 +124,8 @@ export function ledgerRouter(deps, authenticate) {
             admissionNo: student.admissionNo,
           },
           ...dues,
+          totals: { ...dues.totals, lateFee: school.totals.lateFee + transport.totals.lateFee },
+          modules: { school: school.totals, transport: transport.totals },
         });
       } catch (err) {
         next(err);

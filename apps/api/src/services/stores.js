@@ -1,7 +1,10 @@
-import { CLASS_KEYS } from '@erp/shared';
+import mongoose from 'mongoose';
+import { CLASS_KEYS, receiptNumber } from '@erp/shared';
 import { AuditLog } from '../models/AuditLog.js';
 import { Charge } from '../models/Charge.js';
+import { Counter } from '../models/Counter.js';
 import { FeeStructure } from '../models/FeeStructure.js';
+import { Receipt } from '../models/Receipt.js';
 import { Student } from '../models/Student.js';
 import { User } from '../models/User.js';
 
@@ -116,6 +119,13 @@ export function makeStudentStore() {
         sections: sections.filter(Boolean).sort(),
       };
     },
+    // admission number -> student id, for importing old fees against existing students
+    async idsByAdmissionNo(tenantId, nos) {
+      const rows = await Student.find({ tenantId, admissionNo: { $in: nos } })
+        .select('admissionNo')
+        .lean();
+      return new Map(rows.map((r) => [r.admissionNo, r._id]));
+    },
     findById: (tenantId, id) => Student.findOne({ tenantId, _id: id }).lean(),
     findManyByIds: (tenantId, ids) =>
       Student.find({ tenantId, _id: { $in: ids } })
@@ -170,6 +180,43 @@ export function makeChargeStore() {
     // Used only when students are permanently deleted: their unpaid fee plan goes with them.
     deleteForStudents: (tenantId, studentIds) =>
       Charge.deleteMany({ tenantId, studentId: { $in: studentIds } }),
+    // Old (opening) fees already imported: Set of "studentId|head"
+    async openingKeys(tenantId, fy, studentIds) {
+      const rows = await Charge.find({
+        tenantId,
+        fy,
+        studentId: { $in: studentIds },
+        head: { $in: ['old_fees', 'transport_old'] },
+      })
+        .select('studentId head')
+        .lean();
+      return new Set(rows.map((r) => `${r.studentId}|${r.head}`));
+    },
+    // Adds many single charges at once; existing ones (same student/head/period) are left alone.
+    async postBatch(tenantId, fy, items) {
+      if (items.length === 0) return 0;
+      const result = await Charge.bulkWrite(
+        items.map((c) => ({
+          updateOne: {
+            filter: { tenantId, studentId: c.studentId, fy, head: c.head, period: c.period },
+            update: {
+              $setOnInsert: {
+                tenantId,
+                studentId: c.studentId,
+                fy,
+                head: c.head,
+                period: c.period,
+                dueDate: c.dueDate,
+                amountPaise: c.amountPaise,
+              },
+            },
+            upsert: true,
+          },
+        })),
+        { ordered: false },
+      );
+      return result.upsertedCount;
+    },
     listForStudent: (tenantId, studentId, fy) =>
       Charge.find({ tenantId, studentId, fy }).sort({ dueDate: 1 }).lean(),
     // Adds only the charges that do not exist yet; returns how many were new.
@@ -188,5 +235,90 @@ export function makeChargeStore() {
       );
       return result.upsertedCount;
     },
+  };
+}
+
+const isDuplicateKey = (err) => err?.code === 11000;
+const isRetryable = (err) =>
+  isDuplicateKey(err) || err?.hasErrorLabel?.('TransientTransactionError');
+
+/**
+ * Receipts. `issue` is the ONE place a receipt is created, and it does everything in a single
+ * database transaction (rules 4, 5, 9):
+ *   1. same Idempotency-Key again  -> returns the receipt already made (no second receipt, no
+ *      second number), so a double click or a network retry is harmless;
+ *   2. locks the student (two cashiers paying for one student queue up);
+ *   3. re-reads the student's earlier receipts and re-checks the rules (`build`), so the amount
+ *      is validated against the TRUE current state, not what the screen showed;
+ *   4. takes the next gap-free number and saves the receipt (and its audit entry) together.
+ * If any step fails, nothing is saved and the number is not used up.
+ */
+export function makeReceiptStore() {
+  return {
+    async issue({ tenantId, studentId, fy, kind, idempotencyKey, build, audit }) {
+      const find = (session) =>
+        Receipt.findOne({ tenantId, idempotencyKey })
+          .session(session ?? null)
+          .lean();
+      let lastError;
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const session = await mongoose.startSession();
+        try {
+          let result;
+          await session.withTransaction(async () => {
+            const existing = await find(session);
+            if (existing) {
+              result = { receipt: existing, replay: true };
+              return;
+            }
+            await Counter.updateOne(
+              { tenantId, key: `lock:${studentId}` },
+              { $inc: { seq: 1 } },
+              { upsert: true, session },
+            );
+            const prior = await Receipt.find({ tenantId, studentId, fy }).session(session).lean();
+            const doc = await build(prior);
+            const counter = await Counter.findOneAndUpdate(
+              { tenantId, key: `receipt:${kind}:${fy}` },
+              { $inc: { seq: 1 } },
+              { upsert: true, returnDocument: 'after', session },
+            ).lean();
+            const [created] = await Receipt.create(
+              [
+                {
+                  ...doc,
+                  tenantId,
+                  kind,
+                  fy,
+                  studentId,
+                  idempotencyKey,
+                  seq: counter.seq,
+                  number: receiptNumber(kind, fy, counter.seq),
+                },
+              ],
+              { session },
+            );
+            const saved = created.toObject();
+            if (audit) await audit(saved, session);
+            result = { receipt: saved, replay: false };
+          });
+          return result;
+        } catch (err) {
+          lastError = err;
+          if (isDuplicateKey(err)) {
+            // Lost a race with the same Idempotency-Key: the winner's receipt is the answer.
+            const existing = await find(null);
+            if (existing) return { receipt: existing, replay: true };
+          }
+          if (!isRetryable(err)) throw err;
+        } finally {
+          await session.endSession();
+        }
+      }
+      throw lastError;
+    },
+    findById: (tenantId, id) => Receipt.findOne({ tenantId, _id: id }).lean(),
+    listForStudent: (tenantId, studentId, fy) =>
+      Receipt.find({ tenantId, studentId, fy }).sort({ issuedAt: 1 }).lean(),
   };
 }

@@ -66,8 +66,7 @@ export function AppShell() {
           {account}
         </div>
       )}
-      // sticky + full screen height: the Sign out button stays at the bottom of the visible screen
-      however long the page is.
+      {/* sticky + full screen height: the Sign out button stays at the bottom of the visible screen however long the page is. */}
       <aside className="hidden w-64 shrink-0 flex-col gap-6 overflow-y-auto bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen">
         <div className="flex items-center gap-3">
           <img

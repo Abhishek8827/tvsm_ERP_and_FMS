@@ -1,0 +1,297 @@
+import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import { z } from 'zod';
+import {
+  HEAD_LABEL,
+  MODULES,
+  ReceiptRuleError,
+  getFinancialYear,
+  moduleDues,
+  planReceipt,
+  todayIst,
+} from '@erp/shared';
+import { requireRole } from '../middleware/requireRole.js';
+import { recordAudit } from '../services/audit.js';
+import { AppError, notFound } from '../utils/errors.js';
+
+// UPI and QR payments must carry the bank's reference so they can be matched with the statement.
+const MODES_NEEDING_REFERENCE = ['upi', 'qr'];
+const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
+const paise = z.number().int().min(0).max(100_000_000);
+const kindField = z.enum(MODULES);
+const issueBody = z.object({
+  studentId: objectId,
+  kind: kindField,
+  input: z.object({
+    oldPaise: paise.optional(),
+    newPaise: paise.optional(),
+    admissionPaise: paise.optional(),
+    formPaise: paise.optional(),
+    tcPaise: paise.optional(),
+    otherPaise: paise.optional(),
+    otherNote: z.string().trim().max(80).optional(),
+    lateFeePaise: paise.optional(),
+    lateFeeRemark: z.string().trim().max(200).optional(),
+  }),
+  mode: z.enum(['cash', 'upi', 'qr']),
+  reference: z.string().trim().max(60).optional(),
+});
+const idemKey = z
+  .string({ error: 'Idempotency-Key header is required' })
+  .regex(/^[\w-]{8,100}$/, 'Idempotency-Key must be 8-100 letters, digits, - or _');
+
+const shapeReceipt = (r, extra = {}) => ({
+  id: String(r._id),
+  number: r.number,
+  kind: r.kind,
+  fy: r.fy,
+  student: r.student,
+  lines: r.lines.map((l) => ({
+    head: l.head,
+    label: l.head === 'other' && l.note ? l.note : HEAD_LABEL[l.head],
+    period: l.period ?? null,
+    amountPaise: l.amountPaise,
+  })),
+  lateFee: r.lateFee ?? null,
+  totalPaise: r.totalPaise,
+  monthLabel: r.monthLabel,
+  dueAfterPaise: r.dueAfterPaise,
+  mode: r.mode,
+  reference: r.reference ?? null,
+  cashierName: r.cashierName ?? null,
+  issuedAt: r.issuedAt,
+  ...extra,
+});
+
+async function loadStudentAndLedger(deps, tenantId, studentId) {
+  const student = await deps.studentStore.findById(tenantId, studentId);
+  if (!student) throw notFound('Student');
+  const fy = getFinancialYear(new Date());
+  const [charges, receipts, chart] = await Promise.all([
+    deps.chargeStore.listForStudent(tenantId, student._id, fy),
+    deps.receiptStore.listForStudent(tenantId, student._id, fy),
+    deps.feeStore.get(tenantId, fy),
+  ]);
+  return {
+    student,
+    fy,
+    chart,
+    receipts,
+    charges: charges.map((c) => ({
+      id: String(c._id),
+      head: c.head,
+      period: c.period,
+      dueDate: c.dueDate,
+      amount: c.amountPaise,
+    })),
+  };
+}
+
+/**
+ * Fee collection. Cashier collects; Admin and Principal can only look.
+ *  - GET  /students/:id/dues?kind=school|transport   what is pending (server-calculated)
+ *  - POST /receipts                                  collect and issue a receipt (needs Idempotency-Key)
+ *  - GET  /receipts/:id                              one receipt
+ *  - POST /receipts/:id/reprint                      a later print: marked DUPLICATE, audited
+ * Receipts are never edited. The server re-checks every rule; the browser is only a convenience.
+ */
+export function receiptsRouter(deps, authenticate) {
+  const router = Router();
+  const look = [authenticate, requireRole('admin', 'principal', 'cashier')];
+
+  router.get('/students/:id/dues', ...look, async (req, res, next) => {
+    try {
+      const kind = kindField.parse(req.query.kind);
+      const tenantId = req.user.tenantId;
+      const { student, fy, chart, receipts, charges } = await loadStudentAndLedger(
+        deps,
+        tenantId,
+        req.params.id,
+      );
+      const asOf = todayIst();
+      const dues = moduleDues({ kind, charges, receipts, asOf, config: chart ?? undefined });
+      const remaining = {};
+      for (const i of dues.instalments)
+        for (const it of i.items) remaining[it.head] = (remaining[it.head] ?? 0) + it.due;
+      res.json({
+        kind,
+        fy,
+        asOf,
+        student: {
+          id: String(student._id),
+          admissionNo: student.admissionNo,
+          name: student.name,
+          fatherName: student.fatherName ?? null,
+          classKey: student.classKey,
+          section: student.section ?? null,
+          village: student.village ?? null,
+          usesTransport: !!student.usesTransport,
+          status: student.status,
+        },
+        remaining, // still unpaid per head, for the whole year
+        lateFeeCalculatedPaise: dues.totals.lateFee,
+        dueNowPaise: dues.totals.dueNow,
+        instalments: dues.instalments,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post(
+    '/receipts',
+    rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-7', legacyHeaders: false }),
+    authenticate,
+    requireRole('cashier'),
+    async (req, res, next) => {
+      try {
+        const key = idemKey.parse(req.get('Idempotency-Key'));
+        const body = issueBody.parse(req.body);
+        if (MODES_NEEDING_REFERENCE.includes(body.mode) && (body.reference ?? '').length < 4)
+          throw new AppError('REFERENCE_REQUIRED', 422, 'Enter the UPI / QR reference number.', {
+            reference: 'Reference number is required',
+          });
+        const tenantId = req.user.tenantId;
+        const loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
+        const { student, fy, chart } = loaded;
+        if (student.status !== 'active')
+          throw new AppError(
+            'STUDENT_INACTIVE',
+            409,
+            'Fees cannot be collected for an inactive student.',
+          );
+
+        const asOf = todayIst();
+        const { receipt, replay } = await deps.receiptStore.issue({
+          tenantId,
+          studentId: student._id,
+          fy,
+          kind: body.kind,
+          idempotencyKey: key,
+          // Runs inside the transaction on freshly re-read receipts (see makeReceiptStore.issue).
+          build: async (prior) => {
+            let plan;
+            try {
+              plan = planReceipt({
+                kind: body.kind,
+                charges: loaded.charges,
+                receipts: prior,
+                asOf,
+                config: chart ?? undefined,
+                input: body.input,
+              });
+            } catch (e) {
+              if (e instanceof ReceiptRuleError)
+                throw new AppError(
+                  e.code,
+                  422,
+                  e.message,
+                  e.field ? { [e.field]: e.message } : undefined,
+                );
+              throw e;
+            }
+            return {
+              lines: plan.lines,
+              lateFee: plan.lateFee,
+              totalPaise: plan.totalPaise,
+              monthLabel: plan.monthLabel,
+              dueAfterPaise: plan.dueAfterPaise,
+              mode: body.mode,
+              reference: body.mode === 'cash' ? undefined : body.reference,
+              cashierId: String(req.user.id),
+              cashierName: req.user.name,
+              student: {
+                admissionNo: student.admissionNo,
+                name: student.name,
+                fatherName: student.fatherName,
+                classKey: student.classKey,
+                section: student.section,
+                address: student.address,
+                contactNo: student.contactNo,
+                village: student.village,
+              },
+            };
+          },
+          audit: async (saved, session) => {
+            await recordAudit(
+              deps,
+              req,
+              {
+                action: 'create',
+                entity: 'receipt',
+                entityId: String(saved._id),
+                newValue: {
+                  number: saved.number,
+                  kind: saved.kind,
+                  totalPaise: saved.totalPaise,
+                  mode: saved.mode,
+                  studentId: String(saved.studentId),
+                },
+              },
+              { critical: true, session },
+            );
+            // Every reduced late fee is audited on its own, with the cashier's reason.
+            if (saved.lateFee && saved.lateFee.chargedPaise < saved.lateFee.calculatedPaise)
+              await recordAudit(
+                deps,
+                req,
+                {
+                  action: 'override',
+                  entity: 'late_fee',
+                  entityId: String(saved._id),
+                  oldValue: { calculatedPaise: saved.lateFee.calculatedPaise },
+                  newValue: { chargedPaise: saved.lateFee.chargedPaise },
+                  reason: saved.lateFee.remark,
+                },
+                { critical: true, session },
+              );
+          },
+        });
+        res.status(replay ? 200 : 201).json(shapeReceipt(receipt, { replay }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  router.get('/receipts/:id', ...look, async (req, res, next) => {
+    try {
+      const r = await deps.receiptStore.findById(req.user.tenantId, objectId.parse(req.params.id));
+      if (!r) throw notFound('Receipt');
+      res.json(shapeReceipt(r));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  router.post(
+    '/receipts/:id/reprint',
+    authenticate,
+    requireRole('admin', 'cashier'),
+    async (req, res, next) => {
+      try {
+        const r = await deps.receiptStore.findById(
+          req.user.tenantId,
+          objectId.parse(req.params.id),
+        );
+        if (!r) throw notFound('Receipt');
+        await recordAudit(
+          deps,
+          req,
+          {
+            action: 'reprint',
+            entity: 'receipt',
+            entityId: String(r._id),
+            newValue: { number: r.number },
+          },
+          { critical: true },
+        );
+        res.json(shapeReceipt(r, { duplicate: true }));
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+
+  return router;
+}

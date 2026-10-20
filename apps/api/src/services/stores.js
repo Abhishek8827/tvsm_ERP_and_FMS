@@ -201,7 +201,6 @@ export function makeChargeStore() {
             filter: { tenantId, studentId: c.studentId, fy, head: c.head, period: c.period },
             update: {
               $setOnInsert: {
-                tenantId,
                 studentId: c.studentId,
                 fy,
                 head: c.head,
@@ -226,7 +225,7 @@ export function makeChargeStore() {
           updateOne: {
             filter: { tenantId, studentId, fy, head: c.head, period: c.period },
             update: {
-              $setOnInsert: { tenantId, studentId, fy, ...c, amountPaise: c.amount },
+              $setOnInsert: { studentId, fy, ...c, amountPaise: c.amount },
             },
             upsert: true,
           },

@@ -26,7 +26,8 @@ export function ImportOldFees() {
         notify(`${res.created} old fee entries imported.`, 'success');
       }
     },
-    onError: (e) => notify(e.message, 'error'),
+    onError: (e) =>
+      notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
   });
 
   async function downloadTemplate() {
@@ -39,7 +40,7 @@ export function ImportOldFees() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      notify(e.message, 'error');
+      notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error');
     }
   }
 

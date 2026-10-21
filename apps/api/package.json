@@ -9,6 +9,7 @@
     "test": "vitest run",
     "fees:seed": "node --env-file-if-exists=.env src/scripts/seedFeeStructure.js",
     "students:demo": "node --env-file-if-exists=.env src/scripts/seedDemoStudents.js",
+    "money:demo": "node --env-file-if-exists=.env src/scripts/seedDemoMoney.js",
     "users:seed": "node --env-file-if-exists=.env src/scripts/seedUsers.js"
   },
   "dependencies": {

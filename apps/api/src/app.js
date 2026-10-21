@@ -12,6 +12,7 @@ import { healthRouter } from './routes/health.js';
 import { studentImportRouter } from './routes/studentImport.js';
 import { studentsRouter } from './routes/students.js';
 import { ledgerRouter } from './routes/ledger.js';
+import { moneyRouter } from './routes/money.js';
 import { oldDuesImportRouter } from './routes/oldDuesImport.js';
 import { receiptsRouter } from './routes/receipts.js';
 import { usersRouter } from './routes/users.js';
@@ -60,6 +61,7 @@ export function createApp(env, logger, auth) {
     app.use('/api', ledgerRouter(deps, authenticate));
     app.use('/api', oldDuesImportRouter(deps, authenticate));
     app.use('/api', receiptsRouter(deps, authenticate));
+    app.use('/api', moneyRouter(deps, authenticate));
   } else {
     app.use(
       [
@@ -69,6 +71,15 @@ export function createApp(env, logger, auth) {
         '/api/fee-structure',
         '/api/receipts',
         '/api/old-dues',
+        '/api/money',
+        '/api/banks',
+        '/api/expense-heads',
+        '/api/vouchers',
+        '/api/expense-payments',
+        '/api/expense-reversals',
+        '/api/petty',
+        '/api/transfers',
+        '/api/cashier-pin',
       ],
       (req, res) => {
         res.status(503).json({

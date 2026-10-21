@@ -11,6 +11,7 @@ import {
   makeStudentStore,
   makeUserStore,
 } from './services/stores.js';
+import { makeMoneyStore } from './services/moneyStore.js';
 import { createLogger } from './utils/logger.js';
 async function main() {
   const env = loadEnv(); // throws with a readable list if config is bad
@@ -29,6 +30,7 @@ async function main() {
         feeStore: makeFeeStore(),
         chargeStore: makeChargeStore(),
         receiptStore: makeReceiptStore(),
+        moneyStore: makeMoneyStore(),
         auditStore: makeAuditStore(),
       }
     : undefined;

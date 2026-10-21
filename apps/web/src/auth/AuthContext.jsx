@@ -11,8 +11,15 @@ import { api, configureAuth } from '../api/client';
 import { useIdleTimeout } from './useIdleTimeout';
 
 export const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // decision: 10 minutes on shared counter PCs
+const AUTH_RETRY_DELAYS_MS = [250, 500, 1000];
 
 const AuthContext = createContext(null);
+
+function isTransientAuthError(err) {
+  return [0, 502, 503, 504].includes(err?.status) && err?.code !== 'AUTH_NOT_CONFIGURED';
+}
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Never reveal whether an email exists: wrong email and wrong password look the same. */
 export function friendlyAuthError(err) {
@@ -61,6 +68,7 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
 
   useEffect(() => {
     if (!service) return undefined;
+    let active = true;
     configureAuth(service.getToken, () => {
       setNotice('Your session has expired. Please sign in again.');
       void service.signOut();
@@ -72,7 +80,19 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
         return;
       }
       try {
-        const { user: me } = await api('/api/auth/me');
+        let result;
+        for (let retry = 0; ; retry += 1) {
+          try {
+            result = await api('/api/auth/me');
+            break;
+          } catch (err) {
+            const delay = AUTH_RETRY_DELAYS_MS[retry];
+            if (!active || delay === undefined || !isTransientAuthError(err)) throw err;
+            await wait(delay);
+          }
+        }
+        if (!active) return;
+        const { user: me } = result;
         setUser(me);
         setLoadError(null);
         setStatus('signedIn');
@@ -81,6 +101,7 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
           void sessionEvent('login');
         }
       } catch (err) {
+        if (!active) return;
         if (err.status === 401 || err.status === 403) {
           // Signed in with Firebase but not allowed into this school's system.
           setNotice(err.message);
@@ -92,6 +113,7 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
       }
     });
     return () => {
+      active = false;
       unsubscribe?.();
       configureAuth(null);
     };

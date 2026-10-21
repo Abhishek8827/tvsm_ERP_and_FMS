@@ -147,8 +147,29 @@ describe('sign-in', () => {
   it('shows a retry screen when the server cannot be reached', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('x')));
     renderApp(fakeService({ signedIn: true }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Could not reach the server/);
+    expect(await screen.findByRole('alert', {}, { timeout: 5000 })).toHaveTextContent(
+      /Could not reach the server/,
+    );
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('retries a transient API gateway error after sign-in', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('Bad Gateway', { status: 502 }))
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ user: USERS.cashier }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      .mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderApp(fakeService({ signedIn: true }));
+
+    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(fetchMock.mock.calls.filter(([url]) => url === '/api/auth/me')).toHaveLength(2);
   });
 
   it('Sign out calls the server and Firebase and returns to the login screen', async () => {

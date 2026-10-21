@@ -52,6 +52,9 @@ const receiptSchema = new mongoose.Schema(
     dueAfterNewPaise: { type: Number, min: 0 },
     mode: { type: String, enum: ['cash', 'upi', 'qr'], required: true },
     reference: { type: String },
+    // Which bank account a UPI / QR payment went to (Step 6). Cash has none.
+    bankId: { type: String },
+    bankName: { type: String },
     cashierId: { type: String, required: true },
     cashierName: { type: String },
     idempotencyKey: { type: String, required: true },

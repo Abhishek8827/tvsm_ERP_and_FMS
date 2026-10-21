@@ -13,7 +13,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "pnpm -r test"
+    "test": "pnpm -r test",
+    "money:demo": "pnpm --filter @erp/api money:demo"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

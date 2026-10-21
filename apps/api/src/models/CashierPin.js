@@ -16,7 +16,7 @@ const pinSchema = new mongoose.Schema(
     setBy: { type: String },
     setAt: { type: Date, default: () => new Date() },
   },
-  { versionKey: false },
+  { versionKey: false, tenantIdIndex: false },
 );
 pinSchema.index({ tenantId: 1 }, { unique: true });
 

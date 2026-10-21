@@ -7,7 +7,11 @@ import { ErrorState, Spinner } from './components/ui';
 import { AppShell } from './layout/AppShell';
 import { ComingSoon } from './pages/ComingSoon';
 import { Dashboard } from './pages/Dashboard';
+import { BankCash } from './pages/BankCash';
 import { CollectFee } from './pages/CollectFee';
+import { ExpenseVoucher } from './pages/ExpenseVoucher';
+import { Expenses } from './pages/Expenses';
+import { PettyCash } from './pages/PettyCash';
 import { FeeStructure } from './pages/FeeStructure';
 import { ImportOldFees } from './pages/ImportOldFees';
 import { ReceiptView } from './pages/ReceiptView';
@@ -77,11 +81,22 @@ export function App() {
               i.key !== 'fee-structure' &&
               i.key !== 'collect-fee' &&
               i.key !== 'receipts' &&
+              i.key !== 'expenses' &&
+              i.key !== 'petty-cash' &&
+              i.key !== 'bank-cash' &&
               i.key !== 'fees-receipts',
           )
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
           ))}
+        <Route path="/petty-cash" element={<PettyCash />} />
+        <Route path="/bank-cash" element={<BankCash />} />
+        {(role === 'admin' || role === 'principal') && (
+          <Route path="/expenses" element={<Expenses />} />
+        )}
+        {(role === 'admin' || role === 'principal') && (
+          <Route path="/expenses/:id" element={<ExpenseVoucher />} />
+        )}
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />
         <Route path="/fee-structure" element={<FeeStructure />} />

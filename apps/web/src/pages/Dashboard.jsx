@@ -41,6 +41,39 @@ function TodayCollection() {
   );
 }
 
+/** Principal: what is waiting for a decision. */
+function PrincipalPending() {
+  const q = useQuery({
+    queryKey: ['money', 'pending'],
+    queryFn: () => api('/api/money/pending'),
+    refetchInterval: 60_000,
+    retry: false,
+  });
+  return (
+    <Card
+      title="Waiting for you"
+      subtitle="Expense vouchers and reversals need the Principal's decision"
+    >
+      {q.isPending && <Spinner label="Loading approvals" />}
+      {q.isError && <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />}
+      {q.data && (
+        <div className="grid gap-3 sm:grid-cols-2">
+          <StatCard
+            label="Expense vouchers"
+            value={String(q.data.vouchers)}
+            caption="awaiting approval"
+          />
+          <StatCard
+            label="Reversal requests"
+            value={String(q.data.reversals)}
+            caption="awaiting a decision"
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
+
 export function Dashboard() {
   const { user, role } = useAuth();
   const health = useQuery({
@@ -58,6 +91,7 @@ export function Dashboard() {
         </p>
       </div>
       {role === 'cashier' && <TodayCollection />}
+      {role === 'principal' && <PrincipalPending />}
       <Card title="System status" subtitle="Live from the API">
         {health.isPending && <Spinner label="Checking the server" />}
         {health.isError && (

@@ -79,16 +79,47 @@ describe('Collect Fee', () => {
     });
   });
 
-  it('UPI needs a reference before Collect is allowed', async () => {
-    api.mockImplementation(async (url) =>
-      String(url).startsWith('/api/students?') ? { rows: [student] } : dues(),
-    );
+  const banksReply = (defaults = ['upi']) => ({
+    banks: [
+      { id: 'b1', name: 'IDFC', last4: '1234', defaultForModes: defaults },
+      { id: 'b2', name: 'Kotak', last4: '9876', defaultForModes: [] },
+    ],
+  });
+
+  it('UPI needs a reference and a bank (the default bank is preselected) before Collect is allowed', async () => {
+    api.mockImplementation(async (url) => {
+      if (String(url).startsWith('/api/students?')) return { rows: [student] };
+      if (url === '/api/banks/options') return banksReply();
+      if (url === '/api/receipts') return { id: 'r1', number: 'S-FY2026-27/0001' };
+      return dues();
+    });
     show();
     await pickStudent();
     await userEvent.type(await screen.findByLabelText(/Tuition fees/), '1000');
     await userEvent.selectOptions(screen.getByLabelText('Payment mode'), 'upi');
     expect(screen.getByRole('button', { name: /Collect/ })).toBeDisabled();
     await userEvent.type(screen.getByLabelText(/UPI \/ QR reference/), 'UPI998877');
+    await vi.waitFor(() => expect(screen.getByLabelText('Bank account')).toHaveValue('b1'));
+    expect(screen.getByRole('button', { name: /Collect/ })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: /Collect/ }));
+    await screen.findByText('Receipt page');
+    const post = api.mock.calls.find((c) => c[0] === '/api/receipts');
+    expect(post[1].body).toMatchObject({ mode: 'upi', reference: 'UPI998877', bankId: 'b1' });
+  });
+
+  it('without a default bank the Cashier must choose one for QR', async () => {
+    api.mockImplementation(async (url) => {
+      if (String(url).startsWith('/api/students?')) return { rows: [student] };
+      if (url === '/api/banks/options') return banksReply([]);
+      return dues();
+    });
+    show();
+    await pickStudent();
+    await userEvent.type(await screen.findByLabelText(/Tuition fees/), '1000');
+    await userEvent.selectOptions(screen.getByLabelText('Payment mode'), 'qr');
+    await userEvent.type(screen.getByLabelText(/UPI \/ QR reference/), 'QR12345678');
+    expect(screen.getByRole('button', { name: /Collect/ })).toBeDisabled();
+    await userEvent.selectOptions(await screen.findByLabelText('Bank account'), 'b2');
     expect(screen.getByRole('button', { name: /Collect/ })).toBeEnabled();
   });
 

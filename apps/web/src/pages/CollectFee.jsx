@@ -174,6 +174,7 @@ function CollectForm({ student, kind }) {
     lateRemark: '',
     mode: 'cash',
     reference: '',
+    bankId: '', // '' = use the bank the Admin set as default for this mode
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
@@ -215,7 +216,16 @@ function CollectForm({ student, kind }) {
       p.other.paise +
       p.late.paise;
   const needsRef = f.mode !== 'cash';
+  // UPI / QR money lands in a bank account: the Cashier picks it (the Admin's default is preselected).
+  const banks = useQuery({
+    queryKey: ['banks', 'options'],
+    queryFn: () => api('/api/banks/options'),
+    enabled: needsRef,
+  });
+  const bankList = banks.data?.banks ?? [];
+  const bankId = f.bankId || bankList.find((b) => b.defaultForModes.includes(f.mode))?.id || '';
   const missing =
+    (needsRef && !bankId && 'Choose the bank account that received the money.') ||
     (needsRef && f.reference.trim().length < 4 && 'Enter the UPI / QR reference number.') ||
     (lateWaived > 0 &&
       f.lateRemark.trim().length < 3 &&
@@ -234,6 +244,7 @@ function CollectForm({ student, kind }) {
           kind,
           mode: f.mode,
           reference: needsRef ? f.reference.trim() : undefined,
+          bankId: needsRef ? bankId : undefined,
           input: {
             oldPaise: p.old.paise,
             newPaise: p.current.paise,
@@ -404,8 +415,30 @@ function CollectForm({ student, kind }) {
             label="Payment mode"
             options={MODES}
             value={f.mode}
-            onChange={(e) => set({ mode: e.target.value })}
+            onChange={(e) => set({ mode: e.target.value, bankId: '' })}
           />
+          {needsRef && (
+            <Select
+              label="Bank account"
+              value={bankId}
+              error={fieldErrors.bankId}
+              onChange={(e) => set({ bankId: e.target.value })}
+              options={[
+                {
+                  value: '',
+                  label: banks.isPending
+                    ? 'Loading banks...'
+                    : bankList.length
+                      ? 'Choose a bank'
+                      : 'No bank account yet. Ask the Admin to add one.',
+                },
+                ...bankList.map((b) => ({
+                  value: b.id,
+                  label: `${b.name}${b.last4 ? ` ••••${b.last4}` : ''}`,
+                })),
+              ]}
+            />
+          )}
           {needsRef && (
             <Input
               label="UPI / QR reference no."

@@ -4,8 +4,8 @@ export const ROLES = ['admin', 'principal', 'cashier'];
 export const roleSchema = z.enum(ROLES);
 /**
  * Role-based navigation matches the Figma sidebars:
- *  Cashier:   Dashboard, Collect Fee, Receipts, Students, Expenses, Petty Cash
- *  Principal: Dashboard, Approvals, Reports, Students, Bank & Cash, Audit Log
+ *  Cashier:   Dashboard, Collect Fee, Receipts, Students, Petty Cash, Bank & Cash (PIN)
+ *  Principal: Dashboard, Approvals, Reports, Students, Expenses, Petty Cash, Bank & Cash, Audit Log
  *  Admin:     Dashboard, Students, Fee Structure, Fees & Receipts, Fees Database, Expenses,
  *             Petty Cash, Bank & Cash, Reports, TC & Bonafide, Data Import, Users & Settings, Audit Log
  * Server-side RBAC (Step 2) is the real enforcement; this only drives the UI.
@@ -60,14 +60,16 @@ export const NAV_ITEMS = [
     key: 'expenses',
     label: 'Expenses',
     path: '/expenses',
-    roles: ['admin', 'cashier'],
+    // Admin makes vouchers; the Principal approves and views. The Cashier has no expense screen.
+    roles: ['admin', 'principal'],
     availableFromStep: 6,
   },
   {
     key: 'petty-cash',
     label: 'Petty Cash',
     path: '/petty-cash',
-    roles: ['admin', 'cashier'],
+    // Cashier: only the remaining balance and the last 5 entries.
+    roles: ['admin', 'principal', 'cashier'],
     availableFromStep: 6,
   },
   {
@@ -81,8 +83,9 @@ export const NAV_ITEMS = [
     key: 'bank-cash',
     label: 'Bank & Cash',
     path: '/bank-cash',
-    roles: ['admin', 'principal'],
-    availableFromStep: 9,
+    // Cashier: all balances behind a 4-digit PIN.
+    roles: ['admin', 'principal', 'cashier'],
+    availableFromStep: 6,
   },
   {
     key: 'reports',

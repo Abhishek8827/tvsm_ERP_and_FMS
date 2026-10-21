@@ -5,3 +5,4 @@ export * from './classes.js';
 export * from './fees.js';
 export * from './school.js';
 export * from './collect.js';
+export * from './expenses.js';

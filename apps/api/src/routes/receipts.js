@@ -37,6 +37,8 @@ const issueBody = z.object({
   }),
   mode: z.enum(['cash', 'upi', 'qr']),
   reference: z.string().trim().max(60).optional(),
+  // Which bank account the UPI / QR money went to (compulsory for UPI and QR).
+  bankId: objectId.optional(),
 });
 const idemKey = z
   .string({ error: 'Idempotency-Key header is required' })
@@ -84,6 +86,7 @@ const shapeReceipt = (r, extra = {}) => ({
   dueAfterNewPaise: r.dueAfterNewPaise ?? r.dueAfterPaise,
   mode: r.mode,
   reference: r.reference ?? null,
+  bankName: r.bankName ?? null,
   cashierName: r.cashierName ?? null,
   issuedAt: r.issuedAt,
   status: r.status ?? statusOf(r.cancellation),
@@ -187,6 +190,19 @@ export function receiptsRouter(deps, authenticate) {
             reference: 'Reference number is required',
           });
         const tenantId = req.user.tenantId;
+        let bank = null;
+        if (MODES_NEEDING_REFERENCE.includes(body.mode)) {
+          bank = body.bankId ? await deps.moneyStore.findActiveBank(tenantId, body.bankId) : null;
+          if (!bank)
+            throw new AppError(
+              'BANK_REQUIRED',
+              422,
+              'Choose the bank account that received the money.',
+              {
+                bankId: 'Choose the bank account',
+              },
+            );
+        }
         const loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
         const { student, fy, chart } = loaded;
         if (student.status !== 'active')
@@ -235,6 +251,8 @@ export function receiptsRouter(deps, authenticate) {
               dueAfterNewPaise: plan.dueAfterNewPaise,
               mode: body.mode,
               reference: body.mode === 'cash' ? undefined : body.reference,
+              bankId: bank ? String(bank._id) : undefined,
+              bankName: bank?.name,
               cashierId: String(req.user.id),
               cashierName: req.user.name,
               student: {

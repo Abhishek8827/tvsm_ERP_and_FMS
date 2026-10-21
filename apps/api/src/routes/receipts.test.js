@@ -32,6 +32,7 @@ const rs = (n) => n * 100;
 function build({ withOld = false } = {}) {
   const audit = [];
   const receipts = [];
+  const cancellations = [];
   const counters = {};
   const students = {
     [S1]: {
@@ -61,6 +62,10 @@ function build({ withOld = false } = {}) {
     studentStore: { findById: async (_t, id) => students[id] ?? null },
     feeStore: { get: async () => null },
     chargeStore: { listForStudent: async () => charges },
+    // Only the bank lookup is needed here: the bank "b1" is active, anything else is unknown.
+    moneyStore: {
+      findActiveBank: async (_t, id) => (id === BANK ? { _id: BANK, name: 'IDFC' } : null),
+    },
     // Same behaviour as the real store: same key = same receipt, numbers per kind, rules re-checked.
     receiptStore: {
       issue: async ({ studentId, fy, kind, idempotencyKey, build: make, audit: log }) => {
@@ -84,7 +89,61 @@ function build({ withOld = false } = {}) {
         receipts.push(saved);
         return { receipt: saved, replay: false };
       },
-      findById: async (_t, id) => receipts.find((r) => r._id === id) ?? null,
+      findById: async (_t, id) => {
+        const r = receipts.find((x) => x._id === id);
+        return r
+          ? { ...r, cancellation: cancellations.find((c) => c.receiptId === id) ?? null }
+          : null;
+      },
+      list: async ({ kind, page, pageSize }) => {
+        const rows = receipts
+          .filter((r) => !kind || r.kind === kind)
+          .map((r) => ({
+            ...r,
+            status: cancellations.some((c) => c.receiptId === r._id && c.status === 'cancelled')
+              ? 'cancelled'
+              : 'valid',
+          }));
+        const groups = {};
+        for (const r of rows.filter((x) => x.status === 'valid')) {
+          const k = `${r.kind}|${r.mode}`;
+          groups[k] = groups[k] ?? { kind: r.kind, mode: r.mode, paise: 0, count: 0 };
+          groups[k].paise += r.totalPaise;
+          groups[k].count += 1;
+        }
+        return {
+          rows: rows.slice((page - 1) * pageSize, page * pageSize),
+          total: rows.length,
+          groups: Object.values(groups),
+        };
+      },
+      listAll: async () => receipts.map((r) => ({ ...r, status: 'valid' })),
+      requestCancel: async ({ receipt, reason, user, audit: log }) => {
+        if (cancellations.some((c) => c.receiptId === String(receipt._id))) return null;
+        const c = {
+          _id: `q${cancellations.length + 1}`,
+          receiptId: String(receipt._id),
+          status: 'requested',
+          reason,
+          requestedByName: user.name,
+        };
+        if (log) await log(c);
+        cancellations.push(c);
+        return c;
+      },
+      cancelDirect: async ({ receipt, reason, user, audit: log }) => {
+        const live = cancellations.find((c) => c.receiptId === String(receipt._id));
+        if (live?.status === 'cancelled') return null;
+        const c = live ?? {
+          _id: `q${cancellations.length + 1}`,
+          receiptId: String(receipt._id),
+          reason,
+        };
+        Object.assign(c, { status: 'cancelled', decidedByName: user.name });
+        if (log) await log(c);
+        if (!live) cancellations.push(c);
+        return c;
+      },
       listForStudent: async (_t, id) => receipts.filter((r) => String(r.studentId) === id),
     },
   };
@@ -93,6 +152,7 @@ function build({ withOld = false } = {}) {
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 let n = 0;
 const key = () => `key-${Date.now()}-${(n += 1)}`;
+const BANK = 'b'.repeat(24);
 const collect = (app, body, who = 'cashier', idem = key()) =>
   request(app)
     .post('/api/receipts')
@@ -167,15 +227,38 @@ describe('collecting fees', () => {
     const yes = await collect(app, {
       mode: 'qr',
       reference: 'UPI123456',
+      bankId: BANK,
       input: { newPaise: rs(1000) },
     });
-    expect(yes.body).toMatchObject({ mode: 'qr', reference: 'UPI123456' });
+    expect(yes.body).toMatchObject({ mode: 'qr', reference: 'UPI123456', bankName: 'IDFC' });
     const cash = await collect(app, {
       mode: 'cash',
       reference: 'ignored',
       input: { newPaise: rs(1000) },
     });
     expect(cash.body.reference).toBeNull();
+  });
+
+  it('UPI and QR must name an active bank account; cash has none', async () => {
+    const { app, receipts } = build();
+    const none = await collect(app, {
+      mode: 'upi',
+      reference: 'UPI123456',
+      input: { newPaise: rs(1000) },
+    });
+    expect(none.status).toBe(422);
+    expect(none.body.error.code).toBe('BANK_REQUIRED');
+    const wrong = await collect(app, {
+      mode: 'upi',
+      reference: 'UPI123456',
+      bankId: 'c'.repeat(24),
+      input: { newPaise: rs(1000) },
+    });
+    expect(wrong.body.error.code).toBe('BANK_REQUIRED');
+    expect(receipts).toHaveLength(0);
+    const cash = await collect(app, { mode: 'cash', input: { newPaise: rs(1000) } });
+    expect(cash.status).toBe(201);
+    expect(cash.body.bankName).toBeNull();
   });
 
   it('refuses new fees while old fees are pending, and a refused payment uses up no number', async () => {
@@ -242,5 +325,84 @@ describe('collecting fees', () => {
     expect(dup.status).toBe(200);
     expect(dup.body).toMatchObject({ duplicate: true, number: 'S-FY2026-27/0001' });
     expect(audit.some((e) => e.action === 'reprint' && e.entityId === id)).toBe(true);
+  });
+
+  it('the list shows all receipts with totals by type and mode, to every role', async () => {
+    const { app } = build();
+    await collect(app, { input: { newPaise: rs(1000) } });
+    await collect(app, {
+      mode: 'upi',
+      reference: 'UPI123456',
+      bankId: BANK,
+      input: { newPaise: rs(1000) },
+    });
+    await collect(app, { kind: 'transport', input: { newPaise: rs(500) } });
+    for (const who of ['admin', 'principal', 'cashier']) {
+      const r = await request(app).get('/api/receipts').set(as(who));
+      expect(r.status).toBe(200);
+      expect(r.body.total).toBe(3);
+      expect(r.body.totals).toMatchObject({
+        paise: rs(2500),
+        count: 3,
+        byKind: { school: rs(2000), transport: rs(500) },
+        byMode: { cash: rs(1500), upi: rs(1000) },
+      });
+    }
+    expect((await request(app).get('/api/receipts?from=oops').set(as('cashier'))).status).toBe(400);
+  });
+
+  it('Cashier can only ask for a cancellation (reason needed, once); Admin cancels directly; nobody else', async () => {
+    const { app, audit } = build();
+    const id = (await collect(app, { input: { newPaise: rs(1000) } })).body.id;
+    const ask = (who, reason) =>
+      request(app).post(`/api/receipts/${id}/cancel-request`).set(as(who)).send({ reason });
+    expect((await ask('admin', 'wrong amount')).status).toBe(403);
+    expect((await ask('principal', 'wrong amount')).status).toBe(403);
+    expect((await ask('cashier', 'x')).status).toBe(400);
+    expect((await ask('cashier', 'Wrong student')).status).toBe(201);
+    expect((await ask('cashier', 'Wrong student')).status).toBe(409);
+    expect((await request(app).get(`/api/receipts/${id}`).set(as('cashier'))).body.status).toBe(
+      'cancel_requested',
+    );
+    expect(
+      (
+        await request(app)
+          .post(`/api/receipts/${id}/cancel`)
+          .set(as('cashier'))
+          .send({ reason: 'ok ok' })
+      ).status,
+    ).toBe(403);
+    const done = await request(app)
+      .post(`/api/receipts/${id}/cancel`)
+      .set(as('admin'))
+      .send({ reason: 'Wrong student' });
+    expect(done.status).toBe(200);
+    expect((await request(app).get(`/api/receipts/${id}`).set(as('principal'))).body.status).toBe(
+      'cancelled',
+    );
+    expect(
+      (
+        await request(app)
+          .post(`/api/receipts/${id}/cancel`)
+          .set(as('admin'))
+          .send({ reason: 'again' })
+      ).status,
+    ).toBe(409);
+    expect(
+      audit.some(
+        (e) => e.action === 'cancel' && e.entity === 'receipt' && e.reason === 'Wrong student',
+      ),
+    ).toBe(true);
+  });
+
+  it('only the Admin can export; it is audited', async () => {
+    const { app, audit } = build();
+    await collect(app, { input: { newPaise: rs(1000) } });
+    expect((await request(app).get('/api/receipts/export').set(as('cashier'))).status).toBe(403);
+    expect((await request(app).get('/api/receipts/export').set(as('principal'))).status).toBe(403);
+    const r = await request(app).get('/api/receipts/export').set(as('admin')).buffer(true);
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toMatch(/spreadsheetml/);
+    expect(audit.some((e) => e.action === 'export' && e.entity === 'receipts')).toBe(true);
   });
 });

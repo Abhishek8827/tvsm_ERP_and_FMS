@@ -2,12 +2,13 @@ import { createApp } from './app.js';
 import { loadEnv } from './config/env.js';
 import { initFirebaseAuth } from './auth/firebase.js';
 import { createTokenVerifier } from './auth/tokenVerifier.js';
-import { connectDb, disconnectDb } from './db.js';
+import { connectDb, disconnectDb, ensureModels } from './db.js';
 import {
   makeAuditStore,
   makeChargeStore,
   makeFeeStore,
   makeReceiptStore,
+  makeRebateStore,
   makeStudentStore,
   makeUserStore,
 } from './services/stores.js';
@@ -17,6 +18,7 @@ async function main() {
   const env = loadEnv(); // throws with a readable list if config is bad
   const logger = createLogger(env.LOG_LEVEL);
   await connectDb(env.MONGODB_URI, env.MONGODB_DB_NAME);
+  await ensureModels();
   logger.info('MongoDB connected');
   const firebaseAuth = initFirebaseAuth(env);
   if (!firebaseAuth) {
@@ -25,12 +27,14 @@ async function main() {
   const auth = firebaseAuth
     ? {
         verifyToken: createTokenVerifier(firebaseAuth),
+        firebaseAuth, // used by the Admin Users screen to create accounts and reset passwords
         userStore: makeUserStore(),
         studentStore: makeStudentStore(),
         feeStore: makeFeeStore(),
         chargeStore: makeChargeStore(),
         receiptStore: makeReceiptStore(),
         moneyStore: makeMoneyStore(),
+        rebateStore: makeRebateStore(),
         auditStore: makeAuditStore(),
       }
     : undefined;

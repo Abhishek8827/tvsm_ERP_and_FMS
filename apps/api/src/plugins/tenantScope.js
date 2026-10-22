@@ -44,13 +44,7 @@ function touchesTenantId(update) {
 }
 export function tenantScopePlugin(schema) {
   if (schema.options.tenantScope === false) return;
-  schema.add({
-    tenantId: {
-      type: String,
-      required: true,
-      index: schema.options.tenantIdIndex !== false,
-    },
-  });
+  schema.add({ tenantId: { type: String, required: true } });
   for (const op of QUERY_OPS) {
     schema.pre(op, function () {
       if (this.getOptions()._skipTenantCheck === true) return;

@@ -18,3 +18,15 @@ export async function connectDb(uri, dbName) {
 export async function disconnectDb() {
   await mongoose.disconnect();
 }
+
+/**
+ * Creates every collection and index up front. WHY: Mongoose builds indexes lazily; inside a
+ * transaction the first write to a missing collection can fail ("first try error, second
+ * try works"). Creating them at start-up removes that race.
+ */
+export async function ensureModels() {
+  for (const model of Object.values(mongoose.models)) {
+    await model.createCollection().catch(() => {});
+    await model.init();
+  }
+}

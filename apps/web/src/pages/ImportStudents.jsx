@@ -54,8 +54,8 @@ export function ImportStudents() {
     <div className="flex max-w-4xl flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-ink">Import students</h1>
-        <Link className="text-sm text-brand hover:underline" to="/data-import/old-fees">
-          Import old fees instead
+        <Link className="text-sm text-brand hover:underline" to="/data-import">
+          ← Data import
         </Link>
       </div>
 
@@ -102,6 +102,32 @@ export function ImportStudents() {
             />
             <StatCard label="Skipped" value={result.skipped} caption="Problems or already exist" />
           </div>
+
+          {result.feePlan && (
+            <div className="mt-4 rounded-lg border border-line bg-app p-3 text-sm">
+              <p>
+                Fees for {result.feePlan.fy} were posted for {result.feePlan.posted} of{' '}
+                {result.feePlan.students} students.
+              </p>
+              {result.feePlan.skipped.length > 0 && (
+                <>
+                  <p className="mt-2 font-medium text-warning">
+                    {result.feePlan.skipped.length} students have no fees posted yet:
+                  </p>
+                  <ul className="mt-1 list-disc pl-5 text-ink-muted">
+                    {result.feePlan.skipped.slice(0, 10).map((x) => (
+                      <li key={x.admissionNo}>
+                        SCH. {x.admissionNo} {x.name}: {x.reason}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-xs text-ink-muted">
+                    Fix the fee chart, then use "Apply fees" in Fees Database.
+                  </p>
+                </>
+              )}
+            </div>
+          )}
 
           {result.errors.length > 0 && (
             <div className="mt-4 overflow-x-auto rounded-card border border-line">

@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { Badge, Button, Card, EmptyState, StatCard, useToast } from '../components/ui';
 
@@ -51,7 +52,12 @@ export function ImportOldFees() {
 
   return (
     <div className="flex max-w-4xl flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-ink">Import old fees</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-ink">Import old fees</h1>
+        <Link className="text-sm text-brand hover:underline" to="/data-import">
+          ← Data import
+        </Link>
+      </div>
 
       <Card title="1. Get the template">
         <p className="text-sm text-ink-muted">

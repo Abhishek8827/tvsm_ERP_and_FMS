@@ -19,6 +19,7 @@ import {
   Table,
   useToast,
 } from '../components/ui';
+import { PaymentDialog } from './PayVoucherDialog';
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const STATUS_TONE = {
@@ -159,6 +160,7 @@ function VouchersTab({ isAdmin }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [creating, setCreating] = useState(false);
+  const [paying, setPaying] = useState(null); // the voucher row being paid
   useEffect(() => {
     const t = window.setTimeout(() => {
       setQ(search.trim());
@@ -211,7 +213,21 @@ function VouchersTab({ isAdmin }) {
       align: 'right',
       render: (r) => money(r.adjustedPaise),
     },
-    { key: 'status', header: 'Status', render: (r) => <StatusBadge status={r.status} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (r) => (
+        <div className="flex items-center gap-2">
+          <StatusBadge status={r.status} />
+          {/* Only the Admin pays, only after approval, only while something is still due. */}
+          {isAdmin && r.status === 'approved' && r.balanceDuePaise > 0 && (
+            <Button className="min-h-8 px-3" onClick={() => setPaying(r)}>
+              Pay
+            </Button>
+          )}
+        </div>
+      ),
+    },
   ];
   const rows = d?.rows?.map((r, i) => ({ ...r, _n: (page - 1) * pageSize + i + 1 }));
   const withNo = [{ key: 'sno', header: 'S.No', render: (r) => r._n }, ...cols];
@@ -276,6 +292,7 @@ function VouchersTab({ isAdmin }) {
         />
       )}
       {isAdmin && <NewVoucherDialog open={creating} onClose={() => setCreating(false)} />}
+      {paying && <PaymentDialog voucher={paying} open onClose={() => setPaying(null)} />}
     </div>
   );
 }

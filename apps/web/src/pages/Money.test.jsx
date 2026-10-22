@@ -87,6 +87,48 @@ describe('Expenses register', () => {
     expect(screen.queryByRole('tab', { name: 'Heads' })).not.toBeInTheDocument();
   });
 
+  it('Admin gets a Pay button next to Approved only while balance is due; Principal gets none', async () => {
+    const withDue = {
+      ...lists,
+      '/api/vouchers?': {
+        rows: [
+          voucher({ status: 'approved', balanceDuePaise: 500000 }),
+          voucher({
+            id: 'v2',
+            number: 'EXP-FY2026-27/0002',
+            status: 'approved',
+            balanceDuePaise: 0,
+          }),
+          voucher({ id: 'v3', number: 'EXP-FY2026-27/0003', status: 'pending' }),
+        ],
+        total: 3,
+        totals: {},
+      },
+    };
+    route(withDue);
+    show(<Expenses />, '/expenses');
+    await screen.findByText('EXP-FY2026-27/0001');
+    // Only the approved voucher that still owes money is payable.
+    expect(screen.getAllByRole('button', { name: 'Pay' })).toHaveLength(1);
+    await userEvent.click(screen.getByRole('button', { name: 'Pay' }));
+    expect(await screen.findByText('Pay EXP-FY2026-27/0001')).toBeInTheDocument();
+  });
+
+  it('the Principal sees no Pay button on an approved voucher in the list', async () => {
+    role = 'principal';
+    route({
+      ...lists,
+      '/api/vouchers?': {
+        rows: [voucher({ status: 'approved', balanceDuePaise: 500000 })],
+        total: 1,
+        totals: {},
+      },
+    });
+    show(<Expenses />, '/expenses');
+    await screen.findByText('EXP-FY2026-27/0001');
+    expect(screen.queryByRole('button', { name: 'Pay' })).not.toBeInTheDocument();
+  });
+
   it('Admin makes a voucher: sends an Idempotency-Key and the amount in paise', async () => {
     route({
       ...lists,

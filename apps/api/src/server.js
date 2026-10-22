@@ -12,6 +12,7 @@ import {
   makeStudentStore,
   makeUserStore,
 } from './services/stores.js';
+import { startMonthlyPlanJob } from './services/monthlyPlan.js';
 import { makeDayCloseStore } from './services/dayCloseStore.js';
 import { makeMoneyStore } from './services/moneyStore.js';
 import { createLogger } from './utils/logger.js';
@@ -43,7 +44,12 @@ async function main() {
 
   const app = createApp(env, logger, auth);
   const server = app.listen(env.PORT, () => logger.info(`API listening on port ${env.PORT}`));
+  // Fees are posted month by month: this posts the current month for everyone, automatically.
+  const stopMonthlyJob = auth
+    ? startMonthlyPlanJob({ deps: auth, tenantId: env.DEFAULT_TENANT_ID, logger })
+    : () => {};
   const shutdown = (signal) => {
+    stopMonthlyJob();
     logger.info(`${signal} received, shutting down`);
     server.close(() => {
       void disconnectDb().finally(() => process.exit(0));

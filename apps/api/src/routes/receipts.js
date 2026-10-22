@@ -204,6 +204,13 @@ export function receiptsRouter(deps, authenticate) {
               },
             );
         }
+        // A closed day takes no more receipts (the Admin can reopen it with a reason).
+        if (await deps.dayCloseStore.isClosed(tenantId, todayIst()))
+          throw new AppError(
+            'DAY_CLOSED',
+            409,
+            "Today's Day Close is done, so fees cannot be collected. Ask the Admin to reopen the day.",
+          );
         const loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
         const { student, fy, chart } = loaded;
         if (student.status !== 'active')

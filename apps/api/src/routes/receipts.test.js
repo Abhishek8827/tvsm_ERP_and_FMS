@@ -29,7 +29,7 @@ const S1 = 'a'.repeat(23) + '1';
 const S2 = 'a'.repeat(23) + '2';
 const rs = (n) => n * 100;
 
-function build({ withOld = false } = {}) {
+function build({ withOld = false, dayClosed = false } = {}) {
   const audit = [];
   const receipts = [];
   const cancellations = [];
@@ -61,6 +61,7 @@ function build({ withOld = false } = {}) {
     auditStore: { append: async (e) => audit.push(e) },
     studentStore: { findById: async (_t, id) => students[id] ?? null },
     feeStore: { get: async () => null },
+    dayCloseStore: { isClosed: async () => dayClosed },
     chargeStore: { listForStudent: async () => charges },
     // Only the bank lookup is needed here: the bank "b1" is active, anything else is unknown.
     moneyStore: {
@@ -173,6 +174,14 @@ describe('collecting fees', () => {
     for (const who of ['admin', 'principal'])
       expect((await collect(app, { input: { newPaise: rs(1000) } }, who)).status).toBe(403);
     expect((await request(app).post('/api/receipts').send({})).status).toBe(401);
+  });
+
+  it('a closed day takes no receipt (409 DAY_CLOSED) and saves nothing', async () => {
+    const { app, receipts } = build({ dayClosed: true });
+    const r = await collect(app, { input: { newPaise: rs(1000) } });
+    expect(r.status).toBe(409);
+    expect(r.body.error.code).toBe('DAY_CLOSED');
+    expect(receipts).toHaveLength(0);
   });
 
   it('needs an Idempotency-Key header', async () => {

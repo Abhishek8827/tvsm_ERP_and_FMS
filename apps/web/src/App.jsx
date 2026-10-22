@@ -15,6 +15,7 @@ import { PettyCash } from './pages/PettyCash';
 import { FeeStructure } from './pages/FeeStructure';
 import { FeesDatabase } from './pages/FeesDatabase';
 import { UsersSettings } from './pages/UsersSettings';
+import { DayClose } from './pages/DayClose';
 import { DataImport } from './pages/DataImport';
 import { ImportOldFees } from './pages/ImportOldFees';
 import { ReceiptView } from './pages/ReceiptView';
@@ -89,6 +90,7 @@ export function App() {
               i.key !== 'bank-cash' &&
               i.key !== 'fees-receipts' &&
               i.key !== 'fees-database' &&
+              i.key !== 'day-close' &&
               i.key !== 'users-settings',
           )
           .map((i) => (
@@ -103,6 +105,7 @@ export function App() {
           <Route path="/expenses/:id" element={<ExpenseVoucher />} />
         )}
         <Route path="/fees-database" element={<FeesDatabase />} />
+        <Route path="/day-close" element={<DayClose />} />
         {role === 'admin' && <Route path="/users-settings" element={<UsersSettings />} />}
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />

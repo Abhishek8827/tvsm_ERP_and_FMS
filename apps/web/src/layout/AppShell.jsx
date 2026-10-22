@@ -8,7 +8,7 @@ import { Footer } from './Footer';
 
 const ROLE_LABEL = { admin: 'Admin', principal: 'Principal', cashier: 'Cashier' };
 /** Steps already built. Anything later is shown with a "Soon" tag, never as a dead link. */
-export const CURRENT_STEP = 6;
+export const CURRENT_STEP = 7;
 const KEY = 'erp.sidebarCollapsed';
 
 // localStorage can throw (private window, blocked data), so the choice is a convenience only.

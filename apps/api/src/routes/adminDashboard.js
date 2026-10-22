@@ -19,7 +19,7 @@ export function adminDashboardRouter(deps, authenticate) {
         const tenantId = req.user.tenantId;
         const fy = getFinancialYear(new Date());
         const today = todayIst();
-        const [funds, pending, rows, todayReceipts] = await Promise.all([
+        const [funds, pending, rows, todayReceipts, cancellations] = await Promise.all([
           deps.moneyStore.overview(tenantId),
           deps.moneyStore.pendingCounts(tenantId),
           buildFeeRows({ deps, tenantId, fy, filters: { status: 'active' }, asOf: today }),
@@ -30,6 +30,7 @@ export function adminDashboardRouter(deps, authenticate) {
             page: 1,
             pageSize: 1,
           }),
+          deps.receiptStore.countPendingCancellations(tenantId),
         ]);
         const byClass = new Map();
         for (const r of rows) {
@@ -48,8 +49,12 @@ export function adminDashboardRouter(deps, authenticate) {
           fees: totalsOf(rows),
           noPlanStudents: rows.filter((r) => !r.planPosted).length,
           classes: CLASS_KEYS.filter((k) => byClass.has(k)).map((k) => byClass.get(k)),
-          pending,
-          today: todayReceipts.totals,
+          pending: { ...pending, cancellations },
+          // The store returns groups (kind x mode); a total of only what still counts is summed here.
+          today: {
+            paise: todayReceipts.groups.reduce((n, g) => n + g.paise, 0),
+            count: todayReceipts.groups.reduce((n, g) => n + g.count, 0),
+          },
         });
       } catch (err) {
         next(err);

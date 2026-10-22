@@ -525,6 +525,61 @@ export function makeReceiptStore() {
         await session.endSession();
       }
     },
+    /** Cancellation requests with the receipt's facts, newest first (Approvals screen). */
+    async listCancellations({ tenantId, status, page, pageSize }) {
+      const match = { tenantId, ...(status ? { status } : {}) };
+      const [rows, total] = await Promise.all([
+        ReceiptCancellation.find(match)
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * pageSize)
+          .limit(pageSize)
+          .lean(),
+        ReceiptCancellation.countDocuments(match),
+      ]);
+      const receipts = rows.length
+        ? await Receipt.find({ tenantId, _id: { $in: rows.map((r) => r.receiptId) } })
+            .select('number kind mode totalPaise issuedAt student cashierName')
+            .lean()
+        : [];
+      const byId = new Map(receipts.map((r) => [String(r._id), r]));
+      return {
+        rows: rows.map((c) => ({ ...c, receipt: byId.get(String(c.receiptId)) ?? null })),
+        total,
+      };
+    },
+    countPendingCancellations: (tenantId) =>
+      ReceiptCancellation.countDocuments({ tenantId, status: 'requested' }),
+    /**
+     * The Principal decides a request. Only a still-"requested" record can be decided, so a
+     * double click or two tabs cannot decide it twice (returns null then).
+     */
+    async decideCancellation({ tenantId, id, decision, note, user, audit }) {
+      const session = await mongoose.startSession();
+      try {
+        let result = null;
+        await session.withTransaction(async () => {
+          const saved = await ReceiptCancellation.findOneAndUpdate(
+            { tenantId, _id: id, status: 'requested' },
+            {
+              $set: {
+                status: decision === 'approve' ? 'cancelled' : 'rejected',
+                decidedBy: String(user.id),
+                decidedByName: user.name,
+                decidedAt: new Date(),
+                ...(note ? { decisionNote: note } : {}),
+              },
+            },
+            { returnDocument: 'after', session },
+          ).lean();
+          if (!saved) return;
+          if (audit) await audit(saved, session);
+          result = saved;
+        });
+        return result;
+      } finally {
+        await session.endSession();
+      }
+    },
     /**
      * The Admin cancels directly (no Principal approval). If the Cashier had already asked, that
      * request is the one that becomes "cancelled". Returns null if it is already cancelled.

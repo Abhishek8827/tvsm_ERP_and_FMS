@@ -50,11 +50,7 @@ export function adminDashboardRouter(deps, authenticate) {
           noPlanStudents: rows.filter((r) => !r.planPosted).length,
           classes: CLASS_KEYS.filter((k) => byClass.has(k)).map((k) => byClass.get(k)),
           pending: { ...pending, cancellations },
-          // The store returns groups (kind x mode); a total of only what still counts is summed here.
-          today: {
-            paise: todayReceipts.groups.reduce((n, g) => n + g.paise, 0),
-            count: todayReceipts.groups.reduce((n, g) => n + g.count, 0),
-          },
+          today: todayReceipts.totals,
         });
       } catch (err) {
         next(err);

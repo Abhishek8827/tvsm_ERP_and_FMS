@@ -288,7 +288,11 @@ async function rebateCredits(tenantId, studentId, fy, session = null) {
     .session(session)
     .lean();
   const concessionLines = rows.flatMap((r) => r.lines);
-  return concessionLines.length ? [{ lines: [], concessionLines }] : [];
+  // A waived month counts as "late fee already dealt with", exactly like one settled on a receipt.
+  const periods = rows.flatMap((r) => r.periods ?? []);
+  return concessionLines.length || periods.length
+    ? [{ lines: [], concessionLines, lateFee: { periods } }]
+    : [];
 }
 
 // Receipts that were cancelled no longer count as payments (their money is not "paid").
@@ -644,7 +648,7 @@ export function makeRebateStore() {
   return {
     activeForStudents: (tenantId, studentIds, fy) =>
       Rebate.find({ tenantId, fy, studentId: { $in: studentIds }, status: 'active' })
-        .select('studentId kind lines totalPaise')
+        .select('studentId kind lines periods totalPaise')
         .lean(),
     /**
      * Saves a rebate inside a transaction under the student's lock, after `build` has worked
@@ -669,7 +673,13 @@ export function makeRebateStore() {
               .lean()),
             ...(await rebateCredits(tenantId, studentId, fy, session)),
           ];
-          const lines = build(prior);
+          const built = build(prior);
+          // A rebate returns its lines; a late-fee waiver returns { lines: [], periods, totalPaise }.
+          const lines = Array.isArray(built) ? built : built.lines;
+          const periods = Array.isArray(built) ? [] : built.periods;
+          const totalPaise = Array.isArray(built)
+            ? lines.reduce((n, l) => n + l.amountPaise, 0)
+            : built.totalPaise;
           const [doc] = await Rebate.create(
             [
               {
@@ -679,7 +689,8 @@ export function makeRebateStore() {
                 kind,
                 reason,
                 lines,
-                totalPaise: lines.reduce((n, l) => n + l.amountPaise, 0),
+                periods,
+                totalPaise,
                 student,
                 createdBy: String(user.id),
                 createdByName: user.name,

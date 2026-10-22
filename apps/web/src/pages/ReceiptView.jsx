@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Link, useLocation, useParams } from 'react-router-dom';
 import { SCHOOL, classLabel, formatINR, rupeesInWords } from '@erp/shared';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { printHtml } from '../lib/printHtml';
 import { Badge, Button, ConfirmDialog, ErrorState, Spinner, useToast } from '../components/ui';
 
 const TITLE = { school: 'SCHOOL FEES RECEIPT', transport: 'TRANSPORT FEES RECEIPT' };
@@ -147,7 +149,8 @@ function Copy({ r, copyName, duplicate, cancelled }) {
   );
 }
 
-const PRINT_CSS = `
+// Layout of the receipt, used on screen AND inside the clean print page.
+const SHEET_CSS = `
 .sheet{display:flex;width:210mm;height:148.5mm;background:#fff;color:#000;font-size:8.5pt;line-height:1.25}
 .copy{width:105mm;height:148.5mm;padding:5mm;box-sizing:border-box;border-right:1px dashed #666;display:flex;flex-direction:column;gap:1.4mm}
 .copy:last-child{border-right:0}
@@ -166,15 +169,9 @@ th{text-align:left}
 .words{font-size:7.5pt;font-style:italic}
 .note{font-size:7pt}
 .signs{margin-top:auto;display:flex;justify-content:space-between;font-size:7.5pt;padding-top:7mm}
-@media print{
-  @page{size:A4 portrait;margin:0}
-  html,body{background:#fff!important}
-  body *{visibility:hidden}
-  .sheet,.sheet *{visibility:visible}
-  .sheet{position:absolute;left:0;top:0}
-  .no-print{display:none!important}
-}
 `;
+// Only for the clean print page: A4 sheet with no margins, nothing else.
+const PAGE_CSS = `@page{size:A4 portrait;margin:0}html,body{margin:0;background:#fff}`;
 
 /**
  * Shows one receipt and prints it on the TOP HALF of an A4 sheet: Student copy on the left,
@@ -191,18 +188,34 @@ export function ReceiptView() {
   const [reason, setReason] = useState('');
   const [printedOnce, setPrintedOnce] = useState(false);
   const [duplicate, setDuplicate] = useState(false);
+  const [printing, setPrinting] = useState(false);
+  const sheetRef = useRef(null);
   const fresh = Boolean(location.state?.fresh);
 
   const receipt = useQuery({
     queryKey: ['receipt', id],
     queryFn: () => api(`/api/receipts/${id}`),
   });
+  async function printNow() {
+    setPrinting(true);
+    try {
+      await printHtml({
+        html: sheetRef.current.outerHTML,
+        css: SHEET_CSS + PAGE_CSS,
+        title: `Receipt ${receipt.data.number}`,
+      });
+    } catch (e) {
+      notify(`Could not open the print window. ${e.message}`, 'error');
+    } finally {
+      setPrinting(false);
+    }
+  }
   const reprint = useMutation({
     mutationFn: () => api(`/api/receipts/${id}/reprint`, { method: 'POST' }),
     onSuccess: () => {
-      setDuplicate(true);
-      // Let the DUPLICATE stamp render before the print dialog opens.
-      setTimeout(() => window.print(), 50);
+      // The DUPLICATE stamp must be in the page BEFORE it is copied for printing.
+      flushSync(() => setDuplicate(true));
+      void printNow();
     },
     onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
   });
@@ -240,22 +253,23 @@ export function ReceiptView() {
 
   return (
     <div className="flex flex-col gap-4">
-      <style>{PRINT_CSS}</style>
+      <style>{SHEET_CSS}</style>
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-ink">Receipt {r.number}</h1>
         <div className="flex flex-wrap gap-2">
           {original ? (
             <Button
+              loading={printing}
               onClick={() => {
-                window.print();
                 setPrintedOnce(true);
+                void printNow();
               }}
             >
               Print receipt
             </Button>
           ) : (
             canReprint && (
-              <Button loading={reprint.isPending} onClick={() => reprint.mutate()}>
+              <Button loading={reprint.isPending || printing} onClick={() => reprint.mutate()}>
                 Print duplicate
               </Button>
             )
@@ -313,7 +327,7 @@ export function ReceiptView() {
         Choose A4 paper, margins None, scale 100%.
       </p>
       <div className="overflow-x-auto">
-        <div className="sheet border border-line">
+        <div ref={sheetRef} className="sheet border border-line">
           <Copy r={r} copyName="STUDENT COPY" duplicate={duplicate} cancelled={cancelled} />
           <Copy r={r} copyName="OFFICE COPY" duplicate={duplicate} cancelled={cancelled} />
         </div>

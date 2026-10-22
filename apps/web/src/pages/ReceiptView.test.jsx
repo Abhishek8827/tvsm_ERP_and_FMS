@@ -7,9 +7,11 @@ import { ToastProvider } from '../components/ui';
 import { ReceiptView } from './ReceiptView';
 
 vi.mock('../api/client', () => ({ api: vi.fn() }));
+vi.mock('../lib/printHtml', () => ({ printHtml: vi.fn().mockResolvedValue() }));
 let role = 'cashier';
 vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ role }) }));
 import { api } from '../api/client';
+import { printHtml } from '../lib/printHtml';
 
 const receipt = {
   id: 'r1',
@@ -58,7 +60,8 @@ describe('Receipt view', () => {
   beforeEach(() => {
     api.mockReset();
     role = 'cashier';
-    window.print = vi.fn();
+    printHtml.mockReset();
+    printHtml.mockResolvedValue();
   });
 
   it('prints a Student copy and an Office copy with the number, title, month and total', async () => {
@@ -79,10 +82,19 @@ describe('Receipt view', () => {
     );
     show({ fresh: true });
     await userEvent.click(await screen.findByRole('button', { name: 'Print receipt' }));
-    expect(window.print).toHaveBeenCalledTimes(1);
+    expect(printHtml).toHaveBeenCalledTimes(1);
+    // Only the receipt is printed (no menu, clock or page chrome).
+    const sent = printHtml.mock.calls[0][0];
+    expect(sent.html).toContain('STUDENT COPY');
+    expect(sent.html).toContain('OFFICE COPY');
+    expect(sent.html).not.toContain('Sign out');
+    expect(sent.css).toContain('@page');
     await userEvent.click(await screen.findByRole('button', { name: 'Print duplicate' }));
     expect(await screen.findAllByText('DUPLICATE')).toHaveLength(2);
     expect(api).toHaveBeenCalledWith('/api/receipts/r1/reprint', { method: 'POST' });
+    // The duplicate print carries the DUPLICATE stamp.
+    expect(printHtml).toHaveBeenCalledTimes(2);
+    expect(printHtml.mock.calls[1][0].html).toContain('DUPLICATE');
   });
 
   it('an old receipt opened later offers only Print duplicate, and WhatsApp opens a wa.me link', async () => {
@@ -100,7 +112,7 @@ describe('Receipt view', () => {
     expect(await screen.findByText('Receipt not found.')).toBeInTheDocument();
   });
 
-  it('shows old dues and new dues separately, and village with the address', async () => {
+  it('shows old dues and new dues separately, and one address (village is the same thing)', async () => {
     api.mockResolvedValue({
       ...receipt,
       dueAfterOldPaise: 50000,
@@ -110,7 +122,8 @@ describe('Receipt view', () => {
     show();
     expect((await screen.findAllByText(/Old Dues/)).length).toBe(2);
     expect(screen.getAllByText(/New Dues/).length).toBe(2);
-    expect(screen.getAllByText(/Ward 4, Khakner/).length).toBe(2);
+    expect(screen.getAllByText(/Add\.: Ward 4/).length).toBe(2);
+    expect(screen.queryByText(/Khakner/)).not.toBeInTheDocument();
   });
 
   it('cashier requests cancellation with a reason; admin cancels directly', async () => {

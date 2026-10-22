@@ -14,6 +14,7 @@ import {
 } from '@erp/shared';
 import { requireRole } from '../middleware/requireRole.js';
 import { recordAudit } from '../services/audit.js';
+import { postAdvanceMonths } from '../services/feePlan.js';
 import { AppError, notFound } from '../utils/errors.js';
 
 // UPI and QR payments must carry the bank's reference so they can be matched with the statement.
@@ -211,7 +212,7 @@ export function receiptsRouter(deps, authenticate) {
             409,
             "Today's Day Close is done, so fees cannot be collected. Ask the Admin to reopen the day.",
           );
-        const loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
+        let loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
         const { student, fy, chart } = loaded;
         if (student.status !== 'active')
           throw new AppError(
@@ -219,6 +220,20 @@ export function receiptsRouter(deps, authenticate) {
             409,
             'Fees cannot be collected for an inactive student.',
           );
+
+        // Future months are not posted yet. If more than the posted fee is being paid (advance),
+        // post the months it needs first, then read the charges again.
+        if ((body.input.newPaise ?? 0) > 0) {
+          const added = await postAdvanceMonths({
+            deps,
+            tenantId,
+            student,
+            fy,
+            kind: body.kind,
+            wantPaise: body.input.newPaise,
+          });
+          if (added > 0) loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
+        }
 
         const asOf = todayIst();
         const { receipt, replay } = await deps.receiptStore.issue({

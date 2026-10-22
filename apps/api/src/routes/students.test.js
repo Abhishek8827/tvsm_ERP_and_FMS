@@ -72,7 +72,9 @@ function build() {
     },
     auditStore: { append: async (e) => audit.push(e) },
     studentStore,
+    feeStore: { get: async () => null }, // no chart yet -> plan is reported as skipped
     chargeStore: {
+      postMany: async () => 0,
       deleteForStudents: async (_t, ids) => {
         removedCharges.push(...ids);
       },

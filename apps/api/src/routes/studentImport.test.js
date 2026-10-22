@@ -33,8 +33,12 @@ function build(existing = []) {
     verifyToken: async (t) => ({ uid: t, role: t, tenantId: TENANT }),
     userStore: { findByFirebaseUid: async (_t, uid) => users[uid], touchLogin: async () => {} },
     auditStore: { append: async (e) => audit.push(e) },
+    feeStore: { get: async () => null },
+    chargeStore: { postMany: async () => 0 },
     studentStore: {
       existingAdmissionNos: async () => new Set(existing),
+      findByAdmissionNos: async (_t, list) =>
+        saved.filter((d) => list.includes(d.admissionNo)).map((d, i) => ({ ...d, _id: `s${i}` })),
       createMany: async (_t, docs) => {
         saved.push(...docs);
         return docs.length;

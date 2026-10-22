@@ -62,6 +62,11 @@ export function creditsFromReceipts(receipts) {
     for (const l of r.lines ?? [])
       if (l.chargeId)
         credits.push({ appliesTo: String(l.chargeId), kind: 'payment', amount: l.amountPaise });
+  // Rebates (Admin concessions) reduce what a charge asks for, exactly like a payment, but they
+  // are not money received, so they come in as `concessionLines`, never as receipt lines.
+  for (const r of receipts)
+    for (const l of r.concessionLines ?? [])
+      credits.push({ appliesTo: String(l.chargeId), kind: 'concession', amount: l.amountPaise });
   return credits;
 }
 
@@ -227,4 +232,48 @@ export function planReceipt({ kind, charges, receipts, asOf = todayIst(), config
     dueAfterOldPaise,
     dueAfterNewPaise: after.totals.dueNow - dueAfterOldPaise,
   };
+}
+
+/**
+ * Splits a rebate (concession) over the student's unpaid charges, oldest first, for ONE module.
+ * WHY oldest first: the same order payments use, so a rebate never leaves an old month unpaid
+ * while a later month is reduced. `head` limits it to one head (e.g. only tuition).
+ * Throws when the amount is more than what is still unpaid (a rebate cannot make a credit).
+ */
+export function planRebate({
+  kind,
+  charges,
+  receipts,
+  asOf = todayIst(),
+  config,
+  amountPaise,
+  head,
+}) {
+  try {
+    assertPaise(amountPaise, 'amountPaise');
+  } catch {
+    throw new ReceiptRuleError('BAD_AMOUNT', 'Amount must be whole paise.', 'amountPaise');
+  }
+  if (amountPaise <= 0)
+    throw new ReceiptRuleError('BAD_AMOUNT', 'Enter a rebate amount.', 'amountPaise');
+  const dues = moduleDues({ kind, charges, receipts, asOf, config });
+  const items = dues.instalments
+    .flatMap((i) => i.items.map((x) => ({ ...x, period: i.period })))
+    .filter((x) => x.due > 0 && (!head || x.head === head));
+  const open = items.reduce((n, x) => n + x.due, 0);
+  if (amountPaise > open)
+    throw new ReceiptRuleError(
+      'REBATE_TOO_BIG',
+      'The rebate is more than what is still unpaid.',
+      'amountPaise',
+    );
+  let left = amountPaise;
+  const lines = [];
+  for (const x of items) {
+    if (left === 0) break;
+    const take = Math.min(left, x.due);
+    lines.push({ chargeId: x.id, head: x.head, period: x.period, amountPaise: take });
+    left -= take;
+  }
+  return lines;
 }

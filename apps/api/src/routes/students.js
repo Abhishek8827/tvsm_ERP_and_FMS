@@ -1,8 +1,9 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { CLASS_KEYS, STREAMS, STREAM_CLASSES } from '@erp/shared';
+import { CLASS_KEYS, STREAMS, STREAM_CLASSES, getFinancialYear } from '@erp/shared';
 import { requireRole } from '../middleware/requireRole.js';
 import { recordAudit } from '../services/audit.js';
+import { postPlans } from '../services/feePlan.js';
 import { AppError, notFound } from '../utils/errors.js';
 
 const listQuery = z.object({
@@ -213,7 +214,15 @@ export function studentsRouter(deps, authenticate) {
           classKey: created.classKey,
         },
       });
-      res.status(201).json(shapeStudent(created, req.user.role));
+      // WHY: without posted charges the cashier cannot take any payment (pending shows 0).
+      // A missing fee chart must not block admission, so the result is reported, not thrown.
+      const plan = await postPlans({
+        deps,
+        tenantId: req.user.tenantId,
+        students: [created],
+        fy: getFinancialYear(new Date()),
+      });
+      res.status(201).json({ ...shapeStudent(created, req.user.role), feePlan: plan });
     } catch (err) {
       next(err);
     }

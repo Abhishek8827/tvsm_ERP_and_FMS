@@ -2,8 +2,10 @@ import express, { Router } from 'express';
 import { readSheet } from 'read-excel-file/universal';
 import writeXlsxFile from 'write-excel-file/node';
 import { z } from 'zod';
+import { getFinancialYear } from '@erp/shared';
 import { requireRole } from '../middleware/requireRole.js';
 import { recordAudit } from '../services/audit.js';
+import { postPlans } from '../services/feePlan.js';
 import { TEMPLATE_HEADERS, parseStudentSheet } from '../services/studentImport.js';
 import { AppError } from '../utils/errors.js';
 
@@ -76,11 +78,21 @@ export function studentImportRouter(deps, authenticate) {
         errors.sort((a, b) => a.row - b.row);
 
         let created = 0;
+        let feePlan = null;
         if (commit === 'true' && ready.length > 0) {
           created = await deps.studentStore.createMany(
             tenantId,
             ready.map((s) => s.data),
           );
+          feePlan = await postPlans({
+            deps,
+            tenantId,
+            students: await deps.studentStore.findByAdmissionNos(
+              tenantId,
+              ready.map((s) => s.data.admissionNo),
+            ),
+            fy: getFinancialYear(new Date()),
+          });
           await recordAudit(deps, req, {
             action: 'create',
             entity: 'student_import',
@@ -92,6 +104,7 @@ export function studentImportRouter(deps, authenticate) {
           rowsInFile: parsed.students.length + parsed.errors.length,
           ready: ready.length,
           created,
+          feePlan,
           skipped: errors.length,
           errors: errors.slice(0, 200),
         });

@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from '../app.js';
 import { loadEnv } from '../config/env.js';
 import { createLogger } from '../utils/logger.js';
@@ -98,6 +98,13 @@ const ledger = (app, id, asOf) =>
   request(app).get(`/api/students/${id}/ledger?fy=2026-27&asOf=${asOf}`).set(as('cashier'));
 
 describe('fee plan and ledger', () => {
+  // Fees are posted month by month. March 2027 = the last month, so every month is posted here.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2027-03-15T06:00:00Z'));
+  });
+  afterEach(() => vi.useRealTimers());
+
   it('403 when Cashier or Principal posts a fee plan', async () => {
     const { app } = build();
     for (const r of ['cashier', 'principal']) expect((await post(app, 's1', r)).status).toBe(403);
@@ -138,5 +145,23 @@ describe('fee plan and ledger', () => {
   it('inactive students cannot get a fee plan', async () => {
     const { app } = build();
     expect((await post(app, 's4')).status).toBe(409);
+  });
+
+  it('only months up to the current month are posted, and the next month is added later', async () => {
+    const { app } = build();
+    vi.setSystemTime(new Date('2026-08-10T06:00:00Z')); // June, July, August
+    const first = await post(app, 's1');
+    expect(first.body.charges).toBe(3);
+    expect((await ledger(app, 's1', '2027-03-31')).body.totals.billed).toBe(210000);
+    vi.setSystemTime(new Date('2026-09-02T06:00:00Z')); // September begins
+    const next = await post(app, 's1');
+    expect(next.body.newlyAdded).toBe(1);
+    expect((await ledger(app, 's1', '2027-03-31')).body.totals.billed).toBe(280000);
+  });
+  it('before June nothing monthly is posted yet; a new admission still gets admission + form', async () => {
+    const { app } = build();
+    vi.setSystemTime(new Date('2026-05-10T06:00:00Z'));
+    expect((await post(app, 's1')).body.charges).toBe(0);
+    expect((await post(app, 's2')).body.charges).toBe(2);
   });
 });

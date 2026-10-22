@@ -4,6 +4,7 @@ import { AuditLog } from '../models/AuditLog.js';
 import { Charge } from '../models/Charge.js';
 import { Counter } from '../models/Counter.js';
 import { FeeStructure } from '../models/FeeStructure.js';
+import { Rebate } from '../models/Rebate.js';
 import { Receipt } from '../models/Receipt.js';
 import { ReceiptCancellation } from '../models/ReceiptCancellation.js';
 import { Student } from '../models/Student.js';
@@ -18,6 +19,16 @@ export function makeUserStore() {
     findByFirebaseUid: (tenantId, firebaseUid) => User.findOne({ tenantId, firebaseUid }).lean(),
     touchLogin: (tenantId, id) =>
       User.updateOne({ tenantId, _id: id }, { $set: { lastLoginAt: new Date() } }),
+    findById: (tenantId, id) => User.findOne({ tenantId, _id: id }).lean(),
+    findByEmail: (tenantId, email) => User.findOne({ tenantId, email }).lean(),
+    async create(tenantId, data) {
+      const doc = await User.create({ ...data, tenantId });
+      return doc.toObject();
+    },
+    update: (tenantId, id, data) =>
+      User.findOneAndUpdate({ tenantId, _id: id }, { $set: data }, { new: true }).lean(),
+    countActiveAdmins: (tenantId) =>
+      User.countDocuments({ tenantId, role: 'admin', isActive: true }),
     async list({ tenantId, page, pageSize }) {
       const filter = { tenantId };
       const [rows, total] = await Promise.all([
@@ -45,6 +56,28 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // "2" before "10": compare scholar numbers as numbers, not as text.
 const NUMERIC = { locale: 'en', numericOrdering: true };
 
+// Every word typed must match somewhere (AND), and a word can match ANY part of the name,
+// father's name, mother's name, admission number, mobile number, address or village (so "sha",
+// "rajesh", "9876", "siwal" all work). Tenant + index narrow the scan first.
+function addTextSearch(base, q) {
+  if (!q || !q.trim()) return;
+  const words = q.trim().toLowerCase().split(/\s+/).slice(0, 5);
+  base.$and = words.map((w) => {
+    const rx = { $regex: escapeRegex(w), $options: 'i' };
+    return {
+      $or: [
+        { nameLower: { $regex: escapeRegex(w) } },
+        { fatherName: rx },
+        { motherName: rx },
+        { admissionNo: rx },
+        { contactNo: rx },
+        { address: rx },
+        { village: rx },
+      ],
+    };
+  });
+}
+
 export function makeStudentStore() {
   return {
     // Search: exact admission number, or name starting with the text (uses the nameLower index).
@@ -52,27 +85,7 @@ export function makeStudentStore() {
       const base = { tenantId };
       if (classKey) base.classKey = classKey;
       if (section) base.section = section;
-      if (q && q.trim()) {
-        // Every word typed must match somewhere (AND), and a word can match ANY part of the
-        // name, father's name, mother's name, admission number, mobile number, address or
-        // village (so "sha", "rajesh", "9876", "siwal" all work). Tenant + index narrow the
-        // scan first, and one school has a few thousand students at most.
-        const words = q.trim().toLowerCase().split(/\s+/).slice(0, 5);
-        base.$and = words.map((w) => {
-          const rx = { $regex: escapeRegex(w), $options: 'i' };
-          return {
-            $or: [
-              { nameLower: { $regex: escapeRegex(w) } },
-              { fatherName: rx },
-              { motherName: rx },
-              { admissionNo: rx },
-              { contactNo: rx },
-              { address: rx },
-              { village: rx },
-            ],
-          };
-        });
-      }
+      addTextSearch(base, q);
       const filter = status ? { ...base, status } : base;
       const way = dir === 'desc' ? -1 : 1;
       // Every sort ends with the scholar number so the order is stable between pages.
@@ -144,6 +157,33 @@ export function makeStudentStore() {
         .lean();
       return new Set(found.map((s) => s.admissionNo));
     },
+    // Students for the Fees Database (filters narrow the set before fees are worked out).
+    async forFees(tenantId, f = {}) {
+      const base = { tenantId };
+      for (const k of ['classKey', 'section', 'village', 'category', 'gender', 'status'])
+        if (f[k]) base[k] = f[k];
+      if (f.transport !== undefined) base.usesTransport = f.transport;
+      if (f.newAdmission !== undefined) base.isNewAdmission = f.newAdmission;
+      if (f.rte !== undefined) base.isRTE = f.rte;
+      addTextSearch(base, f.q);
+      return Student.find(base)
+        .select(
+          'admissionNo name fatherName classKey section contactNo village usesTransport isNewAdmission isRTE status category gender',
+        )
+        .collation(NUMERIC)
+        .sort({ admissionNo: 1 })
+        .lean();
+    },
+    // Active students for fee-plan posting: optional class and/or explicit ids.
+    activeForPlan: (tenantId, { classKey, ids } = {}) =>
+      Student.find({
+        tenantId,
+        status: 'active',
+        ...(classKey ? { classKey } : {}),
+        ...(ids ? { _id: { $in: ids } } : {}),
+      }).lean(),
+    findByAdmissionNos: (tenantId, list) =>
+      Student.find({ tenantId, admissionNo: { $in: list } }).lean(),
     async createMany(tenantId, docs) {
       const made = await Student.insertMany(
         docs.map((d) => ({ ...d, tenantId, nameLower: d.name.toLowerCase() })),
@@ -212,6 +252,10 @@ export function makeChargeStore() {
       );
       return result.upsertedCount;
     },
+    listForStudents: (tenantId, studentIds, fy) =>
+      Charge.find({ tenantId, fy, studentId: { $in: studentIds } })
+        .select('studentId head period dueDate amountPaise')
+        .lean(),
     listForStudent: (tenantId, studentId, fy) =>
       Charge.find({ tenantId, studentId, fy }).sort({ dueDate: 1 }).lean(),
     // Adds only the charges that do not exist yet; returns how many were new.
@@ -234,6 +278,17 @@ export function makeChargeStore() {
       return result.upsertedCount;
     },
   };
+}
+
+// Active rebates as ONE pseudo receipt that carries only concession lines. WHY: the fee engine
+// reads `receipts`; a rebate lowers what a charge asks for but is not a payment, so it has no
+// receipt `lines` (no money) - only `concessionLines`.
+async function rebateCredits(tenantId, studentId, fy, session = null) {
+  const rows = await Rebate.find({ tenantId, studentId, fy, status: 'active' })
+    .session(session)
+    .lean();
+  const concessionLines = rows.flatMap((r) => r.lines);
+  return concessionLines.length ? [{ lines: [], concessionLines }] : [];
 }
 
 // Receipts that were cancelled no longer count as payments (their money is not "paid").
@@ -283,7 +338,15 @@ export function makeReceiptStore() {
               { $inc: { seq: 1 } },
               { upsert: true, session },
             );
-            const prior = await Receipt.find({ tenantId, studentId, fy }).session(session).lean();
+            // WHY cancelled ones are left out: a cancelled receipt's money was never kept, so it
+            // must not count as paid when the next receipt is checked.
+            const gone = await cancelledReceiptIds(tenantId, { studentId }, session);
+            const prior = [
+              ...(await Receipt.find({ tenantId, studentId, fy, _id: { $nin: gone } })
+                .session(session)
+                .lean()),
+              ...(await rebateCredits(tenantId, studentId, fy, session)),
+            ];
             const doc = await build(prior);
             const counter = await Counter.findOneAndUpdate(
               { tenantId, key: `receipt:${kind}:${fy}` },
@@ -337,8 +400,16 @@ export function makeReceiptStore() {
     // Only receipts that still count (cancelled ones are left out), used for dues and ledgers.
     async listForStudent(tenantId, studentId, fy) {
       const gone = await cancelledReceiptIds(tenantId, { studentId });
-      return Receipt.find({ tenantId, studentId, fy, _id: { $nin: gone } })
+      const rows = await Receipt.find({ tenantId, studentId, fy, _id: { $nin: gone } })
         .sort({ issuedAt: 1 })
+        .lean();
+      return [...rows, ...(await rebateCredits(tenantId, studentId, fy))];
+    },
+    // Fees Database: payment lines of every receipt that still counts, for many students at once.
+    async linesForStudents(tenantId, studentIds, fy) {
+      const gone = await cancelledReceiptIds(tenantId);
+      return Receipt.find({ tenantId, fy, studentId: { $in: studentIds }, _id: { $nin: gone } })
+        .select('studentId kind lines lateFee.periods issuedAt')
         .lean();
     },
     /** Filtered, paginated list for the Receipts screens, plus totals of the receipts that count. */
@@ -511,5 +582,91 @@ export function makeReceiptStore() {
         await session.endSession();
       }
     },
+  };
+}
+
+export function makeRebateStore() {
+  return {
+    activeForStudents: (tenantId, studentIds, fy) =>
+      Rebate.find({ tenantId, fy, studentId: { $in: studentIds }, status: 'active' })
+        .select('studentId kind lines totalPaise')
+        .lean(),
+    /**
+     * Saves a rebate inside a transaction under the student's lock, after `build` has worked
+     * out the lines from the freshly read receipts + rebates (so two Admins cannot both
+     * rebate the same unpaid amount).
+     */
+    async create({ tenantId, studentId, fy, kind, reason, student, user, build, audit }) {
+      const session = await mongoose.startSession();
+      try {
+        let saved;
+        await session.withTransaction(async () => {
+          await Counter.updateOne(
+            { tenantId, key: `lock:${studentId}` },
+            { $inc: { seq: 1 } },
+            { upsert: true, session },
+          );
+          // Cancelled receipts must not count as payments here either.
+          const gone = await cancelledReceiptIds(tenantId, { studentId }, session);
+          const prior = [
+            ...(await Receipt.find({ tenantId, studentId, fy, _id: { $nin: gone } })
+              .session(session)
+              .lean()),
+            ...(await rebateCredits(tenantId, studentId, fy, session)),
+          ];
+          const lines = build(prior);
+          const [doc] = await Rebate.create(
+            [
+              {
+                tenantId,
+                studentId,
+                fy,
+                kind,
+                reason,
+                lines,
+                totalPaise: lines.reduce((n, l) => n + l.amountPaise, 0),
+                student,
+                createdBy: String(user.id),
+                createdByName: user.name,
+              },
+            ],
+            { session, ordered: true },
+          );
+          saved = doc.toObject();
+          if (audit) await audit(saved, session);
+        });
+        return saved;
+      } finally {
+        await session.endSession();
+      }
+    },
+    listForStudent: (tenantId, studentId) =>
+      Rebate.find({ tenantId, studentId }).sort({ createdAt: -1 }).limit(100).lean(),
+    findById: (tenantId, id) => Rebate.findOne({ tenantId, _id: id }).lean(),
+    async list({ tenantId, page, pageSize }) {
+      const [rows, total] = await Promise.all([
+        Rebate.find({ tenantId })
+          .sort({ createdAt: -1 })
+          .skip((page - 1) * pageSize)
+          .limit(pageSize)
+          .lean(),
+        Rebate.countDocuments({ tenantId }),
+      ]);
+      return { rows, total };
+    },
+    // Reversing is allowed once; the record stays, it just stops counting.
+    reverse: ({ tenantId, id, reason, user }) =>
+      Rebate.findOneAndUpdate(
+        { tenantId, _id: id, status: 'active' },
+        {
+          $set: {
+            status: 'reversed',
+            reversedReason: reason,
+            reversedAt: new Date(),
+            reversedByName: user.name,
+          },
+        },
+        { new: true },
+      ).lean(),
   };
 }

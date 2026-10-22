@@ -217,13 +217,67 @@ export function makeMoneyStore() {
       }
     },
 
+    /**
+     * Admin edits an opening balance. WHY an entry and not an edit: the ledger is insert-only,
+     * so the correction is a signed `opening_change` for the difference, with the reason. The
+     * history (old opening + every change) stays visible and the balance moves by the delta.
+     */
+    async changeOpening({ tenantId, account, amountPaise, reason, user, audit }) {
+      return runTxn(tenantId, async (session) => {
+        if (account.startsWith('bank:')) {
+          const bank = await BankAccount.findOne({ tenantId, _id: account.slice(5) })
+            .session(session)
+            .lean();
+          if (!bank) fail('BANK_NOT_FOUND', 'Bank account not found.', 'account');
+        }
+        const rows = await LedgerEntry.find({
+          tenantId,
+          account,
+          type: { $in: ['opening', 'opening_change'] },
+        })
+          .session(session)
+          .lean();
+        const current = rows.reduce((n, r) => n + r.amountPaise, 0);
+        const delta = amountPaise - current;
+        if (delta === 0) fail('NO_CHANGE', 'This is already the opening balance.', 'amountPaise');
+        const { balances } = await computeBalances(tenantId, session);
+        if ((balances[account] ?? 0) + delta < 0)
+          fail(
+            'WOULD_GO_NEGATIVE',
+            'Money already spent from this account is more than this opening balance.',
+            'amountPaise',
+          );
+        const [row] = await LedgerEntry.create(
+          ledger(tenantId, user, [
+            {
+              account,
+              amountPaise: delta,
+              type: rows.length ? 'opening_change' : 'opening',
+              note: `Opening changed from ${current} to ${amountPaise} paise: ${reason}`,
+            },
+          ]),
+          { session, ordered: true },
+        );
+        const result = { account, fromPaise: current, toPaise: amountPaise, reason };
+        if (audit) await audit({ ...result, _id: row._id }, session);
+        return result;
+      });
+    },
+
     // ---------- balances ----------
     async overview(tenantId) {
-      const [{ balances, unassignedPaise }, banks] = await Promise.all([
+      const [{ balances, unassignedPaise }, banks, openRows] = await Promise.all([
         computeBalances(tenantId),
         BankAccount.find({ tenantId }).sort({ nameLower: 1 }).lean(),
+        LedgerEntry.aggregate([
+          { $match: { tenantId, type: { $in: ['opening', 'opening_change'] } } },
+          { $group: { _id: '$account', amountPaise: { $sum: '$amountPaise' } } },
+        ]),
       ]);
+      const openings = Object.fromEntries(openRows.map((r) => [r._id, r.amountPaise]));
       return {
+        openingCashPaise: openings.cash ?? 0,
+        openingPettyPaise: openings.petty ?? 0,
         cashPaise: balances.cash ?? 0,
         pettyPaise: balances.petty ?? 0,
         banks: banks.map((b) => ({
@@ -232,6 +286,7 @@ export function makeMoneyStore() {
           last4: b.last4 ?? null,
           active: b.active,
           defaultForModes: b.defaultForModes,
+          openingPaise: openings[`bank:${b._id}`] ?? 0,
           balancePaise: balances[`bank:${b._id}`] ?? 0,
         })),
         unassignedReceiptsPaise: unassignedPaise,

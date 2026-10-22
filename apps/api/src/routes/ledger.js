@@ -1,11 +1,27 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { buildCharges, computeDues, creditsFromReceipts, moduleDues, todayIst } from '@erp/shared';
+import {
+  computeDues,
+  creditsFromReceipts,
+  lateSettledFromReceipts,
+  moduleDues,
+  todayIst,
+} from '@erp/shared';
 import { requireRole } from '../middleware/requireRole.js';
 import { recordAudit } from '../services/audit.js';
+import { chargesForStudent, postPlans } from '../services/feePlan.js';
 import { AppError, notFound } from '../utils/errors.js';
 
 const fyField = z.string().regex(/^\d{4}-\d{2}$/, 'Use a year like 2026-27');
+const applyBody = z.object({
+  fy: fyField,
+  kinds: z
+    .array(z.enum(['school', 'transport']))
+    .min(1)
+    .default(['school', 'transport']),
+  classKey: z.string().optional(),
+  studentIds: z.array(z.string()).max(2000).optional(),
+});
 const planBody = z.object({ fy: fyField });
 const ledgerQuery = z.object({
   fy: fyField,
@@ -37,36 +53,7 @@ export function ledgerRouter(deps, authenticate) {
         if (student.status !== 'active')
           throw new AppError('STUDENT_INACTIVE', 409, 'This student is inactive.');
         const chart = await deps.feeStore.get(tenantId, fy);
-        if (!chart)
-          throw new AppError('NO_FEE_STRUCTURE', 409, `No fee chart exists for ${fy} yet.`);
-        const row = chart.classFees.find((c) => c.classKey === student.classKey);
-        if (!row)
-          throw new AppError('NO_CLASS_FEE', 409, 'The fee chart has no fee for this class.');
-
-        let transportMonthly = 0;
-        if (student.usesTransport) {
-          const village = chart.villages.find((v) => v.name === student.village?.toUpperCase());
-          if (!village)
-            throw new AppError(
-              'NO_VILLAGE_FEE',
-              409,
-              `Bus fee for village "${student.village}" is not in the fee chart. Add it first.`,
-            );
-          transportMonthly = village.monthlyPaise;
-        }
-
-        const charges = buildCharges({
-          fy,
-          classFee: {
-            tuition: row.monthlyTuitionPaise,
-            admission: row.admissionPaise,
-            form: chart.formFeePaise,
-          },
-          transportMonthly,
-          // WHY: admission and form fee are for new admissions only (confirmed by the school).
-          chargeAdmission: !!student.isNewAdmission,
-          config: chart,
-        });
+        const charges = chargesForStudent({ student, chart, fy });
         const created = await deps.chargeStore.postMany(tenantId, student._id, fy, charges);
         await recordAudit(deps, req, {
           action: 'create',
@@ -112,8 +99,9 @@ export function ledgerRouter(deps, authenticate) {
           credits: creditsFromReceipts(receipts),
           asOf: day,
           config,
+          lateFeesSettled: lateSettledFromReceipts(receipts),
         });
-        // School and transport have separate receipts and separate late fees.
+        // School and transport have separate receipts; the late fee is ONE Rs 100 per month for both.
         const school = moduleDues({ kind: 'school', charges, receipts, asOf: day, config });
         const transport = moduleDues({ kind: 'transport', charges, receipts, asOf: day, config });
         res.json({
@@ -124,7 +112,7 @@ export function ledgerRouter(deps, authenticate) {
             admissionNo: student.admissionNo,
           },
           ...dues,
-          totals: { ...dues.totals, lateFee: school.totals.lateFee + transport.totals.lateFee },
+          planPosted: charges.length > 0,
           modules: { school: school.totals, transport: transport.totals },
         });
       } catch (err) {
@@ -132,6 +120,34 @@ export function ledgerRouter(deps, authenticate) {
       }
     },
   );
+
+  // Bulk: post (or top up) the year's charges for a class or for every active student.
+  router.post('/fee-plan/apply', authenticate, requireRole('admin'), async (req, res, next) => {
+    try {
+      const body = applyBody.parse(req.body);
+      const tenantId = req.user.tenantId;
+      const students = await deps.studentStore.activeForPlan(tenantId, {
+        classKey: body.classKey,
+        ids: body.studentIds,
+      });
+      const result = await postPlans({ deps, tenantId, students, fy: body.fy, kinds: body.kinds });
+      await recordAudit(deps, req, {
+        action: 'create',
+        entity: 'fee_plan_bulk',
+        newValue: {
+          fy: body.fy,
+          kinds: body.kinds,
+          classKey: body.classKey ?? 'all',
+          students: result.students,
+          newCharges: result.newCharges,
+          skipped: result.skipped.length,
+        },
+      });
+      res.json({ ...result, skipped: result.skipped.slice(0, 200) });
+    } catch (err) {
+      next(err);
+    }
+  });
 
   return router;
 }

@@ -56,10 +56,14 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       dueDate: c.dueDate,
       amount: c.amountPaise,
     }));
-    const concessionLines = (rebatesBy.get(key) ?? []).flatMap((r) => r.lines);
+    const active = rebatesBy.get(key) ?? [];
+    const concessionLines = active.flatMap((r) => r.lines);
+    const waivedPeriods = active.flatMap((r) => r.periods ?? []);
     const mine = [
       ...(receiptsBy.get(key) ?? []),
-      ...(concessionLines.length ? [{ lines: [], concessionLines }] : []),
+      ...(concessionLines.length || waivedPeriods.length
+        ? [{ lines: [], concessionLines, lateFee: { periods: waivedPeriods } }]
+        : []),
     ];
     const config = chart ?? undefined;
     const all = computeDues({

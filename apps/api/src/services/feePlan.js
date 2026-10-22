@@ -1,4 +1,4 @@
-import { buildCharges } from '@erp/shared';
+import { buildCharges, moduleDues, todayIst } from '@erp/shared';
 import { AppError } from '../utils/errors.js';
 
 const SCHOOL_HEADS = ['tuition', 'admission', 'form'];
@@ -8,8 +8,20 @@ const TRANSPORT_HEADS = ['transport'];
  * The year's charges for ONE student from the fee chart. `kinds` = which modules to post
  * ('school' = tuition + (for new admissions) admission/form, 'transport' = bus fee).
  * Throws AppError when the chart cannot price the student (so nothing is guessed).
+ *
+ * WHY only up to the current month: fees are posted month by month (the school's rule), so a
+ * month that has not started yet has no charge. `asOf` is the day it is worked out for; pass
+ * `asOf: null` for the whole year (used only to find the months an advance payment needs).
+ * One-time fees (admission, form) are always included.
  */
-export function chargesForStudent({ student, chart, fy, kinds = ['school', 'transport'] }) {
+const MONTHLY = ['tuition', 'transport'];
+export function chargesForStudent({
+  student,
+  chart,
+  fy,
+  kinds = ['school', 'transport'],
+  asOf = todayIst(),
+}) {
   if (!chart) throw new AppError('NO_FEE_STRUCTURE', 409, `No fee chart exists for ${fy} yet.`);
   const row = chart.classFees.find((c) => c.classKey === student.classKey);
   if (!row) throw new AppError('NO_CLASS_FEE', 409, 'The fee chart has no fee for this class.');
@@ -39,7 +51,12 @@ export function chargesForStudent({ student, chart, fy, kinds = ['school', 'tran
     // WHY: admission and form fee are for new admissions only (confirmed by the school).
     chargeAdmission: !!student.isNewAdmission,
     config: chart,
-  }).filter((c) => heads.includes(c.head));
+  }).filter(
+    (c) =>
+      heads.includes(c.head) &&
+      // "2026-10-15" <= "2026-10-31": compare the YYYY-MM part only.
+      (asOf === null || !MONTHLY.includes(c.head) || c.dueDate.slice(0, 7) <= asOf.slice(0, 7)),
+  );
 }
 
 /**
@@ -47,14 +64,14 @@ export function chargesForStudent({ student, chart, fy, kinds = ['school', 'tran
  * fee or village) is SKIPPED WITH A REASON, never guessed. Safe to repeat: charges that
  * already exist are not added twice.
  */
-export async function postPlans({ deps, tenantId, students, fy, kinds }) {
+export async function postPlans({ deps, tenantId, students, fy, kinds, asOf }) {
   const chart = await deps.feeStore.get(tenantId, fy);
   let posted = 0;
   let charges = 0;
   const skipped = [];
   for (const student of students) {
     try {
-      const list = chargesForStudent({ student, chart, fy, kinds });
+      const list = chargesForStudent({ student, chart, fy, kinds, asOf });
       const added = await deps.chargeStore.postMany(tenantId, student._id, fy, list);
       if (added > 0) posted += 1;
       charges += added;
@@ -64,4 +81,59 @@ export async function postPlans({ deps, tenantId, students, fy, kinds }) {
     }
   }
   return { fy, students: students.length, posted, newCharges: charges, skipped };
+}
+
+/**
+ * Advance payment: when the cashier collects MORE than what is posted and unpaid for the
+ * current-fee head, the next months are posted first (in order) until the amount is covered, so
+ * "pay next month's fee in advance" works even though future months are not posted yet.
+ * Posts nothing when the amount already fits. Never goes past the end of the year. Old fees are
+ * checked by the receipt rules afterwards (new fees are blocked while old fees are pending).
+ */
+export async function postAdvanceMonths({ deps, tenantId, student, fy, kind, wantPaise }) {
+  const head = kind === 'school' ? 'tuition' : 'transport';
+  const chart = await deps.feeStore.get(tenantId, fy);
+  if (!chart) return 0; // nothing can be priced; the receipt rules will explain
+  const [rows, receipts] = await Promise.all([
+    deps.chargeStore.listForStudent(tenantId, student._id, fy),
+    deps.receiptStore.listForStudent(tenantId, student._id, fy),
+  ]);
+  const posted = rows.map((c) => ({
+    id: String(c._id),
+    head: c.head,
+    period: c.period,
+    dueDate: c.dueDate,
+    amount: c.amountPaise,
+  }));
+  const open = moduleDues({
+    kind,
+    charges: posted,
+    receipts,
+    asOf: todayIst(),
+    config: chart ?? undefined,
+  })
+    .instalments.flatMap((i) => i.items)
+    .filter((x) => x.head === head)
+    .reduce((n, x) => n + x.due, 0);
+  if (wantPaise <= open) return 0;
+  const have = new Set(posted.filter((c) => c.head === head).map((c) => c.period));
+  let all;
+  try {
+    all = chargesForStudent({ student, chart, fy, kinds: [kind], asOf: null });
+  } catch (err) {
+    if (err instanceof AppError) return 0; // e.g. village fee missing: the rules explain
+    throw err;
+  }
+  const future = all
+    .filter((c) => c.head === head && !have.has(c.period))
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  let covered = open;
+  const needed = [];
+  for (const c of future) {
+    if (covered >= wantPaise) break;
+    needed.push(c);
+    covered += c.amount;
+  }
+  if (needed.length === 0) return 0;
+  return deps.chargeStore.postMany(tenantId, student._id, fy, needed);
 }

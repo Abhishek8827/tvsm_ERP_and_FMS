@@ -4,6 +4,9 @@ import { z } from 'zod';
 import {
   CLASS_KEYS,
   ReceiptRuleError,
+  computeDues,
+  creditsFromReceipts,
+  lateSettledFromReceipts,
   classLabel,
   getFinancialYear,
   istDateString,
@@ -59,6 +62,11 @@ const rebateBody = z.object({
     .optional(),
   reason: z.string().trim().min(3, 'Write the reason').max(300),
 });
+const waiverBody = z.object({
+  fy: z.string().regex(/^\d{4}-\d{2}$/),
+  periods: z.array(z.string().min(1).max(20)).min(1, 'Choose at least one month').max(12),
+  reason: z.string().trim().min(3, 'Write the reason').max(300),
+});
 const reverseBody = z.object({ reason: z.string().trim().min(3, 'Write the reason').max(300) });
 
 const shapeRebate = (r) => ({
@@ -67,6 +75,7 @@ const shapeRebate = (r) => ({
   student: r.student ?? null,
   fy: r.fy,
   kind: r.kind,
+  periods: r.periods ?? [],
   totalPaise: r.totalPaise,
   reason: r.reason,
   status: r.status,
@@ -274,6 +283,88 @@ export function feesDatabaseRouter(deps, authenticate) {
                 student: student.admissionNo,
                 fy: body.fy,
                 kind: body.kind,
+                totalPaise: doc.totalPaise,
+              },
+            },
+            { critical: true },
+          ),
+      });
+      res.status(201).json(shapeRebate(saved));
+    }),
+  );
+
+  // Late-fee relaxation: the Admin waives the late fee of chosen overdue months, with a reason.
+  // Stored like a rebate (so it can be reversed and is audited) but it carries months, not money.
+  router.post(
+    '/students/:id/late-fee-waivers',
+    authenticate,
+    requireRole('admin'),
+    wrap(async (req, res) => {
+      const body = waiverBody.parse(req.body);
+      const tenantId = req.user.tenantId;
+      const student = await deps.studentStore.findById(tenantId, objectId.parse(req.params.id));
+      if (!student) throw notFound('Student');
+      const rows = await deps.chargeStore.listForStudent(tenantId, student._id, body.fy);
+      const charges = rows.map((c) => ({
+        id: String(c._id),
+        head: c.head,
+        period: c.period,
+        dueDate: c.dueDate,
+        amount: c.amountPaise,
+      }));
+      const chart = await deps.feeStore.get(tenantId, body.fy);
+      const saved = await deps.rebateStore.create({
+        tenantId,
+        studentId: student._id,
+        fy: body.fy,
+        kind: 'late_fee',
+        reason: body.reason,
+        student: {
+          name: student.name,
+          admissionNo: student.admissionNo,
+          classKey: student.classKey,
+        },
+        user: req.user,
+        // Inside the transaction, on freshly read data: only months that REALLY carry a late fee
+        // right now can be waived (so a month cannot be waived twice or before it is late).
+        build: (prior) => {
+          const dues = computeDues({
+            charges,
+            credits: creditsFromReceipts(prior),
+            asOf: todayIst(),
+            config: chart ?? undefined,
+            lateFeesSettled: lateSettledFromReceipts(prior),
+          });
+          const late = new Map(
+            dues.instalments.filter((i) => i.lateFee > 0).map((i) => [i.period, i.lateFee]),
+          );
+          const bad = body.periods.filter((p) => !late.has(p));
+          if (bad.length)
+            throw new AppError(
+              'NO_LATE_FEE',
+              422,
+              `No late fee is pending for: ${bad.join(', ')}.`,
+              { periods: 'Choose months that have a late fee' },
+            );
+          return {
+            lines: [],
+            periods: body.periods,
+            totalPaise: body.periods.reduce((n, p) => n + late.get(p), 0),
+          };
+        },
+        audit: (doc) =>
+          recordAudit(
+            deps,
+            req,
+            {
+              action: 'create',
+              entity: 'late_fee_waiver',
+              entityId: String(doc._id),
+              reason: body.reason,
+              newValue: {
+                student: student.admissionNo,
+                fy: body.fy,
+                periods: body.periods,
                 totalPaise: doc.totalPaise,
               },
             },

@@ -81,6 +81,7 @@ export function FeesDatabase() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [rebateFor, setRebateFor] = useState(null);
+  const [waiveFor, setWaiveFor] = useState(null);
   const [applyOpen, setApplyOpen] = useState(false);
   const queryClient = useQueryClient();
 
@@ -188,8 +189,15 @@ export function FeesDatabase() {
       render: (r) => (r.planPosted ? money(r.dueNowPaise) : '-'),
     },
     {
+      key: 'late',
+      header: 'Late fee',
+      align: 'right',
+      render: (r) =>
+        r.lateFeePaise > 0 ? <span className="text-danger">{money(r.lateFeePaise)}</span> : '-',
+    },
+    {
       key: 'out',
-      header: head('Outstanding (year)', 'outstanding'),
+      header: head('Outstanding', 'outstanding'),
       align: 'right',
       render: (r) => (r.planPosted ? money(r.outstandingPaise) : '-'),
     },
@@ -214,9 +222,16 @@ export function FeesDatabase() {
       header: '',
       render: (r) =>
         r.planPosted ? (
-          <Button variant="secondary" onClick={() => setRebateFor(r)}>
-            Add rebate
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setRebateFor(r)}>
+              Add rebate
+            </Button>
+            {r.lateFeePaise > 0 && (
+              <Button variant="secondary" onClick={() => setWaiveFor(r)}>
+                Waive late fee
+              </Button>
+            )}
+          </div>
         ) : (
           <Button
             variant="secondary"
@@ -246,9 +261,9 @@ export function FeesDatabase() {
       </div>
 
       {t && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <StatCard label="Students" value={t.students} caption="Matching the filters" />
-          <StatCard label="Billed (year)" value={money(t.billedPaise)} />
+          <StatCard label="Billed (till this month)" value={money(t.billedPaise)} />
           <StatCard
             label="Paid"
             value={money(t.paidPaise)}
@@ -257,7 +272,12 @@ export function FeesDatabase() {
           <StatCard
             label="Due till today"
             value={money(t.dueNowPaise)}
-            caption={`Overdue ${money(t.overduePaise)} · Late fee ${money(t.lateFeePaise)}`}
+            caption={`Overdue ${money(t.overduePaise)}`}
+          />
+          <StatCard
+            label="Late fee (penalty)"
+            value={money(t.lateFeePaise)}
+            caption="Shown separately, not in due"
           />
         </div>
       )}
@@ -384,6 +404,7 @@ export function FeesDatabase() {
       {rebateFor && (
         <RebateDialog row={rebateFor} fy={data?.fy} onClose={() => setRebateFor(null)} />
       )}
+      {waiveFor && <WaiveDialog row={waiveFor} fy={data?.fy} onClose={() => setWaiveFor(null)} />}
       {applyOpen && <ApplyDialog fy={data?.fy} onClose={() => setApplyOpen(false)} />}
     </div>
   );
@@ -546,6 +567,89 @@ function ApplyDialog({ fy, onClose }) {
             )}
           </div>
         )}
+      </div>
+    </Dialog>
+  );
+}
+
+/** Late-fee relaxation: the Admin picks the overdue months to waive and writes the reason. */
+function WaiveDialog({ row, fy, onClose }) {
+  const { notify } = useToast();
+  const queryClient = useQueryClient();
+  const [picked, setPicked] = useState(null); // null = all months ticked
+  const [reason, setReason] = useState('');
+  const ledger = useQuery({
+    queryKey: ['ledger', row.id, fy],
+    queryFn: () => api(`/api/students/${row.id}/ledger?fy=${fy}`),
+  });
+  const late = (ledger.data?.instalments ?? []).filter((i) => i.lateFee > 0);
+  const chosen = picked ?? late.map((i) => i.period);
+  const total = late.filter((i) => chosen.includes(i.period)).reduce((n, i) => n + i.lateFee, 0);
+  const save = useMutation({
+    mutationFn: () =>
+      api(`/api/students/${row.id}/late-fee-waivers`, {
+        method: 'POST',
+        body: { fy, periods: chosen, reason: reason.trim() },
+      }),
+    onSuccess: async () => {
+      for (const key of ['fees-database', 'dues', 'ledger', 'dashboard'])
+        await queryClient.invalidateQueries({ queryKey: [key] });
+      notify('Late fee waived.', 'success');
+      onClose();
+    },
+    onError: (e) => notify(errorText(e), 'error'),
+  });
+  const toggle = (p) =>
+    setPicked(chosen.includes(p) ? chosen.filter((x) => x !== p) : [...chosen, p]);
+  return (
+    <Dialog
+      open
+      title={`Waive late fee: ${row.name}`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+            Cancel
+          </Button>
+          <Button
+            disabled={chosen.length === 0 || reason.trim().length < 3}
+            loading={save.isPending}
+            onClick={() => save.mutate()}
+          >
+            Waive {money(total)}
+          </Button>
+        </>
+      }
+    >
+      <div className="flex flex-col gap-3">
+        {ledger.isPending && <p className="text-ink-muted">Loading the months…</p>}
+        {ledger.isError && <p className="text-danger">{errorText(ledger.error)}</p>}
+        {ledger.data && late.length === 0 && (
+          <p className="text-ink-muted">No late fee is pending for this student.</p>
+        )}
+        {late.length > 0 && (
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-sm font-medium">Months with a late fee</legend>
+            {late.map((i) => (
+              <label key={i.period} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={chosen.includes(i.period)}
+                  onChange={() => toggle(i.period)}
+                />
+                {i.period} · {money(i.lateFee)}
+              </label>
+            ))}
+          </fieldset>
+        )}
+        <Input
+          label="Reason (required)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        <p className="text-xs text-ink-muted">
+          The waiver is recorded with your reason and can be reversed later.
+        </p>
       </div>
     </Dialog>
   );

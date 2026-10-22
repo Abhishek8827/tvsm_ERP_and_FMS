@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -71,5 +71,39 @@ describe('Fees Database', () => {
     api.mockRejectedValue(new Error('boom'));
     show();
     expect(await screen.findByText(/boom/)).toBeInTheDocument();
+  });
+
+  it('shows the late fee in its own column, and Admin can waive it with a reason', async () => {
+    mockRole = 'admin';
+    api.mockImplementation(async (url) => {
+      if (String(url).startsWith('/api/fees-database'))
+        return { ...data, rows: [row({ lateFeePaise: 10000 })], total: 1 };
+      if (String(url).includes('/ledger'))
+        return {
+          instalments: [
+            { period: 'jun', lateFee: 10000 },
+            { period: 'jul', lateFee: 10000 },
+          ],
+        };
+      return { ok: true };
+    });
+    show();
+    expect(await screen.findByRole('columnheader', { name: 'Late fee' })).toBeInTheDocument();
+    await userEvent.click(await screen.findByRole('button', { name: 'Waive late fee' }));
+    const dialog = await screen.findByRole('dialog');
+    const waive = await within(dialog).findByRole('button', { name: /^Waive/ });
+    expect(waive).toBeDisabled(); // reason missing
+    await userEvent.type(within(dialog).getByLabelText(/Reason/), 'Family problem');
+    await userEvent.click(within(dialog).getByLabelText(/jul/));
+    await userEvent.click(waive);
+    const call = api.mock.calls.find((c) => String(c[0]).endsWith('/late-fee-waivers'));
+    expect(call[1].body).toEqual({ fy: '2026-27', periods: ['jun'], reason: 'Family problem' });
+  });
+  it('Cashier never gets the waive button', async () => {
+    mockRole = 'cashier';
+    api.mockResolvedValue({ ...data, rows: [row({ lateFeePaise: 10000 })], total: 1 });
+    show();
+    expect(await screen.findByText('Asha')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Waive late fee' })).toBeNull();
   });
 });

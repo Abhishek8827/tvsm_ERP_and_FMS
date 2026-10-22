@@ -118,4 +118,30 @@ describe('Fees Database', () => {
       .send({ ...body, reason: '' });
     expect(noReason.status).toBe(400);
   });
+
+  it('only the Admin can waive a late fee; months are compulsory and so is the reason', async () => {
+    const { app } = build();
+    const body = { fy: '2026-27', periods: ['jun'], reason: 'Family problem' };
+    for (const who of ['principal', 'cashier'])
+      expect(
+        (await request(app).post(`/api/students/${ID}/late-fee-waivers`).set(as(who)).send(body))
+          .status,
+      ).toBe(403);
+    const noMonth = await request(app)
+      .post(`/api/students/${ID}/late-fee-waivers`)
+      .set(as('admin'))
+      .send({ ...body, periods: [] });
+    expect(noMonth.status).toBe(400);
+    const noReason = await request(app)
+      .post(`/api/students/${ID}/late-fee-waivers`)
+      .set(as('admin'))
+      .send({ ...body, reason: '' });
+    expect(noReason.status).toBe(400);
+  });
+  it('the list carries a separate late-fee column and the waiver removes it', async () => {
+    const { app } = build();
+    const r = await request(app).get('/api/fees-database').set(as('admin'));
+    expect(r.body.rows[0]).toHaveProperty('lateFeePaise');
+    expect(r.body.totals).toHaveProperty('lateFeePaise');
+  });
 });

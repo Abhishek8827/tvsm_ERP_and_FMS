@@ -166,6 +166,7 @@ export function receiptsRouter(deps, authenticate) {
           usesTransport: !!student.usesTransport,
           status: student.status,
         },
+        planPosted: charges.length > 0, // false: nothing posted yet, so nothing can be collected
         remaining, // still unpaid per head, for the whole year
         lateFeeCalculatedPaise: dues.totals.lateFee,
         dueNowPaise: dues.totals.dueNow,

@@ -76,6 +76,7 @@ const pettyBody = z.object({
   particulars: text(300),
   amountPaise: paise,
 });
+const reasonText = text(300).min(3, 'Write the reason');
 const reasonBody = z.object({ reason: text(300).min(3, 'Write the reason') });
 
 const shapeVoucher = (v) => ({
@@ -220,6 +221,37 @@ export function moneyRouter(deps, authenticate) {
           ),
       });
       res.status(201).json({ id: String(row._id) });
+    }),
+  );
+
+  // Edit any opening balance (cash, petty or a bank). Reason is compulsory; history is kept.
+  router.put(
+    '/money/opening',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const body = z
+        .object({ account: accountKey, amountPaise: paise, reason: reasonText })
+        .parse(req.body);
+      const out = await store().changeOpening({
+        tenantId: tenant(req),
+        ...body,
+        user: req.user,
+        audit: (saved) =>
+          recordAudit(
+            deps,
+            req,
+            {
+              action: 'update',
+              entity: 'opening_balance',
+              entityId: body.account,
+              reason: body.reason,
+              oldValue: { amountPaise: saved.fromPaise },
+              newValue: { amountPaise: saved.toPaise },
+            },
+            { critical: true },
+          ),
+      });
+      res.json(out);
     }),
   );
 

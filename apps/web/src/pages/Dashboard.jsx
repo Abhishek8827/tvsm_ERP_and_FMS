@@ -67,8 +67,8 @@ function Overview() {
           />
           <StatCard
             label="Collected today"
-            value={money(d.today?.paise)}
-            caption={`${d.today?.count ?? 0} receipts`}
+            value={money(d.today.paise)}
+            caption={`${d.today.count} receipts`}
           />
         </div>
       </Card>

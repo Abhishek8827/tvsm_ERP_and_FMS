@@ -208,20 +208,33 @@ function BankDialog({ open, onClose }) {
   );
 }
 
-function OpeningDialog({ open, onClose }) {
+function OpeningDialog({ open, overview, onClose }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
+  const options = [
+    { value: 'cash', label: 'Cash in hand', paise: overview.openingCashPaise },
+    { value: 'petty', label: 'Petty cash', paise: overview.openingPettyPaise },
+    ...overview.banks.map((b) => ({
+      value: `bank:${b.id}`,
+      label: b.name,
+      paise: b.openingPaise,
+    })),
+  ];
   const [account, setAccount] = useState('cash');
-  const [text, setText] = useState('');
+  const current = options.find((o) => o.value === account)?.paise ?? 0;
+  const [text, setText] = useState(String(current / 100));
+  const [reason, setReason] = useState('');
   const amount = parseRupees(text);
   const save = useMutation({
     mutationFn: () =>
-      api('/api/money/opening', { method: 'POST', body: { account, amountPaise: amount.paise } }),
+      api('/api/money/opening', {
+        method: 'PUT',
+        body: { account, amountPaise: amount.paise, reason: reason.trim() },
+      }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['money'] });
       await queryClient.invalidateQueries({ queryKey: ['petty'] });
-      notify('Opening balance saved.', 'success');
-      setText('');
+      notify('Opening balance changed.', 'success');
       onClose();
     },
     onError: (e) => notify(errorText(e), 'error'),
@@ -229,7 +242,7 @@ function OpeningDialog({ open, onClose }) {
   return (
     <Dialog
       open={open}
-      title="Opening balance"
+      title="Edit opening balance"
       onClose={onClose}
       footer={
         <>
@@ -238,7 +251,7 @@ function OpeningDialog({ open, onClose }) {
           </Button>
           <Button
             loading={save.isPending}
-            disabled={!(amount.paise > 0) || !!amount.error}
+            disabled={!!amount.error || amount.paise === current || reason.trim().length < 3}
             onClick={() => save.mutate()}
           >
             Save
@@ -248,23 +261,30 @@ function OpeningDialog({ open, onClose }) {
     >
       <div className="flex flex-col gap-3">
         <p className="text-ink-muted">
-          Each account's opening balance can be set only once. Use the real figure from your books.
+          The balance moves by the difference. The old figure and your reason stay on record, and
+          the change is audited.
         </p>
         <Select
           label="Account"
           value={account}
-          onChange={(e) => setAccount(e.target.value)}
-          options={[
-            { value: 'cash', label: 'Cash in hand' },
-            { value: 'petty', label: 'Petty cash' },
-          ]}
+          onChange={(e) => {
+            setAccount(e.target.value);
+            setText(String((options.find((o) => o.value === e.target.value)?.paise ?? 0) / 100));
+          }}
+          options={options}
         />
+        <p className="text-xs text-ink-muted">Current opening: {formatINR(current)}</p>
         <Input
-          label="Amount (₹)"
+          label="New opening balance (₹)"
           inputMode="decimal"
           value={text}
           error={amount.error}
           onChange={(e) => setText(e.target.value)}
+        />
+        <Input
+          label="Reason (required)"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
         />
       </div>
     </Dialog>
@@ -545,7 +565,7 @@ function StaffView({ isAdmin }) {
             Add bank account
           </Button>
           <Button variant="secondary" onClick={() => setDialog('opening')}>
-            Opening cash / petty cash
+            Edit opening balances
           </Button>
         </div>
       )}
@@ -562,7 +582,9 @@ function StaffView({ isAdmin }) {
       </Card>
       {isAdmin && <PinCard />}
       {isAdmin && dialog === 'bank' && <BankDialog open onClose={() => setDialog(null)} />}
-      {isAdmin && dialog === 'opening' && <OpeningDialog open onClose={() => setDialog(null)} />}
+      {isAdmin && dialog === 'opening' && (
+        <OpeningDialog open overview={q.data} onClose={() => setDialog(null)} />
+      )}
       {isAdmin && dialog === 'transfer' && (
         <TransferDialog open overview={q.data} onClose={() => setDialog(null)} />
       )}

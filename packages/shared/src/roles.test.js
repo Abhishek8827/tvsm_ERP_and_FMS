@@ -9,7 +9,6 @@ describe('navForRole', () => {
       'data-import',
       'users-settings',
       'tc-bonafide',
-      'fees-database',
       'audit-log',
       'approvals',
     ]) {

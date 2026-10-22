@@ -53,8 +53,9 @@ export const NAV_ITEMS = [
     key: 'fees-database',
     label: 'Fees Database',
     path: '/fees-database',
-    roles: ['admin', 'principal'],
-    availableFromStep: 10,
+    // Everyone can LOOK; the Cashier sees it read-only (no export, no changes).
+    roles: ['admin', 'principal', 'cashier'],
+    availableFromStep: 6,
   },
   {
     key: 'expenses',
@@ -113,7 +114,7 @@ export const NAV_ITEMS = [
     label: 'Users & Settings',
     path: '/users-settings',
     roles: ['admin'],
-    availableFromStep: 9,
+    availableFromStep: 6,
   },
   {
     key: 'audit-log',

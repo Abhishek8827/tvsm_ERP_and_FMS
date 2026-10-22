@@ -29,6 +29,37 @@ export function configureAuth(provider, expired) {
 export function newIdempotencyKey() {
   return crypto.randomUUID();
 }
+// Short pauses before a retry. WHY: on a local or weak connection the first call after sign-in
+// can fail for a moment (the proxy cannot reach the API for an instant, or Google's token
+// service does not answer). A retry fixes it without the person having to refresh the page.
+let retryDelays = [400, 1200];
+/** Tests pass [] (no retry) or [0, 0] (instant retries). */
+export function configureRetry(delays) {
+  retryDelays = delays;
+}
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+const NETWORK_MESSAGE = 'Could not reach the server. Check the connection and try again.';
+// 502/503/504 = a gateway could not get an answer from the API.
+const GATEWAY = [502, 503, 504];
+// A retry is only safe when repeating the call cannot do the work twice: reads, and writes
+// that carry an Idempotency-Key.
+const safeToRetry = (opts) =>
+  (opts.method ?? 'GET').toUpperCase() === 'GET' || Boolean(opts.idempotencyKey);
+
+/** The Firebase token, asking again when Google's token service is briefly unreachable. */
+async function getToken(forceRefresh) {
+  for (let i = 0; ; i += 1) {
+    try {
+      return await tokenProvider(forceRefresh);
+    } catch (err) {
+      const offline = err?.code === 'auth/network-request-failed';
+      if (!offline) throw err;
+      if (i >= retryDelays.length) throw new ApiError('NETWORK_ERROR', 0, NETWORK_MESSAGE);
+      await wait(retryDelays[i]);
+    }
+  }
+}
+
 const BASE = import.meta.env.VITE_API_BASE_URL ?? '';
 async function send(path, opts, forceRefresh) {
   const headers = { Accept: 'application/json' };
@@ -36,7 +67,7 @@ async function send(path, opts, forceRefresh) {
   else if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
   if (tokenProvider) {
-    const token = await tokenProvider(forceRefresh);
+    const token = await getToken(forceRefresh);
     if (token) headers.Authorization = `Bearer ${token}`;
   }
   try {
@@ -50,17 +81,27 @@ async function send(path, opts, forceRefresh) {
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') throw err;
     // Network drop: human-readable, and safe to retry when an Idempotency-Key was sent.
-    throw new ApiError(
-      'NETWORK_ERROR',
-      0,
-      'Could not reach the server. Check the connection and try again.',
-    );
+    throw new ApiError('NETWORK_ERROR', 0, NETWORK_MESSAGE);
   }
 }
+/** One attempt, plus quiet retries on a network drop or a gateway error when that is safe. */
+async function sendWithRetry(path, opts, forceRefresh) {
+  for (let i = 0; ; i += 1) {
+    const last = i >= retryDelays.length || !safeToRetry(opts);
+    try {
+      const res = await send(path, opts, forceRefresh);
+      if (!GATEWAY.includes(res.status) || last) return res;
+    } catch (err) {
+      if (err?.code !== 'NETWORK_ERROR' || last) throw err;
+    }
+    await wait(retryDelays[i]);
+  }
+}
+
 export async function api(path, opts = {}) {
-  let res = await send(path, opts, false);
+  let res = await sendWithRetry(path, opts, false);
   if (res.status === 401 && tokenProvider) {
-    res = await send(path, opts, true);
+    res = await sendWithRetry(path, opts, true);
     if (res.status === 401) {
       onSessionExpired?.();
       throw new ApiError('SESSION_EXPIRED', 401, 'Your session has expired. Please sign in again.');

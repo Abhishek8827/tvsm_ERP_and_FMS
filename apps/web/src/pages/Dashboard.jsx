@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { classLabel, formatINR, todayIst } from '@erp/shared';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
+import { errorText } from '../lib/rupees';
 import { Badge, Card, ErrorState, Spinner, StatCard } from '../components/ui';
 /**
  * Step 1 dashboard intentionally shows NO business numbers: there is no data yet, and rule 1
@@ -51,7 +52,8 @@ function Overview() {
     retry: false,
   });
   if (q.isPending) return <Spinner label="Loading the overview" />;
-  if (q.isError) return <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />;
+  if (q.isError)
+    return <ErrorState message={errorText(q.error)} onRetry={() => void q.refetch()} />;
   const d = q.data;
   const bankTotal = d.funds.banks.reduce((n, b) => n + b.balancePaise, 0);
   return (
@@ -67,8 +69,8 @@ function Overview() {
           />
           <StatCard
             label="Collected today"
-            value={money(d.today.paise)}
-            caption={`${d.today.count} receipts`}
+            value={money(d.today?.paise)}
+            caption={`${d.today?.count ?? 0} receipts`}
           />
         </div>
       </Card>

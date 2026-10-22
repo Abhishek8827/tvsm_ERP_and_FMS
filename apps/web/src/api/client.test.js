@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { api, configureAuth } from './client';
+import { api, configureAuth, configureRetry } from './client';
 const json = (status, body) =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 describe('api client', () => {
@@ -8,6 +8,7 @@ describe('api client', () => {
     vi.stubGlobal('fetch', fetchMock);
     fetchMock.mockReset();
     configureAuth(null);
+    configureRetry([]);
   });
   afterEach(() => vi.unstubAllGlobals());
   it('sends the Idempotency-Key and parses JSON', async () => {
@@ -51,5 +52,56 @@ describe('api client', () => {
   it('turns a network failure into a readable error', async () => {
     fetchMock.mockRejectedValue(new TypeError('fetch failed'));
     await expect(api('/api/x')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+  });
+
+  describe('quiet retries', () => {
+    beforeEach(() => configureRetry([0, 0]));
+
+    it('a read that gets 502 first is retried and succeeds (no error shown)', async () => {
+      fetchMock.mockResolvedValueOnce(json(502, {})).mockResolvedValueOnce(json(200, { ok: 1 }));
+      await expect(api('/api/auth/me')).resolves.toEqual({ ok: 1 });
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('a network drop is retried too, and gives up after the last retry', async () => {
+      fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+      await expect(api('/api/x')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+      expect(fetchMock).toHaveBeenCalledTimes(3);
+    });
+
+    it('a write WITHOUT an Idempotency-Key is never retried (it could be done twice)', async () => {
+      fetchMock.mockResolvedValue(json(502, {}));
+      await expect(api('/api/users', { method: 'POST', body: {} })).rejects.toMatchObject({
+        status: 502,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('a write WITH an Idempotency-Key is retried safely', async () => {
+      fetchMock.mockResolvedValueOnce(json(503, {})).mockResolvedValueOnce(json(201, { id: 'r1' }));
+      await expect(
+        api('/api/receipts', { method: 'POST', body: {}, idempotencyKey: 'k' }),
+      ).resolves.toEqual({ id: 'r1' });
+    });
+
+    it('real server errors (500) are not retried', async () => {
+      fetchMock.mockResolvedValue(json(500, { error: { code: 'X', message: 'boom' } }));
+      await expect(api('/api/x')).rejects.toMatchObject({ status: 500 });
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+
+    it("Firebase's token service being briefly unreachable is retried", async () => {
+      const offline = Object.assign(new Error('x'), { code: 'auth/network-request-failed' });
+      configureAuth(vi.fn().mockRejectedValueOnce(offline).mockResolvedValue('tok'));
+      fetchMock.mockResolvedValue(json(200, { ok: 1 }));
+      await expect(api('/api/me')).resolves.toEqual({ ok: 1 });
+      expect(fetchMock.mock.calls[0][1].headers.Authorization).toBe('Bearer tok');
+    });
+
+    it('if the token service stays down, the person sees a plain message, not a Firebase code', async () => {
+      const offline = Object.assign(new Error('x'), { code: 'auth/network-request-failed' });
+      configureAuth(vi.fn().mockRejectedValue(offline));
+      await expect(api('/api/me')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+    });
   });
 });

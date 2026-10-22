@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from './App';
+import { configureRetry } from './api/client';
 import { AuthProvider, IDLE_TIMEOUT_MS } from './auth/AuthContext';
 import { Button, ConfirmDialog, Pagination, ToastProvider } from './components/ui';
 
@@ -145,6 +146,7 @@ describe('sign-in', () => {
   });
 
   it('shows a retry screen when the server cannot be reached', async () => {
+    configureRetry([]); // the real client retries quietly; this test is about the final failure
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('x')));
     renderApp(fakeService({ signedIn: true }));
     expect(await screen.findByRole('alert')).toHaveTextContent(/Could not reach the server/);

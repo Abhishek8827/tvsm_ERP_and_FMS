@@ -14,7 +14,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "pnpm -r test",
-    "money:demo": "pnpm --filter @erp/api money:demo"
+    "money:demo": "pnpm --filter @erp/api money:demo",
+    "students:demo": "pnpm --filter @erp/api students:demo",
+    "fees:seed": "pnpm --filter @erp/api fees:seed",
+    "users:seed": "pnpm --filter @erp/api users:seed"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

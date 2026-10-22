@@ -13,7 +13,9 @@ const rebateSchema = new mongoose.Schema(
   {
     studentId: { type: mongoose.Schema.Types.ObjectId, required: true },
     fy: { type: String, required: true },
-    kind: { type: String, enum: ['school', 'transport'], required: true },
+    // 'late_fee' = a late-fee waiver (no lines; `periods` are the months whose late fee is waived)
+    kind: { type: String, enum: ['school', 'transport', 'late_fee'], required: true },
+    periods: [String],
     totalPaise: { type: Number, required: true },
     lines: [
       {

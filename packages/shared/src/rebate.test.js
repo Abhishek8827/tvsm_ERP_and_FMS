@@ -44,3 +44,22 @@ describe('planRebate', () => {
     ).toThrow();
   });
 });
+
+describe('late fee waiver', () => {
+  it('a waived month carries no late fee, others still do', () => {
+    const asOf = '2026-08-30'; // June and July are past their grace days
+    const mine = charges.slice(0, 3);
+    const before = moduleDues({ kind: 'school', charges: mine, receipts: [], asOf });
+    const lateMonths = before.instalments.filter((i) => i.lateFee > 0).map((i) => i.period);
+    expect(lateMonths.length).toBeGreaterThanOrEqual(2);
+    const waived = moduleDues({
+      kind: 'school',
+      charges: mine,
+      receipts: [{ lines: [], concessionLines: [], lateFee: { periods: [lateMonths[0]] } }],
+      asOf,
+    });
+    const after = waived.instalments.filter((i) => i.lateFee > 0).map((i) => i.period);
+    expect(after).not.toContain(lateMonths[0]);
+    expect(after).toContain(lateMonths[1]);
+  });
+});

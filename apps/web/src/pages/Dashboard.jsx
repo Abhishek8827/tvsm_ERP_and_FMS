@@ -76,7 +76,7 @@ function Overview() {
       </Card>
       <Card title={`Fees ${d.fy}`} subtitle="Active students, from the fee ledger">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Billed" value={money(d.fees.billedPaise)} />
+          <StatCard label="Billed (till this month)" value={money(d.fees.billedPaise)} />
           <StatCard
             label="Collected"
             value={money(d.fees.paidPaise)}
@@ -87,7 +87,7 @@ function Overview() {
             value={money(d.fees.dueNowPaise)}
             caption={`Overdue ${money(d.fees.overduePaise)}`}
           />
-          <StatCard label="Outstanding (whole year)" value={money(d.fees.outstandingPaise)} />
+          <StatCard label="Outstanding" value={money(d.fees.outstandingPaise)} />
         </div>
         {d.noPlanStudents > 0 && (
           <p className="mt-3 text-sm text-warning">

@@ -6,3 +6,4 @@ export * from './fees.js';
 export * from './school.js';
 export * from './collect.js';
 export * from './expenses.js';
+export * from './dayClose.js';

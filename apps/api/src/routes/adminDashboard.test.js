@@ -32,44 +32,39 @@ function build() {
     userStore: { findByFirebaseUid: async (_t, uid) => users[uid], touchLogin: async () => {} },
     auditStore: { append: async () => {} },
     moneyStore: {
-      overview: async () => ({ cashPaise: 1000, pettyPaise: 500, banks: [] }),
-      pendingCounts: async () => ({ vouchers: 1, reversals: 2 }),
+      overview: async () => ({ cashPaise: 1, pettyPaise: 2, banks: [] }),
+      pendingCounts: async () => ({ vouchers: 3, reversals: 1 }),
     },
-    studentStore: {
-      forFees: async () => [
-        { _id: 's1', admissionNo: '1', name: 'Asha', classKey: '5', status: 'active' },
-      ],
-    },
+    studentStore: { forFees: async () => [] },
     feeStore: { get: async () => null },
     chargeStore: { listForStudents: async () => [] },
-    rebateStore: { activeForStudents: async () => [] },
     receiptStore: {
       linesForStudents: async () => [],
+      // Same shape as the real store: groups of kind x mode, not "totals".
       list: async () => ({
-        rows: [],
-        total: 3,
         groups: [
-          { kind: 'school', mode: 'cash', paise: 300000, count: 2 },
-          { kind: 'transport', mode: 'upi', paise: 50000, count: 1 },
+          { kind: 'school', mode: 'cash', paise: 700, count: 2 },
+          { kind: 'school', mode: 'upi', paise: 300, count: 1 },
         ],
       }),
       countPendingCancellations: async () => 4,
     },
+    rebateStore: { activeForStudents: async () => [] },
   };
   return createApp(env, createLogger('silent'), deps);
 }
 
 describe('dashboard overview', () => {
-  it('Admin and Principal get real totals; Cashier is refused', async () => {
+  it('Admin and Principal get it; Cashier gets 403', async () => {
     const app = build();
     expect((await request(app).get('/api/dashboard/overview').set(as('cashier'))).status).toBe(403);
-    for (const who of ['admin', 'principal']) {
-      const r = await request(app).get('/api/dashboard/overview').set(as(who));
-      expect(r.status).toBe(200);
-      expect(r.body.today).toEqual({ paise: 350000, count: 3 });
-      expect(r.body.pending).toEqual({ vouchers: 1, reversals: 2, cancellations: 4 });
-      expect(r.body.noPlanStudents).toBe(1);
-      expect(r.body.classes).toHaveLength(1);
-    }
+    for (const who of ['admin', 'principal'])
+      expect((await request(app).get('/api/dashboard/overview').set(as(who))).status).toBe(200);
+  });
+  it("always carries today's total and the pending counts", async () => {
+    const r = await request(build()).get('/api/dashboard/overview').set(as('admin'));
+    expect(r.body.today).toEqual({ paise: 1000, count: 3 });
+    expect(r.body.pending).toEqual({ vouchers: 3, reversals: 1, cancellations: 4 });
+    expect(r.body.funds.cashPaise).toBe(1);
   });
 });

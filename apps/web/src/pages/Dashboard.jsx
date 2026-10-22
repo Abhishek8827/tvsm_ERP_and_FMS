@@ -67,8 +67,8 @@ function Overview() {
           />
           <StatCard
             label="Collected today"
-            value={money(d.today.paise)}
-            caption={`${d.today.count} receipts`}
+            value={money(d.today?.paise)}
+            caption={`${d.today?.count ?? 0} receipts`}
           />
         </div>
       </Card>
@@ -97,7 +97,12 @@ function Overview() {
         )}
       </Card>
       <Card title="Waiting for the Principal">
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-3">
+          <StatCard
+            label="Receipt cancellations"
+            value={String(d.pending.cancellations)}
+            caption="awaiting a decision"
+          />
           <StatCard
             label="Expense vouchers"
             value={String(d.pending.vouchers)}

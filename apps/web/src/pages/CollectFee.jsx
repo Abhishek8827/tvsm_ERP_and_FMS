@@ -261,6 +261,10 @@ function CollectForm({ student, kind }) {
     onSuccess: async (receipt) => {
       await queryClient.invalidateQueries({ queryKey: ['dues'] });
       await queryClient.invalidateQueries({ queryKey: ['ledger'] });
+      // WHY: Fees Database, dashboards and the receipts list must show this payment at once.
+      await queryClient.invalidateQueries({ queryKey: ['fees-database'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ['receipts'] });
       notify(`Receipt ${receipt.number} created.`, 'success');
       navigate(`/receipts/${receipt.id}`, { state: { fresh: true } });
     },
@@ -275,6 +279,16 @@ function CollectForm({ student, kind }) {
   if (dues.isPending) return <Spinner label="Loading dues" />;
   if (dues.isError)
     return <ErrorState message={dues.error.message} onRetry={() => dues.refetch()} />;
+
+  if (d && d.planPosted === false)
+    return (
+      <Card title="Fees not posted yet">
+        <p className="text-sm text-ink-muted">
+          This student has no fees posted for {d.fy}, so nothing can be collected. Ask the Admin to
+          open Fees Database and press "Apply fees" for this student.
+        </p>
+      </Card>
+    );
 
   const nothingPending = !(rem[oldHead] || rem[curHead] || rem.admission || rem.form);
   const amountBox = (key, label, pending, extra = {}) => (

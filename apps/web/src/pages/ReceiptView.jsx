@@ -86,7 +86,7 @@ function Copy({ r, copyName, duplicate, cancelled }) {
       </div>
       {s.fatherName && <div className="line">Father: {s.fatherName}</div>}
       <div className="line">
-        <span>Add.: {[s.address, s.village].filter(Boolean).join(', ') || '-'}</span>
+        <span>Add.: {s.address || s.village || '-'}</span>
         <span>Mob.: {s.contactNo ?? ''}</span>
       </div>
       <div className="line">Month: {r.monthLabel || '-'}</div>
@@ -217,6 +217,8 @@ export function ReceiptView() {
       setCancelOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['receipt', id] });
       await queryClient.invalidateQueries({ queryKey: ['receipts'] });
+      await queryClient.invalidateQueries({ queryKey: ['fees-database'] });
+      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       notify(
         role === 'admin' ? 'Receipt cancelled.' : 'Cancellation request sent for approval.',
         'success',

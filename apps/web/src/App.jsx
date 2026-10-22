@@ -13,6 +13,9 @@ import { ExpenseVoucher } from './pages/ExpenseVoucher';
 import { Expenses } from './pages/Expenses';
 import { PettyCash } from './pages/PettyCash';
 import { FeeStructure } from './pages/FeeStructure';
+import { FeesDatabase } from './pages/FeesDatabase';
+import { UsersSettings } from './pages/UsersSettings';
+import { DataImport } from './pages/DataImport';
 import { ImportOldFees } from './pages/ImportOldFees';
 import { ReceiptView } from './pages/ReceiptView';
 import { Receipts } from './pages/Receipts';
@@ -84,7 +87,9 @@ export function App() {
               i.key !== 'expenses' &&
               i.key !== 'petty-cash' &&
               i.key !== 'bank-cash' &&
-              i.key !== 'fees-receipts',
+              i.key !== 'fees-receipts' &&
+              i.key !== 'fees-database' &&
+              i.key !== 'users-settings',
           )
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
@@ -97,6 +102,8 @@ export function App() {
         {(role === 'admin' || role === 'principal') && (
           <Route path="/expenses/:id" element={<ExpenseVoucher />} />
         )}
+        <Route path="/fees-database" element={<FeesDatabase />} />
+        {role === 'admin' && <Route path="/users-settings" element={<UsersSettings />} />}
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />
         <Route path="/fee-structure" element={<FeeStructure />} />
@@ -104,7 +111,8 @@ export function App() {
         {role === 'cashier' && <Route path="/receipts" element={<Receipts />} />}
         {role === 'admin' && <Route path="/fees-receipts" element={<Receipts />} />}
         {role === 'cashier' && <Route path="/collect-fee" element={<CollectFee />} />}
-        {role === 'admin' && <Route path="/data-import" element={<ImportStudents />} />}
+        {role === 'admin' && <Route path="/data-import" element={<DataImport />} />}
+        {role === 'admin' && <Route path="/data-import/students" element={<ImportStudents />} />}
         {role === 'admin' && <Route path="/data-import/old-fees" element={<ImportOldFees />} />}
         {role === 'admin' && <Route path="/students/new" element={<StudentForm />} />}
         {role === 'admin' && <Route path="/students/:id/edit" element={<StudentForm />} />}

@@ -43,6 +43,13 @@ export function adminDashboardRouter(deps, authenticate) {
           c.dueNowPaise += r.dueNowPaise;
           byClass.set(r.classKey, c);
         }
+        const todayTotal = todayReceipts.groups.reduce(
+          (total, group) => ({
+            paise: total.paise + group.paise,
+            count: total.count + group.count,
+          }),
+          { paise: 0, count: 0 },
+        );
         res.json({
           fy,
           funds,
@@ -50,7 +57,7 @@ export function adminDashboardRouter(deps, authenticate) {
           noPlanStudents: rows.filter((r) => !r.planPosted).length,
           classes: CLASS_KEYS.filter((k) => byClass.has(k)).map((k) => byClass.get(k)),
           pending: { ...pending, cancellations },
-          today: todayReceipts.totals,
+          today: todayTotal,
         });
       } catch (err) {
         next(err);

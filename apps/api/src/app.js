@@ -11,6 +11,8 @@ import { feeStructureRouter } from './routes/feeStructure.js';
 import { healthRouter } from './routes/health.js';
 import { studentImportRouter } from './routes/studentImport.js';
 import { studentsRouter } from './routes/students.js';
+import { adminDashboardRouter } from './routes/adminDashboard.js';
+import { feesDatabaseRouter } from './routes/feesDatabase.js';
 import { ledgerRouter } from './routes/ledger.js';
 import { moneyRouter } from './routes/money.js';
 import { oldDuesImportRouter } from './routes/oldDuesImport.js';
@@ -59,6 +61,8 @@ export function createApp(env, logger, auth) {
     app.use('/api', studentsRouter(deps, authenticate));
     app.use('/api', feeStructureRouter(deps, authenticate));
     app.use('/api', ledgerRouter(deps, authenticate));
+    app.use('/api', feesDatabaseRouter(deps, authenticate));
+    app.use('/api', adminDashboardRouter(deps, authenticate));
     app.use('/api', oldDuesImportRouter(deps, authenticate));
     app.use('/api', receiptsRouter(deps, authenticate));
     app.use('/api', moneyRouter(deps, authenticate));

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { registerGlobalPlugins } from '../db.js';
-import { makeImmutable } from './Immutable.js';
+import { makeImmutable } from './immutable.js';
 
 registerGlobalPlugins();
 
@@ -12,6 +12,7 @@ registerGlobalPlugins();
  */
 export const LEDGER_TYPES = [
   'opening',
+  'opening_change', // Admin corrects an opening balance (reason in note); old entries stay
   'transfer',
   'petty_entry',
   'petty_reversal',

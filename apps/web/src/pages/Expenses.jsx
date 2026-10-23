@@ -151,7 +151,7 @@ function NewVoucherDialog({ open, onClose }) {
   );
 }
 
-function VouchersTab({ isAdmin }) {
+function VouchersTab({ isAdmin, isPrincipal }) {
   const [status, setStatus] = useState('');
   const [search, setSearch] = useState('');
   const [q, setQ] = useState('');
@@ -161,6 +161,25 @@ function VouchersTab({ isAdmin }) {
   const [pageSize, setPageSize] = useState(25);
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState(null); // the voucher row being paid
+  const [deciding, setDeciding] = useState(null); // { row, kind: 'approve' | 'reject' }
+  const [reason, setReason] = useState('');
+  const { notify } = useToast();
+  const queryClient = useQueryClient();
+  // The Principal decides right from the list (no need to open the voucher first).
+  const decide = useMutation({
+    mutationFn: () =>
+      api(`/api/vouchers/${deciding.row.id}/${deciding.kind}`, {
+        method: 'POST',
+        body: deciding.kind === 'reject' ? { reason } : {},
+      }),
+    onSuccess: async () => {
+      for (const key of ['vouchers', 'money', 'voucher'])
+        await queryClient.invalidateQueries({ queryKey: [key] });
+      notify(deciding.kind === 'approve' ? 'Voucher approved.' : 'Voucher rejected.', 'success');
+      setDeciding(null);
+    },
+    onError: (e) => notify(errorText(e), 'error'),
+  });
   useEffect(() => {
     const t = window.setTimeout(() => {
       setQ(search.trim());
@@ -219,6 +238,29 @@ function VouchersTab({ isAdmin }) {
       render: (r) => (
         <div className="flex items-center gap-2">
           <StatusBadge status={r.status} />
+          {isPrincipal && r.status === 'pending' && (
+            <>
+              <Button
+                className="min-h-8 px-3"
+                onClick={() => {
+                  setReason('');
+                  setDeciding({ row: r, kind: 'approve' });
+                }}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="danger"
+                className="min-h-8 px-3"
+                onClick={() => {
+                  setReason('');
+                  setDeciding({ row: r, kind: 'reject' });
+                }}
+              >
+                Reject
+              </Button>
+            </>
+          )}
           {/* Only the Admin pays, only after approval, only while something is still due. */}
           {isAdmin && r.status === 'approved' && r.balanceDuePaise > 0 && (
             <Button className="min-h-8 px-3" onClick={() => setPaying(r)}>
@@ -293,6 +335,26 @@ function VouchersTab({ isAdmin }) {
       )}
       {isAdmin && <NewVoucherDialog open={creating} onClose={() => setCreating(false)} />}
       {paying && <PaymentDialog voucher={paying} open onClose={() => setPaying(null)} />}
+      <ConfirmDialog
+        open={!!deciding}
+        title={deciding?.kind === 'reject' ? 'Reject this voucher?' : 'Approve this voucher?'}
+        description={
+          deciding
+            ? `${deciding.row.number} · ${deciding.row.payeeName} · ${money(deciding.row.amountPaise)}. ${
+                deciding.kind === 'reject'
+                  ? 'The Admin will see your reason. A rejected voucher cannot be paid.'
+                  : 'After approval the Admin can pay it.'
+              }`
+            : ''
+        }
+        confirmLabel={deciding?.kind === 'reject' ? 'Reject' : 'Approve'}
+        tone={deciding?.kind === 'reject' ? 'danger' : 'primary'}
+        requireReason={deciding?.kind === 'reject'}
+        onReasonChange={setReason}
+        loading={decide.isPending}
+        onConfirm={() => decide.mutate()}
+        onCancel={() => setDeciding(null)}
+      />
     </div>
   );
 }
@@ -617,7 +679,7 @@ export function Expenses() {
           </button>
         ))}
       </div>
-      {tab === 'vouchers' && <VouchersTab isAdmin={isAdmin} />}
+      {tab === 'vouchers' && <VouchersTab isAdmin={isAdmin} isPrincipal={role === 'principal'} />}
       {tab === 'payments' && <PaymentsTab />}
       {tab === 'requests' && <RequestsTab isPrincipal={role === 'principal'} />}
       {tab === 'heads' && isAdmin && <HeadsTab />}

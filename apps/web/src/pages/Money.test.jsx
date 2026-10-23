@@ -129,6 +129,43 @@ describe('Expenses register', () => {
     expect(screen.queryByRole('button', { name: 'Pay' })).not.toBeInTheDocument();
   });
 
+  it('Principal approves or rejects right from the voucher row; Admin gets no such buttons', async () => {
+    role = 'principal';
+    route({
+      ...lists,
+      '/api/vouchers/v1/approve': voucher({ status: 'approved' }),
+      '/api/vouchers/v1/reject': voucher({ status: 'rejected' }),
+    });
+    show(<Expenses />, '/expenses');
+    await screen.findByText('EXP-FY2026-27/0001');
+    await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
+    const dlg = within(await screen.findByRole('dialog'));
+    await userEvent.click(dlg.getByRole('button', { name: 'Approve' }));
+    await vi.waitFor(() =>
+      expect(
+        api.mock.calls.some((c) => c[0] === '/api/vouchers/v1/approve' && c[1]?.method === 'POST'),
+      ).toBe(true),
+    );
+    // Reject needs a reason.
+    await userEvent.click(screen.getByRole('button', { name: 'Reject' }));
+    const rej = within(await screen.findByRole('dialog'));
+    expect(rej.getByRole('button', { name: 'Reject' })).toBeDisabled();
+    await userEvent.type(rej.getByRole('textbox'), 'Not needed');
+    await userEvent.click(rej.getByRole('button', { name: 'Reject' }));
+    await vi.waitFor(() => {
+      const c = api.mock.calls.find((x) => x[0] === '/api/vouchers/v1/reject');
+      expect(c[1].body).toEqual({ reason: 'Not needed' });
+    });
+  });
+
+  it('Admin sees no Approve or Reject on a pending voucher row', async () => {
+    route(lists);
+    show(<Expenses />, '/expenses');
+    await screen.findByText('EXP-FY2026-27/0001');
+    expect(screen.queryByRole('button', { name: 'Approve' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reject' })).not.toBeInTheDocument();
+  });
+
   it('Admin makes a voucher: sends an Idempotency-Key and the amount in paise', async () => {
     route({
       ...lists,

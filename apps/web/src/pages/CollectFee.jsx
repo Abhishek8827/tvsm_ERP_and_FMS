@@ -284,8 +284,9 @@ function CollectForm({ student, kind }) {
     return (
       <Card title="Fees not posted yet">
         <p className="text-sm text-ink-muted">
-          This student has no fees posted for {d.fy}, so nothing can be collected. Ask the Admin to
-          open Fees Database and press "Apply fees" for this student.
+          This student has no fees posted for {d.fy}, so nothing can be collected. Fees are posted
+          automatically every month, so the Admin should check this student's class and village and
+          the fee chart (Dashboard shows what could not be priced).
         </p>
       </Card>
     );

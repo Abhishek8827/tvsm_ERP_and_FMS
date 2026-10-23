@@ -15,7 +15,9 @@ const row = (o) => ({
   id: '1', admissionNo: '7', name: 'Asha', fatherName: 'Ram', classKey: '5th', section: 'A',
   village: '', usesTransport: false, planPosted: true, billedPaise: 1000000, paidPaise: 200000,
   rebatePaise: 0, outstandingPaise: 800000, dueNowPaise: 300000, overduePaise: 0, lateFeePaise: 0,
-  school: {}, transport: {}, ...o,
+  school: {}, transport: {}, status: 'active', address: 'Ward 4', contactNo: '9876543210',
+  cols: { oldSchoolDue: 50000, oldBusDue: 0, newSchoolReceivable: 900000, newBusReceivable: 0, admReceivable: 0, formReceivable: 0, newSchoolPaid: 200000, newBusPaid: 0, admPaid: 0, formPaid: 0, schoolRebate: 0, transportRebate: 0, admissionRebate: 0, newSchoolDue: 250000, newBusDue: 0, admDue: 0, formDue: 0 },
+  ...o,
 }); // prettier-ignore
 const data = {
   fy: '2026-27', page: 1, pageSize: 25, total: 2,
@@ -41,22 +43,60 @@ describe('Fees Database', () => {
     api.mockReset();
     api.mockResolvedValue(data);
   });
-  it('Admin sees rows, totals, export and the per-row actions', async () => {
+  it('Admin sees rows, totals and export; no Apply fees or Add rebate (fees post automatically)', async () => {
     mockRole = 'admin';
     show();
     expect(await screen.findByText('Asha')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export to Excel' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Add rebate' })).toBeInTheDocument();
     expect(screen.getByText('Fees not posted')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Apply fees' }).length).toBeGreaterThan(0);
+    expect(screen.queryByRole('button', { name: /Apply fees/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Add rebate/ })).toBeNull();
   });
-  it('Cashier can only look: no export, no apply, no rebate', async () => {
+  it('Cashier can only look: no export, no waive', async () => {
     mockRole = 'cashier';
     show();
     expect(await screen.findByText('Asha')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Export to Excel' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Add rebate' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Apply fees/ })).toBeNull();
+  });
+  it('shows the school sheet columns; Address is hidden until ticked in Columns', async () => {
+    mockRole = 'admin';
+    show();
+    await screen.findByText('Asha');
+    for (const h of ['S.No', 'Sch. ID', 'Old school due', 'Old bus due', 'Total dues', 'Status'])
+      expect(
+        screen.getByRole('columnheader', { name: new RegExp(`^${h}$`, 'i') }),
+      ).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Address' })).toBeNull();
+    expect(screen.queryByRole('columnheader', { name: 'Adm fees rec.' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Columns' }));
+    await userEvent.click(screen.getByLabelText('Address'));
+    await userEvent.click(screen.getByLabelText('Adm fees rec.'));
+    expect(screen.getByRole('columnheader', { name: 'Address' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Adm fees rec.' })).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText('Old bus due'));
+    expect(screen.queryByRole('columnheader', { name: 'Old bus due' })).toBeNull();
+  });
+  it('quick lists send the right filters: defaulters, school paid + bus pending, transport only', async () => {
+    mockRole = 'principal';
+    show();
+    await screen.findByText('Asha');
+    const last = () => String(api.mock.calls.at(-1)[0]);
+    await userEvent.click(screen.getByRole('button', { name: 'Defaulters' }));
+    await vi.waitFor(() => expect(last()).toContain('feeStatus=pending'));
+    await userEvent.click(screen.getByRole('button', { name: 'School paid, bus pending' }));
+    await vi.waitFor(() => expect(last()).toContain('feeStatus=school_paid_bus_pending'));
+    await userEvent.click(screen.getByRole('button', { name: 'Only transport students' }));
+    await vi.waitFor(() => expect(last()).toContain('transport=true'));
+  });
+  it('"Dues up to" month is sent as upto=YYYY-MM', async () => {
+    mockRole = 'admin';
+    show();
+    await screen.findByText('Asha');
+    await userEvent.selectOptions(screen.getByLabelText('Dues up to'), '2026-09');
+    await vi.waitFor(() =>
+      expect(api.mock.calls.some((c) => String(c[0]).includes('upto=2026-09'))).toBe(true),
+    );
   });
   it('advanced filters are sent to the server', async () => {
     mockRole = 'principal';
@@ -88,7 +128,9 @@ describe('Fees Database', () => {
       return { ok: true };
     });
     show();
-    expect(await screen.findByRole('columnheader', { name: 'Late fee' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('columnheader', { name: 'Late fee (penalty)' }),
+    ).toBeInTheDocument();
     await userEvent.click(await screen.findByRole('button', { name: 'Waive late fee' }));
     const dialog = await screen.findByRole('dialog');
     const waive = await within(dialog).findByRole('button', { name: /^Waive/ });

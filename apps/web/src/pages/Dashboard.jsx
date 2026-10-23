@@ -97,6 +97,22 @@ function Overview() {
             </Link>
           </p>
         )}
+        {/* Fees are posted automatically; this lists what the last run could not price. */}
+        {d.feePlan?.problems?.length > 0 && (
+          <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
+            <p className="font-medium text-warning">
+              Fees were NOT posted for some students (fix the fee chart or the student record):
+            </p>
+            <ul className="mt-1 list-disc pl-5 text-ink-muted">
+              {d.feePlan.problems.map((p) => (
+                <li key={p.reason}>
+                  {p.count} student{p.count > 1 ? 's' : ''}: {p.reason} (e.g.{' '}
+                  {p.examples.join(', ')})
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </Card>
       <Card title="Waiting for the Principal">
         <div className="grid gap-3 sm:grid-cols-3">

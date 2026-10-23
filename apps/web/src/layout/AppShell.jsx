@@ -74,8 +74,12 @@ export function AppShell() {
   }
 
   const items = navForRole(role);
+  // The menu scrolls by itself (min-h-0 lets a flex child shrink); logo and account stay put.
   const navList = (railMode) => (
-    <nav aria-label="Main" className="flex flex-col gap-1">
+    <nav
+      aria-label="Main"
+      className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overscroll-contain pr-1"
+    >
       {items.map((i) => (
         <NavItem
           key={i.key}
@@ -91,7 +95,7 @@ export function AppShell() {
   );
   const nav = navList(false);
   const account = (
-    <div className="mt-auto flex flex-col gap-2 border-t border-white/15 pt-4 text-sm text-white">
+    <div className="mt-auto flex shrink-0 flex-col gap-2 border-t border-white/15 pt-4 text-sm text-white">
       <div className="px-1">
         <p className="font-medium">{user.name}</p>
         <p className="text-xs text-white/60">{ROLE_LABEL[role]}</p>
@@ -106,8 +110,8 @@ export function AppShell() {
     <div className="flex min-h-full">
       {/* Sticky and full screen height: Sign out stays at the bottom of the visible screen. */}
       {!collapsed && !rail && (
-        <aside className="hidden w-64 shrink-0 flex-col gap-6 overflow-y-auto bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen">
-          <div className="flex items-center gap-3">
+        <aside className="hidden w-64 shrink-0 flex-col gap-4 overflow-hidden bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen">
+          <div className="flex shrink-0 items-center gap-3">
             <img
               src="/logo.jpg"
               alt="TVSM School logo"
@@ -127,9 +131,9 @@ export function AppShell() {
         <div className="hidden w-16 shrink-0 md:block">
           <aside
             aria-label="Sidebar"
-            className="group fixed inset-y-0 left-0 z-40 hidden w-16 flex-col gap-6 overflow-x-hidden overflow-y-auto bg-sidebar p-2 transition-[width] duration-200 hover:w-64 hover:p-4 focus-within:w-64 focus-within:p-4 md:flex"
+            className="group fixed inset-y-0 left-0 z-40 hidden w-16 flex-col gap-4 overflow-hidden bg-sidebar p-2 transition-[width] duration-200 hover:w-64 hover:p-4 focus-within:w-64 focus-within:p-4 md:flex"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex shrink-0 items-center gap-3">
               <img
                 src="/logo.jpg"
                 alt="TVSM School logo"
@@ -141,7 +145,9 @@ export function AppShell() {
               </div>
             </div>
             {navList(true)}
-            <div className="opacity-0 transition-opacity group-hover:opacity-100">{account}</div>
+            <div className="mt-auto shrink-0 opacity-0 transition-opacity group-hover:opacity-100">
+              {account}
+            </div>
           </aside>
         </div>
       )}
@@ -156,7 +162,7 @@ export function AppShell() {
           />
           <div
             id="mobile-menu"
-            className="relative flex h-full w-72 max-w-[85%] flex-col gap-4 overflow-y-auto bg-sidebar p-4"
+            className="relative flex h-full w-72 max-w-[85%] flex-col gap-4 overflow-hidden bg-sidebar p-4"
           >
             {nav}
             {account}

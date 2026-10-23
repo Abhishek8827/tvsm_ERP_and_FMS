@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { navForRole } from '@erp/shared';
 import { useAuth } from '../auth/AuthContext';
 import { Button, NavItem } from '../components/ui';
@@ -10,6 +10,16 @@ const ROLE_LABEL = { admin: 'Admin', principal: 'Principal', cashier: 'Cashier' 
 /** Steps already built. Anything later is shown with a "Soon" tag, never as a dead link. */
 export const CURRENT_STEP = 8;
 const KEY = 'erp.sidebarCollapsed';
+// Pages with wide tables: the sidebar shrinks to icons there and opens when the mouse is on it.
+const WIDE_PAGES = [
+  '/fees-database',
+  '/students',
+  '/rebates',
+  '/expenses',
+  '/receipts',
+  '/fees-receipts',
+  '/data-import',
+];
 
 // localStorage can throw (private window, blocked data), so the choice is a convenience only.
 const readCollapsed = () => {
@@ -48,7 +58,9 @@ export function AppShell() {
   const { user, role, signOut } = useAuth();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
+  const { pathname } = useLocation();
   if (!role) return null;
+  const rail = WIDE_PAGES.includes(pathname.replace(/\/$/, ''));
 
   function toggleDesktop() {
     setCollapsed((c) => {
@@ -62,19 +74,22 @@ export function AppShell() {
   }
 
   const items = navForRole(role);
-  const nav = (
+  const navList = (railMode) => (
     <nav aria-label="Main" className="flex flex-col gap-1">
       {items.map((i) => (
         <NavItem
           key={i.key}
           to={i.path}
           label={i.label}
+          icon={i.key}
+          rail={railMode}
           soon={i.availableFromStep > CURRENT_STEP}
           onNavigate={() => setOpen(false)}
         />
       ))}
     </nav>
   );
+  const nav = navList(false);
   const account = (
     <div className="mt-auto flex flex-col gap-2 border-t border-white/15 pt-4 text-sm text-white">
       <div className="px-1">
@@ -90,7 +105,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-full">
       {/* Sticky and full screen height: Sign out stays at the bottom of the visible screen. */}
-      {!collapsed && (
+      {!collapsed && !rail && (
         <aside className="hidden w-64 shrink-0 flex-col gap-6 overflow-y-auto bg-sidebar p-4 md:sticky md:top-0 md:flex md:h-screen">
           <div className="flex items-center gap-3">
             <img
@@ -106,6 +121,29 @@ export function AppShell() {
           {nav}
           {account}
         </aside>
+      )}
+      {/* Wide pages: a narrow icon bar that opens over the page (not pushing it) on hover. */}
+      {!collapsed && rail && (
+        <div className="hidden w-16 shrink-0 md:block">
+          <aside
+            aria-label="Sidebar"
+            className="group fixed inset-y-0 left-0 z-40 hidden w-16 flex-col gap-6 overflow-x-hidden overflow-y-auto bg-sidebar p-2 transition-[width] duration-200 hover:w-64 hover:p-4 focus-within:w-64 focus-within:p-4 md:flex"
+          >
+            <div className="flex items-center gap-3">
+              <img
+                src="/logo.jpg"
+                alt="TVSM School logo"
+                className="h-10 w-auto rounded-lg bg-white p-0.5 group-hover:h-14"
+              />
+              <div className="whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100">
+                <p className="text-lg font-semibold text-white">TVSM School</p>
+                <p className="text-xs text-white/60">School ERP</p>
+              </div>
+            </div>
+            {navList(true)}
+            <div className="opacity-0 transition-opacity group-hover:opacity-100">{account}</div>
+          </aside>
+        </div>
       )}
 
       {open && (

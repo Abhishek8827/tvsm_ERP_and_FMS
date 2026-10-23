@@ -8,10 +8,10 @@ import {
   makeChargeStore,
   makeFeeStore,
   makeReceiptStore,
-  makeRebateStore,
   makeStudentStore,
   makeUserStore,
 } from './services/stores.js';
+import { makeRebateStore } from './services/rebateStore.js';
 import { startMonthlyPlanJob } from './services/monthlyPlan.js';
 import { makeDayCloseStore } from './services/dayCloseStore.js';
 import { makeMoneyStore } from './services/moneyStore.js';

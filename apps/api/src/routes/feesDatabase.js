@@ -42,7 +42,14 @@ const filterQuery = z.object({
   village: z.string().trim().max(60).optional(),
   category: z.string().trim().max(10).optional(),
   gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
-  feeStatus: z.enum(['noplan', 'overdue', 'pending', 'clear']).optional(),
+  feeStatus: z
+    .enum(['noplan', 'overdue', 'pending', 'clear', 'school_paid_bus_pending'])
+    .optional(),
+  // "Dues up to this month" (YYYY-MM): fees due by the END of that month, whatever is paid today.
+  upto: z
+    .string()
+    .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+    .optional(),
   // Rupees in the URL, paise inside (rule: money is paise on the server).
   minDue: rupeesToPaise.optional(),
   maxDue: rupeesToPaise.optional(),
@@ -53,6 +60,11 @@ const listQuery = filterQuery.extend({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
+// Last day of a "YYYY-MM" month, e.g. 2026-09 -> 2026-09-30 (the day dues are worked out for).
+const endOfMonth = (ym) => {
+  const [y, m] = ym.split('-').map(Number);
+  return `${ym}-${String(new Date(Date.UTC(y, m, 0)).getUTCDate()).padStart(2, '0')}`;
+};
 const rebateBody = z.object({
   fy: z.string().regex(/^\d{4}-\d{2}$/),
   kind: z.enum(['school', 'transport']),
@@ -86,7 +98,8 @@ const shapeRebate = (r) => ({
 
 /**
  * Fees Database. Everyone signed in can LOOK (the Cashier too, read-only and without Excel);
- * only the Admin changes anything (apply fees is in ledger.js; rebates are here).
+ * only the Admin changes anything (late-fee waivers here; rebates have their own module,
+ * rebates.js; fees are posted automatically every month).
  */
 export function feesDatabaseRouter(deps, authenticate) {
   const router = Router();
@@ -110,13 +123,13 @@ export function feesDatabaseRouter(deps, authenticate) {
 
   async function rowsFor(req, f) {
     const fy = f.fy ?? getFinancialYear(new Date());
-    const { fy: _fy, feeStatus, minDue, maxDue, ...studentFilters } = f;
+    const { fy: _fy, feeStatus, minDue, maxDue, upto, ...studentFilters } = f;
     const rows = await buildFeeRows({
       deps,
       tenantId: req.user.tenantId,
       fy,
       filters: studentFilters,
-      asOf: todayIst(),
+      asOf: upto ? endOfMonth(upto) : todayIst(),
     });
     return {
       fy,
@@ -151,42 +164,65 @@ export function feesDatabaseRouter(deps, authenticate) {
       const { fy, rows } = await rowsFor(req, f);
       if (rows.length > EXPORT_LIMIT)
         throw new AppError('TOO_MANY_ROWS', 413, 'Too many students. Narrow the filters.');
+      // Every column of the school's sheet is always exported (hiding columns is only on screen).
       const head = [
-        'Sch. No',
-        'Student',
-        'Father',
-        'Class',
-        'Section',
-        'Village',
-        'Bus',
-        'Billed (₹)',
-        'Paid (₹)',
-        'Rebate (₹)',
-        'Outstanding (₹)',
-        'Due till today (₹)',
-        'Overdue (₹)',
-        'Late fee (₹)',
-        'School due till today (₹)',
-        'Bus due till today (₹)',
+        'S.NO',
+        'SCH. ID',
+        'STUDENT NAME',
+        'CLASS',
+        'SECTION',
+        'ADDRESS',
+        'CONTACT NO.',
+        'OLD SCHOOL DUE',
+        'OLD BUS DUE',
+        'NEW SCHOOL RECEIVABLE',
+        'NEW BUS RECEIVABLE',
+        'ADM FEES REC.',
+        'FORM FEES REC.',
+        'NEW SCHOOL FEE PAID',
+        'NEW BUS FEE PAID',
+        'ADMISSION FEE PAID',
+        'FORM FEE PAID',
+        'SCHOOL - REBATE',
+        'TRANSPORT - REBATE',
+        'ADMISSION - REBATE',
+        'NEW SCHOOL FEES DUE',
+        'NEW BUS FEES DUE',
+        'ADM FEES DUE',
+        'FORM FEES DUE',
+        'TOTAL DUES',
+        'LATE FEE (PENALTY, NOT IN TOTAL)',
+        'STATUS',
       ];
       const r = (p) => p / 100;
-      const body = sortRows(rows, 'class').map((x) => [
+      const body = sortRows(rows, 'class').map((x, i) => [
+        i + 1,
         x.admissionNo,
         x.name,
-        x.fatherName,
         classLabel(x.classKey),
         x.section,
-        x.village,
-        x.usesTransport ? 'Yes' : 'No',
-        r(x.billedPaise),
-        r(x.paidPaise),
-        r(x.rebatePaise),
-        r(x.outstandingPaise),
+        x.address,
+        x.contactNo,
+        r(x.cols.oldSchoolDue),
+        r(x.cols.oldBusDue),
+        r(x.cols.newSchoolReceivable),
+        r(x.cols.newBusReceivable),
+        r(x.cols.admReceivable),
+        r(x.cols.formReceivable),
+        r(x.cols.newSchoolPaid),
+        r(x.cols.newBusPaid),
+        r(x.cols.admPaid),
+        r(x.cols.formPaid),
+        r(x.cols.schoolRebate),
+        r(x.cols.transportRebate),
+        r(x.cols.admissionRebate),
+        r(x.cols.newSchoolDue),
+        r(x.cols.newBusDue),
+        r(x.cols.admDue),
+        r(x.cols.formDue),
         r(x.dueNowPaise),
-        r(x.overduePaise),
         r(x.lateFeePaise),
-        r(x.school.dueNowPaise),
-        r(x.transport.dueNowPaise),
+        x.status === 'active' ? 'Active' : 'Inactive',
       ]);
       const buffer = await writeXlsxFile([
         head.map((value) => ({ value, fontWeight: 'bold' })),
@@ -195,7 +231,7 @@ export function feesDatabaseRouter(deps, authenticate) {
       await recordAudit(deps, req, {
         action: 'export',
         entity: 'fees_database',
-        newValue: { rows: rows.length, fy },
+        newValue: { rows: rows.length, fy, upto: f.upto ?? null },
       });
       res
         .set('Content-Type', XLSX)
@@ -250,6 +286,7 @@ export function feesDatabaseRouter(deps, authenticate) {
         studentId: student._id,
         fy: body.fy,
         kind: body.kind,
+        rebateType: body.kind,
         reason: body.reason,
         student: {
           name: student.name,

@@ -12,6 +12,7 @@ import { CollectFee } from './pages/CollectFee';
 import { ExpenseVoucher } from './pages/ExpenseVoucher';
 import { Expenses } from './pages/Expenses';
 import { PettyCash } from './pages/PettyCash';
+import { Rebates } from './pages/Rebates';
 import { FeeStructure } from './pages/FeeStructure';
 import { FeesDatabase } from './pages/FeesDatabase';
 import { UsersSettings } from './pages/UsersSettings';
@@ -91,6 +92,7 @@ export function App() {
               i.key !== 'bank-cash' &&
               i.key !== 'fees-receipts' &&
               i.key !== 'fees-database' &&
+              i.key !== 'rebates' &&
               i.key !== 'day-close' &&
               i.key !== 'approvals' &&
               i.key !== 'users-settings',
@@ -107,6 +109,9 @@ export function App() {
           <Route path="/expenses/:id" element={<ExpenseVoucher />} />
         )}
         <Route path="/fees-database" element={<FeesDatabase />} />
+        {(role === 'admin' || role === 'principal') && (
+          <Route path="/rebates" element={<Rebates />} />
+        )}
         <Route path="/day-close" element={<DayClose />} />
         {role === 'principal' && <Route path="/approvals" element={<Approvals />} />}
         {role === 'admin' && <Route path="/users-settings" element={<UsersSettings />} />}

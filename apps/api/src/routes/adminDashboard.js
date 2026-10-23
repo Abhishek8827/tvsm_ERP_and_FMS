@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { CLASS_KEYS, getFinancialYear, todayIst } from '@erp/shared';
 import { requireRole } from '../middleware/requireRole.js';
 import { buildFeeRows, totalsOf } from '../services/feesDatabase.js';
+import { lastPlanRun } from '../services/monthlyPlan.js';
 
 /**
  * Admin / Principal overview: funds, fees, class-wise students and dues, pending approvals.
@@ -43,21 +44,20 @@ export function adminDashboardRouter(deps, authenticate) {
           c.dueNowPaise += r.dueNowPaise;
           byClass.set(r.classKey, c);
         }
-        const todayTotal = todayReceipts.groups.reduce(
-          (total, group) => ({
-            paise: total.paise + group.paise,
-            count: total.count + group.count,
-          }),
-          { paise: 0, count: 0 },
-        );
         res.json({
           fy,
           funds,
           fees: totalsOf(rows),
           noPlanStudents: rows.filter((r) => !r.planPosted).length,
+          // Students the automatic monthly posting could not price (grouped by reason), or null.
+          feePlan: lastPlanRun(),
           classes: CLASS_KEYS.filter((k) => byClass.has(k)).map((k) => byClass.get(k)),
           pending: { ...pending, cancellations },
-          today: todayTotal,
+          // The store returns groups (kind x mode); a total of only what still counts is summed here.
+          today: {
+            paise: todayReceipts.groups.reduce((n, g) => n + g.paise, 0),
+            count: todayReceipts.groups.reduce((n, g) => n + g.count, 0),
+          },
         });
       } catch (err) {
         next(err);

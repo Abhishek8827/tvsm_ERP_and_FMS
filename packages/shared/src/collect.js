@@ -237,7 +237,8 @@ export function planReceipt({ kind, charges, receipts, asOf = todayIst(), config
 /**
  * Splits a rebate (concession) over the student's unpaid charges, oldest first, for ONE module.
  * WHY oldest first: the same order payments use, so a rebate never leaves an old month unpaid
- * while a later month is reduced. `head` limits it to one head (e.g. only tuition).
+ * while a later month is reduced. `head`/`heads` limit it to some heads (e.g. only tuition).
+ * `order: 'last'` takes the newest month first instead (the Admin picks this per rebate).
  * Throws when the amount is more than what is still unpaid (a rebate cannot make a credit).
  */
 export function planRebate({
@@ -248,7 +249,11 @@ export function planRebate({
   config,
   amountPaise,
   head,
+  heads,
+  order = 'oldest',
 }) {
+  // `heads` (a list) lets one rebate cover e.g. old fees + tuition; `head` stays for old callers.
+  const only = heads ?? (head ? [head] : null);
   try {
     assertPaise(amountPaise, 'amountPaise');
   } catch {
@@ -259,7 +264,10 @@ export function planRebate({
   const dues = moduleDues({ kind, charges, receipts, asOf, config });
   const items = dues.instalments
     .flatMap((i) => i.items.map((x) => ({ ...x, period: i.period })))
-    .filter((x) => x.due > 0 && (!head || x.head === head));
+    .filter((x) => x.due > 0 && (!only || only.includes(x.head)));
+  // order 'last' = the newest month first (BC / OTP style rebates are adjusted in the LAST month's
+  // fee). dueDate strings sort in time order, so a plain reverse of the oldest-first list works.
+  if (order === 'last') items.reverse();
   const open = items.reduce((n, x) => n + x.due, 0);
   if (amountPaise > open)
     throw new ReceiptRuleError(

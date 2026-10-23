@@ -5,8 +5,8 @@ export const roleSchema = z.enum(ROLES);
 /**
  * Role-based navigation matches the Figma sidebars:
  *  Cashier:   Dashboard, Collect Fee, Receipts, Students, Petty Cash, Bank & Cash (PIN)
- *  Principal: Dashboard, Approvals, Reports, Students, Expenses, Petty Cash, Bank & Cash, Audit Log
- *  Admin:     Dashboard, Students, Fee Structure, Fees & Receipts, Fees Database, Expenses,
+ *  Principal: Dashboard, Approvals, Rebates (view), Reports, Students, Expenses, Petty Cash, Bank & Cash, Audit Log
+ *  Admin:     Dashboard, Students, Fee Structure, Fees & Receipts, Fees Database, Rebates, Expenses,
  *             Petty Cash, Bank & Cash, Reports, TC & Bonafide, Data Import, Users & Settings, Audit Log
  * Server-side RBAC (Step 2) is the real enforcement; this only drives the UI.
  */
@@ -56,6 +56,14 @@ export const NAV_ITEMS = [
     // Everyone can LOOK; the Cashier sees it read-only (no export, no changes).
     roles: ['admin', 'principal', 'cashier'],
     availableFromStep: 6,
+  },
+  {
+    key: 'rebates',
+    label: 'Rebates',
+    path: '/rebates',
+    // Admin gives, imports and reverses; the Principal can look and export. Not for the Cashier.
+    roles: ['admin', 'principal'],
+    availableFromStep: 8,
   },
   {
     key: 'expenses',

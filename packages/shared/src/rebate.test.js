@@ -45,6 +45,50 @@ describe('planRebate', () => {
   });
 });
 
+describe('planRebate: heads and order', () => {
+  const mixed = [
+    { id: 'old', head: 'old_fees', period: 'opening', dueDate: '2026-04-01', amount: 50000 },
+    ...charges.slice(0, 3),
+    { id: 'adm', head: 'admission', period: 'once', dueDate: '2026-06-15', amount: 200000 },
+  ];
+  it('"last" takes the newest month first', () => {
+    const lines = planRebate({
+      kind: 'school',
+      charges: mixed,
+      receipts: [],
+      asOf: '2026-10-01',
+      amountPaise: 150000,
+      heads: ['old_fees', 'tuition'],
+      order: 'last',
+    });
+    // newest tuition month first, then the one before it
+    expect(lines.map((l) => l.chargeId)).toEqual(['c2', 'c1']);
+    expect(lines.map((l) => l.amountPaise)).toEqual([100000, 50000]);
+  });
+  it('heads keep a rebate away from other fees (admission rebate lowers only admission)', () => {
+    const lines = planRebate({
+      kind: 'school',
+      charges: mixed,
+      receipts: [],
+      asOf: '2026-10-01',
+      amountPaise: 200000,
+      heads: ['admission'],
+    });
+    expect(lines).toEqual([
+      { chargeId: 'adm', head: 'admission', period: 'once', amountPaise: 200000 },
+    ]);
+    expect(() =>
+      planRebate({
+        kind: 'school',
+        charges: mixed,
+        receipts: [],
+        amountPaise: 200001,
+        heads: ['admission'],
+      }),
+    ).toThrow();
+  });
+});
+
 describe('late fee waiver', () => {
   it('a waived month carries no late fee, others still do', () => {
     const asOf = '2026-08-30'; // June and July are past their grace days

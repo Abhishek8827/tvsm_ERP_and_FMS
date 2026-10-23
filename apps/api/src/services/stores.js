@@ -168,7 +168,7 @@ export function makeStudentStore() {
       addTextSearch(base, f.q);
       return Student.find(base)
         .select(
-          'admissionNo name fatherName classKey section contactNo village usesTransport isNewAdmission isRTE status category gender',
+          'admissionNo name fatherName classKey section contactNo address village usesTransport isNewAdmission isRTE status category gender',
         )
         .collation(NUMERIC)
         .sort({ admissionNo: 1 })
@@ -280,6 +280,7 @@ export function makeChargeStore() {
   };
 }
 
+// (The rebate store itself lives in rebateStore.js.)
 // Active rebates as ONE pseudo receipt that carries only concession lines. WHY: the fee engine
 // reads `receipts`; a rebate lowers what a charge asks for but is not a payment, so it has no
 // receipt `lines` (no money) - only `concessionLines`.
@@ -641,98 +642,5 @@ export function makeReceiptStore() {
         await session.endSession();
       }
     },
-  };
-}
-
-export function makeRebateStore() {
-  return {
-    activeForStudents: (tenantId, studentIds, fy) =>
-      Rebate.find({ tenantId, fy, studentId: { $in: studentIds }, status: 'active' })
-        .select('studentId kind lines periods totalPaise')
-        .lean(),
-    /**
-     * Saves a rebate inside a transaction under the student's lock, after `build` has worked
-     * out the lines from the freshly read receipts + rebates (so two Admins cannot both
-     * rebate the same unpaid amount).
-     */
-    async create({ tenantId, studentId, fy, kind, reason, student, user, build, audit }) {
-      const session = await mongoose.startSession();
-      try {
-        let saved;
-        await session.withTransaction(async () => {
-          await Counter.updateOne(
-            { tenantId, key: `lock:${studentId}` },
-            { $inc: { seq: 1 } },
-            { upsert: true, session },
-          );
-          // Cancelled receipts must not count as payments here either.
-          const gone = await cancelledReceiptIds(tenantId, { studentId }, session);
-          const prior = [
-            ...(await Receipt.find({ tenantId, studentId, fy, _id: { $nin: gone } })
-              .session(session)
-              .lean()),
-            ...(await rebateCredits(tenantId, studentId, fy, session)),
-          ];
-          const built = build(prior);
-          // A rebate returns its lines; a late-fee waiver returns { lines: [], periods, totalPaise }.
-          const lines = Array.isArray(built) ? built : built.lines;
-          const periods = Array.isArray(built) ? [] : built.periods;
-          const totalPaise = Array.isArray(built)
-            ? lines.reduce((n, l) => n + l.amountPaise, 0)
-            : built.totalPaise;
-          const [doc] = await Rebate.create(
-            [
-              {
-                tenantId,
-                studentId,
-                fy,
-                kind,
-                reason,
-                lines,
-                periods,
-                totalPaise,
-                student,
-                createdBy: String(user.id),
-                createdByName: user.name,
-              },
-            ],
-            { session, ordered: true },
-          );
-          saved = doc.toObject();
-          if (audit) await audit(saved, session);
-        });
-        return saved;
-      } finally {
-        await session.endSession();
-      }
-    },
-    listForStudent: (tenantId, studentId) =>
-      Rebate.find({ tenantId, studentId }).sort({ createdAt: -1 }).limit(100).lean(),
-    findById: (tenantId, id) => Rebate.findOne({ tenantId, _id: id }).lean(),
-    async list({ tenantId, page, pageSize }) {
-      const [rows, total] = await Promise.all([
-        Rebate.find({ tenantId })
-          .sort({ createdAt: -1 })
-          .skip((page - 1) * pageSize)
-          .limit(pageSize)
-          .lean(),
-        Rebate.countDocuments({ tenantId }),
-      ]);
-      return { rows, total };
-    },
-    // Reversing is allowed once; the record stays, it just stops counting.
-    reverse: ({ tenantId, id, reason, user }) =>
-      Rebate.findOneAndUpdate(
-        { tenantId, _id: id, status: 'active' },
-        {
-          $set: {
-            status: 'reversed',
-            reversedReason: reason,
-            reversedAt: new Date(),
-            reversedByName: user.name,
-          },
-        },
-        { new: true },
-      ).lean(),
   };
 }

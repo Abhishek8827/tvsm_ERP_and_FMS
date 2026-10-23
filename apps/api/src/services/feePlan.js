@@ -137,3 +137,33 @@ export async function postAdvanceMonths({ deps, tenantId, student, fy, kind, wan
   if (needed.length === 0) return 0;
   return deps.chargeStore.postMany(tenantId, student._id, fy, needed);
 }
+
+/**
+ * A "last month" rebate (BC / OTP style) lowers the final month's fee, but that month is not
+ * posted yet (fees are posted month by month). This posts ONLY the last month of the year for the
+ * head(s) of `kind`, so the rebate has something to reduce. It is not due until that month, so
+ * "due till today" is unchanged. Safe to repeat (charges are never added twice).
+ */
+export async function postLastMonth({ deps, tenantId, student, fy, kind }) {
+  const chart = await deps.feeStore.get(tenantId, fy);
+  if (!chart) return 0;
+  let all;
+  try {
+    all = chargesForStudent({ student, chart, fy, kinds: [kind], asOf: null });
+  } catch (err) {
+    if (err instanceof AppError) return 0; // the rebate step explains what is missing
+    throw err;
+  }
+  const monthly = all.filter((c) => MONTHLY.includes(c.head));
+  if (monthly.length === 0) return 0;
+  const lastDue = monthly
+    .map((c) => c.dueDate)
+    .sort()
+    .at(-1);
+  return deps.chargeStore.postMany(
+    tenantId,
+    student._id,
+    fy,
+    monthly.filter((c) => c.dueDate === lastDue),
+  );
+}

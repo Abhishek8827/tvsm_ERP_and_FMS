@@ -73,6 +73,18 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       config,
       lateFeesSettled: lateSettledFromReceipts(mine),
     });
+    // Per fee head (one line per head the student has): what was billed, paid, rebated and is
+    // due till the chosen day. The Fees Database columns (and the Excel export) read from here.
+    const byHead = {};
+    for (const inst of all.instalments)
+      for (const it of inst.items) {
+        const h = (byHead[it.head] ??= { billed: 0, paid: 0, rebate: 0, dueNow: 0 });
+        h.billed += it.amount;
+        h.paid += it.paid;
+        h.rebate += it.concession;
+        if (inst.isDue) h.dueNow += it.due;
+      }
+    const sumHeads = (heads, field) => heads.reduce((n, k) => n + (byHead[k]?.[field] ?? 0), 0);
     const school = moduleDues({ kind: 'school', charges, receipts: mine, asOf, config }).totals;
     const transport = moduleDues({
       kind: 'transport',
@@ -86,6 +98,8 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       admissionNo: s.admissionNo,
       name: s.name,
       fatherName: s.fatherName ?? '',
+      address: s.address ?? '',
+      contactNo: s.contactNo ?? '',
       classKey: s.classKey,
       section: s.section ?? '',
       village: s.village ?? '',
@@ -101,6 +115,26 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       dueNowPaise: all.totals.dueNow,
       overduePaise: all.totals.overdue,
       lateFeePaise: all.totals.lateFee,
+      // The columns of the school's own sheet. "Due" = due till the chosen day (never future months).
+      cols: {
+        oldSchoolDue: sumHeads(['old_fees'], 'dueNow'),
+        oldBusDue: sumHeads(['transport_old'], 'dueNow'),
+        newSchoolReceivable: sumHeads(['tuition'], 'billed'),
+        newBusReceivable: sumHeads(['transport'], 'billed'),
+        admReceivable: sumHeads(['admission'], 'billed'),
+        formReceivable: sumHeads(['form'], 'billed'),
+        newSchoolPaid: sumHeads(['tuition'], 'paid'),
+        newBusPaid: sumHeads(['transport'], 'paid'),
+        admPaid: sumHeads(['admission'], 'paid'),
+        formPaid: sumHeads(['form'], 'paid'),
+        schoolRebate: sumHeads(['old_fees', 'tuition', 'form'], 'rebate'),
+        transportRebate: sumHeads(['transport_old', 'transport'], 'rebate'),
+        admissionRebate: sumHeads(['admission'], 'rebate'),
+        newSchoolDue: sumHeads(['tuition'], 'dueNow'),
+        newBusDue: sumHeads(['transport'], 'dueNow'),
+        admDue: sumHeads(['admission'], 'dueNow'),
+        formDue: sumHeads(['form'], 'dueNow'),
+      },
       school: { outstandingPaise: school.outstanding, dueNowPaise: school.dueNow },
       transport: { outstandingPaise: transport.outstanding, dueNowPaise: transport.dueNow },
     };
@@ -112,6 +146,9 @@ const FEE_STATUS = {
   overdue: (r) => r.overduePaise > 0,
   pending: (r) => r.dueNowPaise > 0,
   clear: (r) => r.planPosted && r.dueNowPaise === 0,
+  // The school's "school fee paid, bus fee still pending" list.
+  school_paid_bus_pending: (r) =>
+    r.usesTransport && r.planPosted && r.school.dueNowPaise === 0 && r.transport.dueNowPaise > 0,
 };
 
 export function filterRows(rows, { feeStatus, minDuePaise, maxDuePaise }) {

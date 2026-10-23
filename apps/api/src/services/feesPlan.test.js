@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { postAdvanceMonths, postPlans } from './feePlan.js';
-import { runMonthlyPlan } from './monthlyPlan.js';
+import { postAdvanceMonths, postLastMonth, postPlans } from './feePlan.js';
+import { lastPlanRun, runMonthlyPlan } from './monthlyPlan.js';
 
 const chart = {
   fy: '2026-27',
@@ -118,5 +118,39 @@ describe('advance payment posts only the months it needs', () => {
       wantPaise: 99_000_000,
     });
     expect(charges).toHaveLength(10);
+  });
+});
+
+describe('last month posting and the unpriced warning', () => {
+  it('postLastMonth posts only March, once', async () => {
+    const { deps, charges } = fakeDeps();
+    const args = { deps, tenantId: 't', student, fy: '2026-27', kind: 'school' };
+    expect(await postLastMonth(args)).toBe(1);
+    expect(await postLastMonth(args)).toBe(0);
+    expect(charges).toHaveLength(1);
+    expect(charges[0].dueDate.startsWith('2027-03')).toBe(true);
+  });
+  it('postLastMonth does nothing (no error) when the chart cannot price the student', async () => {
+    const { deps } = fakeDeps();
+    const odd = { ...student, classKey: '9th' };
+    expect(
+      await postLastMonth({ deps, tenantId: 't', student: odd, fy: '2026-27', kind: 'school' }),
+    ).toBe(0);
+  });
+  it('the monthly run remembers who it could not price, grouped by reason, for the Dashboard', async () => {
+    const { deps } = fakeDeps();
+    deps.studentStore.activeForPlan = async () => [
+      student,
+      { _id: 's2', admissionNo: '2', name: 'Ravi', classKey: '9th' },
+      { _id: 's3', admissionNo: '3', name: 'Meera', classKey: '9th' },
+    ];
+    await runMonthlyPlan({ deps, tenantId: 't', logger: { info: () => {}, error: () => {} } });
+    const run = lastPlanRun();
+    expect(run.problems).toHaveLength(1);
+    expect(run.problems[0]).toMatchObject({
+      count: 2,
+      reason: 'The fee chart has no fee for this class.',
+    });
+    expect(run.problems[0].examples).toEqual(['2 Ravi', '3 Meera']);
   });
 });

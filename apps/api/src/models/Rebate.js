@@ -16,6 +16,12 @@ const rebateSchema = new mongoose.Schema(
     // 'late_fee' = a late-fee waiver (no lines; `periods` are the months whose late fee is waived)
     kind: { type: String, enum: ['school', 'transport', 'late_fee'], required: true },
     periods: [String],
+    // What the Admin chose in the Rebates screen: school | transport | admission. `kind` stays
+    // the fee MODULE (admission belongs to the school module) so the fee engine is unchanged.
+    rebateType: { type: String, enum: ['school', 'transport', 'admission', null], default: null },
+    // 'oldest' = lowers the oldest unpaid fee first; 'last' = lowers the LAST month's fee first
+    // (for BC / OTP style rebates that the school adjusts in the final month).
+    adjustOn: { type: String, enum: ['oldest', 'last'], default: 'oldest' },
     totalPaise: { type: Number, required: true },
     lines: [
       {
@@ -39,5 +45,6 @@ const rebateSchema = new mongoose.Schema(
 );
 rebateSchema.index({ tenantId: 1, studentId: 1, fy: 1, status: 1 });
 rebateSchema.index({ tenantId: 1, createdAt: -1 });
+rebateSchema.index({ tenantId: 1, 'student.admissionNo': 1, status: 1 });
 
 export const Rebate = mongoose.models.Rebate ?? mongoose.model('Rebate', rebateSchema);

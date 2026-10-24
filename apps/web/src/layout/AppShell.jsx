@@ -15,6 +15,7 @@ const WIDE_PAGES = [
   '/fees-database',
   '/students',
   '/rebates',
+  '/transport',
   '/expenses',
   '/receipts',
   '/fees-receipts',

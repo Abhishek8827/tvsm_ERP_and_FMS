@@ -19,6 +19,7 @@ import { ledgerRouter } from './routes/ledger.js';
 import { moneyRouter } from './routes/money.js';
 import { oldDuesImportRouter } from './routes/oldDuesImport.js';
 import { rebatesRouter } from './routes/rebates.js';
+import { transportRouter } from './routes/transport.js';
 import { receiptsRouter } from './routes/receipts.js';
 import { usersRouter } from './routes/users.js';
 /**
@@ -65,6 +66,7 @@ export function createApp(env, logger, auth) {
     app.use('/api', feeStructureRouter(deps, authenticate));
     app.use('/api', ledgerRouter(deps, authenticate));
     app.use('/api', feesDatabaseRouter(deps, authenticate));
+    app.use('/api', transportRouter(deps, authenticate));
     app.use('/api', rebatesRouter(deps, authenticate));
     app.use('/api', adminDashboardRouter(deps, authenticate));
     app.use('/api', dayCloseRouter(deps, authenticate));
@@ -78,6 +80,7 @@ export function createApp(env, logger, auth) {
         '/api/auth',
         '/api/users',
         '/api/students',
+        '/api/transport',
         '/api/fee-structure',
         '/api/rebates',
         '/api/receipts',

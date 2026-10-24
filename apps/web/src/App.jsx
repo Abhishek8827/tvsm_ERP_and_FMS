@@ -12,6 +12,7 @@ import { CollectFee } from './pages/CollectFee';
 import { ExpenseVoucher } from './pages/ExpenseVoucher';
 import { Expenses } from './pages/Expenses';
 import { PettyCash } from './pages/PettyCash';
+import { Transport } from './pages/Transport';
 import { Rebates } from './pages/Rebates';
 import { FeeStructure } from './pages/FeeStructure';
 import { FeesDatabase } from './pages/FeesDatabase';
@@ -93,6 +94,7 @@ export function App() {
               i.key !== 'fees-receipts' &&
               i.key !== 'fees-database' &&
               i.key !== 'rebates' &&
+              i.key !== 'transport' &&
               i.key !== 'day-close' &&
               i.key !== 'approvals' &&
               i.key !== 'users-settings',
@@ -112,6 +114,7 @@ export function App() {
         {(role === 'admin' || role === 'principal') && (
           <Route path="/rebates" element={<Rebates />} />
         )}
+        <Route path="/transport" element={<Transport />} />
         <Route path="/day-close" element={<DayClose />} />
         {role === 'principal' && <Route path="/approvals" element={<Approvals />} />}
         {role === 'admin' && <Route path="/users-settings" element={<UsersSettings />} />}

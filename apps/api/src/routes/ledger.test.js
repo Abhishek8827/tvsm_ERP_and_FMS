@@ -57,6 +57,7 @@ const students = {
     classKey: 'NURSERY',
     status: 'active',
     usesTransport: true,
+    transportFrom: '2026-04',
     village: 'Siwal',
   },
   s4: { _id: 's4', name: 'Left', admissionNo: '4', classKey: 'NURSERY', status: 'inactive' },

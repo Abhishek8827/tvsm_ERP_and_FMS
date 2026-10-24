@@ -38,6 +38,14 @@ const P = {
       <circle cx="16.5" cy="16.5" r="2" />
     </>
   ),
+  transport: (
+    <>
+      <rect x="4" y="5" width="16" height="11" rx="2" />
+      <path d="M4 11h16M7 19v-3M17 19v-3" />
+      <circle cx="8" cy="13.5" r=".6" />
+      <circle cx="16" cy="13.5" r=".6" />
+    </>
+  ),
   expenses: <path d="M7 17 17 7M9 7h8v8" />,
   'petty-cash': (
     <>

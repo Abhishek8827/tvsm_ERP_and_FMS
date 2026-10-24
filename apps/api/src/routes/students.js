@@ -57,8 +57,6 @@ const studentFields = z.object({
   formNo: text(30).optional(),
   isNewAdmission: z.boolean().default(false),
   isRTE: z.boolean().default(false),
-  usesTransport: z.boolean().default(false),
-  village: text().optional(),
   status: z.enum(['active', 'inactive']).default('active'),
   inactiveReason: z.enum(['left_with_tc', 'left_without_tc']).nullish(),
 });
@@ -70,7 +68,6 @@ function checkRules(d) {
     fields.stream = 'Stream is required for 11th and 12th';
   if (d.status === 'inactive' && !d.inactiveReason)
     fields.inactiveReason = 'Choose: left with TC or left without TC';
-  if (d.usesTransport && !d.village) fields.village = 'Village is required for transport students';
   if (Object.keys(fields).length)
     throw new AppError('VALIDATION_ERROR', 400, 'Some fields are invalid.', fields);
 }

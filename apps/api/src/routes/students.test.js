@@ -130,7 +130,6 @@ describe('students API', () => {
       .send({ ...valid, classKey: '11', usesTransport: true });
     expect(res2.body.error.fields).toMatchObject({
       stream: expect.any(String),
-      village: expect.any(String),
     });
   });
   it('inactive needs a reason (left with / without TC)', async () => {

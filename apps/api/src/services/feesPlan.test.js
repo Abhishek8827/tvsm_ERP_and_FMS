@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { postAdvanceMonths, postLastMonth, postPlans } from './feePlan.js';
+import { postAdvanceMonths, postFullYear, postLastMonth, postPlans } from './feePlan.js';
 import { lastPlanRun, runMonthlyPlan } from './monthlyPlan.js';
 
 const chart = {
@@ -129,6 +129,13 @@ describe('last month posting and the unpriced warning', () => {
     expect(await postLastMonth(args)).toBe(0);
     expect(charges).toHaveLength(1);
     expect(charges[0].dueDate.startsWith('2027-03')).toBe(true);
+  });
+  it('postFullYear posts every fee month of the year, once', async () => {
+    const { deps, charges } = fakeDeps();
+    const args = { deps, tenantId: 't', student, fy: '2026-27', kind: 'school' };
+    expect(await postFullYear(args)).toBe(10);
+    expect(await postFullYear(args)).toBe(0);
+    expect(charges).toHaveLength(10);
   });
   it('postLastMonth does nothing (no error) when the chart cannot price the student', async () => {
     const { deps } = fakeDeps();

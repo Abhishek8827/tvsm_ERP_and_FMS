@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { CLASSES, STREAMS, STREAM_CLASSES, getFinancialYear } from '@erp/shared';
+import { CLASSES, STREAMS, STREAM_CLASSES } from '@erp/shared';
 import { api } from '../api/client';
 import { Button, Card, ErrorState, Input, Select, Spinner, useToast } from '../components/ui';
 
@@ -24,10 +24,8 @@ const EMPTY = {
   bankAccount: '',
   ifsc: '',
   formNo: '',
-  village: '',
   isNewAdmission: false,
   isRTE: false,
-  usesTransport: false,
   status: 'active',
   inactiveReason: '',
 };
@@ -63,13 +61,6 @@ export function StudentForm() {
     enabled: editing,
     queryFn: () => api(`/api/students/${id}`),
   });
-  // Village list comes from the fee chart so the bus fee always has a matching village.
-  const fees = useQuery({
-    queryKey: ['fee-structure', getFinancialYear(new Date())],
-    queryFn: () => api(`/api/fee-structure/${getFinancialYear(new Date())}`),
-    retry: false,
-  });
-
   // Start with the loaded student (edit) or a blank form (new).
   if (form === null) {
     if (!editing) setForm(EMPTY);
@@ -93,7 +84,6 @@ export function StudentForm() {
     setForm((f) => ({ ...f, [key]: v }));
   };
   const err = (k) => errors[k];
-  const villages = fees.data?.villages ?? [];
 
   async function onSubmit(e) {
     e.preventDefault();
@@ -263,26 +253,9 @@ export function StudentForm() {
             <input type="checkbox" checked={form.isRTE} onChange={set('isRTE')} />
             RTE student
           </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={form.usesTransport} onChange={set('usesTransport')} />
-            Uses school bus
-          </label>
-          {form.usesTransport && (
-            <div>
-              <Input
-                label="Village"
-                list="villages"
-                value={form.village}
-                onChange={set('village')}
-                error={err('village')}
-              />
-              <datalist id="villages">
-                {villages.map((v) => (
-                  <option key={v.name} value={v.name} />
-                ))}
-              </datalist>
-            </div>
-          )}
+          <p className="text-xs text-ink-muted sm:col-span-2">
+            School bus: enter the student in the Transport module (village comes from the address).
+          </p>
         </div>
       </Card>
 

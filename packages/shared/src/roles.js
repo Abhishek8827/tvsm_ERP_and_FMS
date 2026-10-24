@@ -123,8 +123,8 @@ export const NAV_ITEMS = [
     key: 'tc-bonafide',
     label: 'TC & Bonafide',
     path: '/tc-bonafide',
-    roles: ['admin'],
-    availableFromStep: 11,
+    roles: ['admin', 'principal', 'cashier'], // Principal and Cashier can only look
+    availableFromStep: 8,
   },
   {
     key: 'data-import',

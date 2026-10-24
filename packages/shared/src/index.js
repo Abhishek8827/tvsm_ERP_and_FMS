@@ -9,3 +9,4 @@ export * from './expenses.js';
 export * from './dayClose.js';
 export * from './rebateCategories.js';
 export * from './transport.js';
+export * from './certificates.js';

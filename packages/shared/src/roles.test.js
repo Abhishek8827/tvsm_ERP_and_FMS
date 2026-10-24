@@ -5,13 +5,7 @@ describe('navForRole', () => {
     const keys = navForRole('cashier').map((n) => n.key);
     expect(keys).toContain('collect-fee');
     expect(keys).toContain('fee-structure');
-    for (const forbidden of [
-      'data-import',
-      'users-settings',
-      'tc-bonafide',
-      'audit-log',
-      'approvals',
-    ]) {
+    for (const forbidden of ['data-import', 'users-settings', 'audit-log', 'approvals']) {
       expect(keys).not.toContain(forbidden);
     }
   });
@@ -19,9 +13,13 @@ describe('navForRole', () => {
     const keys = navForRole('principal').map((n) => n.key);
     expect(keys).toContain('approvals');
     expect(keys).toContain('fee-structure'); // view only
-    for (const forbidden of ['collect-fee', 'data-import', 'users-settings', 'tc-bonafide']) {
+    for (const forbidden of ['collect-fee', 'data-import', 'users-settings']) {
       expect(keys).not.toContain(forbidden);
     }
+  });
+  it('everyone can open TC & Bonafide (only the Admin can make them)', () => {
+    for (const r of ['admin', 'principal', 'cashier'])
+      expect(navForRole(r).map((n) => n.key)).toContain('tc-bonafide');
   });
   it('admin cannot see principal-only approvals inbox', () => {
     expect(navForRole('admin').map((n) => n.key)).not.toContain('approvals');

@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { registerGlobalPlugins } from '../db.js';
-import { makeImmutable } from './immutable.js';
+import { makeImmutable } from './Immutable.js';
 
 registerGlobalPlugins();
 

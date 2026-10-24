@@ -1,0 +1,490 @@
+import { Router } from 'express';
+import { z } from 'zod';
+import {
+  CLASS_KEYS,
+  TC_CONDUCT,
+  TC_REASONS,
+  bonafideNumber,
+  getFinancialYear,
+  todayIst,
+} from '@erp/shared';
+import { requireRole } from '../middleware/requireRole.js';
+import { recordAudit } from '../services/audit.js';
+import {
+  buildSnapshot,
+  concessionText,
+  defaultPromotion,
+  mergeStudent,
+  missingTcFields,
+  pendingPaise,
+  shapeBonafide,
+  shapeTc,
+  studentDues,
+} from '../services/certificates.js';
+import { AppError, notFound } from '../utils/errors.js';
+
+const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Bad id');
+const idemKey = z
+  .string({ error: 'Idempotency-Key header is required' })
+  .regex(/^[\w-]{8,100}$/, 'Idempotency-Key must be 8-100 letters, digits, - or _');
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-10-13');
+const text = (min, max) => z.string().trim().min(min, 'This is required').max(max);
+const listQuery = z.object({
+  q: z.string().trim().max(60).optional(),
+  status: z.enum(['issued', 'cancelled']).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(25),
+});
+const settingsBody = z.object({
+  tcBookNo: text(1, 20),
+  tcStartSl: z.number().int().min(1).max(999999),
+});
+// Student details the Admin may fill in while making the TC; they are saved back to the student.
+const studentPatch = {
+  fatherName: text(1, 80).optional(),
+  motherName: text(1, 80).optional(),
+  category: text(1, 10).optional(),
+  dateOfBirth: day.optional(),
+  nationality: text(1, 40).optional(),
+  firstAdmissionDate: day.optional(),
+  firstAdmissionClass: z.enum(CLASS_KEYS).optional(),
+  pen: text(1, 30).optional(),
+  aparId: text(1, 30).optional(),
+};
+const tcBody = z
+  .object({
+    studentId: objectId,
+    bookNo: text(1, 20).optional(),
+    ...studentPatch,
+    lastExam: text(1, 100), // 9
+    failedInSameClass: text(1, 60), // 10
+    subjects: text(1, 200), // 11
+    qualifiedForPromotion: text(1, 100), // 12
+    workingDays: z.number().int().min(0).max(366), // 15
+    daysPresent: z.number().int().min(0).max(366), // 16
+    ncc: text(1, 100).default('Not applicable'), // 17
+    games: text(1, 100).default('Not applicable'), // 18
+    conduct: z.enum(TC_CONDUCT), // 19
+    dateOfApplication: day, // 20
+    dateOfIssue: day, // 21
+    reason: z.enum(TC_REASONS), // 22
+    reasonNote: text(1, 150).optional(),
+    remarks: text(1, 200).default('None'), // 23
+    duesOverrideReason: text(3, 300).optional(),
+  })
+  .refine((b) => b.daysPresent <= b.workingDays, {
+    message: 'Days present cannot be more than working days',
+    path: ['daysPresent'],
+  });
+const bonafideBody = z.object({
+  studentId: objectId,
+  purpose: text(2, 200),
+  academicYear: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/, 'Use a year like 2026-27')
+    .optional(),
+  dateOfIssue: day.optional(),
+});
+const cancelBody = z.object({ reason: text(3, 300) });
+
+const STUDENT_PATCH_KEYS = Object.keys(studentPatch);
+const pickPatch = (body) =>
+  Object.fromEntries(
+    STUDENT_PATCH_KEYS.filter((k) => body[k] !== undefined).map((k) => [k, body[k]]),
+  );
+const toStudentSet = (patch) => ({
+  ...patch,
+  ...(patch.firstAdmissionDate
+    ? { firstAdmissionDate: new Date(`${patch.firstAdmissionDate}T00:00:00.000Z`) }
+    : {}),
+  ...(patch.dateOfBirth ? { dateOfBirth: new Date(`${patch.dateOfBirth}T00:00:00.000Z`) } : {}),
+});
+
+/**
+ * Transfer Certificates and Bonafide certificates. The Admin makes, reprints and cancels them;
+ * the Principal and Cashier can only look (list and on-screen preview). Every number comes from
+ * a gap-free counter inside the database transaction and every request is idempotent.
+ */
+export function certificatesRouter(deps, authenticate) {
+  const router = Router();
+  const view = [authenticate, requireRole('admin', 'principal', 'cashier')];
+  const adminOnly = [authenticate, requireRole('admin')];
+  const wrap = (fn) => async (req, res, next) => {
+    try {
+      await fn(req, res);
+    } catch (err) {
+      next(err);
+    }
+  };
+  const store = deps.certificateStore;
+  const settingsOf = async (tenantId) => ({
+    tcBookNo: '1',
+    tcStartSl: 1,
+    ...(await store.getSettings(tenantId)),
+  });
+  const loadStudent = async (tenantId, id) => {
+    const s = await deps.studentStore.findById(tenantId, id);
+    if (!s) throw notFound('Student');
+    return s;
+  };
+
+  // ---- settings (Book No. and the Sl. No. the year starts from)
+  router.get(
+    '/certificates/settings',
+    ...view,
+    wrap(async (req, res) => {
+      const tenantId = req.user.tenantId;
+      const s = await settingsOf(tenantId);
+      const fy = getFinancialYear(new Date());
+      res.json({
+        tcBookNo: s.tcBookNo,
+        tcStartSl: s.tcStartSl,
+        fy,
+        startLocked: (await store.countTcInFy(tenantId, fy)) > 0,
+        history: (s.history ?? []).slice(-10).reverse(),
+      });
+    }),
+  );
+  router.put(
+    '/certificates/settings',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const body = settingsBody.parse(req.body);
+      const tenantId = req.user.tenantId;
+      const fy = getFinancialYear(new Date());
+      const before = await settingsOf(tenantId);
+      if (body.tcStartSl !== before.tcStartSl && (await store.countTcInFy(tenantId, fy)) > 0)
+        throw new AppError(
+          'SL_START_LOCKED',
+          409,
+          'A TC is already issued this year, so the starting Sl. No. cannot change now.',
+        );
+      const saved = await store.saveSettings({ tenantId, ...body, user: req.user });
+      await recordAudit(deps, req, {
+        action: 'update',
+        entity: 'certificate_settings',
+        oldValue: { tcBookNo: before.tcBookNo, tcStartSl: before.tcStartSl },
+        newValue: body,
+      });
+      res.json({ tcBookNo: saved.tcBookNo, tcStartSl: saved.tcStartSl });
+    }),
+  );
+
+  // ---- Transfer Certificate
+  // What the form shows first: the auto fields, what is missing, and whether dues block it.
+  router.get(
+    '/tc/draft/:studentId',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const tenantId = req.user.tenantId;
+      const student = await loadStudent(tenantId, req.params.studentId);
+      const fy = getFinancialYear(new Date());
+      const today = todayIst();
+      const existing = await store.activeTcForStudent(tenantId, student._id);
+      const withDefault = { ...student, nationality: student.nationality ?? 'Indian' };
+      const [dues, concession, settings] = await Promise.all([
+        studentDues({ deps, tenantId, student, fy, asOf: today }),
+        concessionText({ deps, tenantId, student, fy }),
+        settingsOf(tenantId),
+      ]);
+      const snapshot = buildSnapshot({ student: withDefault, dues, concession });
+      res.json({
+        fy,
+        today,
+        existingTc: existing ? { id: String(existing._id), slNo: existing.slNo } : null,
+        student: { id: String(student._id), status: student.status },
+        snapshot,
+        pen: student.pen ?? '',
+        aparId: student.aparId ?? '',
+        missing: missingTcFields(withDefault),
+        pendingPaise: pendingPaise(dues),
+        duesPaidUpto: snapshot.duesPaidUpto,
+        bookNo: settings.tcBookNo,
+        nextSl: settings.tcStartSl,
+        defaults: {
+          qualifiedForPromotion: defaultPromotion(student.classKey),
+          ncc: 'Not applicable',
+          games: 'Not applicable',
+          remarks: 'None',
+          dateOfIssue: today,
+          dateOfApplication: today,
+        },
+      });
+    }),
+  );
+
+  router.post(
+    '/tc',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const key = idemKey.parse(req.get('Idempotency-Key'));
+      const body = tcBody.parse(req.body);
+      const tenantId = req.user.tenantId;
+      // A repeated click or retry returns the first TC without doing any work again.
+      const first = await store.findTcByKey(tenantId, key);
+      if (first) return res.status(200).json({ ...shapeTc(first), replay: true });
+
+      const student = await loadStudent(tenantId, body.studentId);
+      const patch = pickPatch(body);
+      const merged = mergeStudent(
+        { ...student, nationality: student.nationality ?? 'Indian' },
+        patch,
+      );
+      const missing = missingTcFields(merged);
+      if (missing.length)
+        throw new AppError(
+          'VALIDATION',
+          400,
+          'Fill the missing student details first.',
+          Object.fromEntries(missing.map((m) => [m.key, `${m.label} is required`])),
+        );
+      const fy = getFinancialYear(new Date());
+      const dues = await studentDues({ deps, tenantId, student, fy, asOf: todayIst() });
+      const due = pendingPaise(dues);
+      if (due > 0 && !body.duesOverrideReason)
+        throw new AppError(
+          'DUES_PENDING',
+          409,
+          'Fees are still due. Clear them, or give a reason to issue the TC anyway.',
+        );
+      const concession = await concessionText({ deps, tenantId, student, fy });
+      const settings = await settingsOf(tenantId);
+      const snapshot = buildSnapshot({ student: merged, dues, concession });
+      const bookNo = body.bookNo ?? settings.tcBookNo;
+      const entered = {
+        lastExam: body.lastExam,
+        failedInSameClass: body.failedInSameClass,
+        subjects: body.subjects,
+        qualifiedForPromotion: body.qualifiedForPromotion,
+        workingDays: body.workingDays,
+        daysPresent: body.daysPresent,
+        ncc: body.ncc,
+        games: body.games,
+        conduct: body.conduct,
+        dateOfApplication: body.dateOfApplication,
+        dateOfIssue: body.dateOfIssue,
+        reason: body.reasonNote ? `${body.reason} (${body.reasonNote})` : body.reason,
+        remarks: body.remarks,
+      };
+      const override =
+        due > 0
+          ? { reason: body.duesOverrideReason, byName: req.user.name, duePaise: due }
+          : undefined;
+
+      const { tc, replay } = await store.issueTc({
+        tenantId,
+        studentId: student._id,
+        fy,
+        startSl: settings.tcStartSl,
+        idempotencyKey: key,
+        user: req.user,
+        prepare: async (fresh, hasActiveTc) => {
+          if (!fresh) throw notFound('Student');
+          if (hasActiveTc)
+            throw new AppError('TC_EXISTS', 409, 'A Transfer Certificate is already issued.');
+          return {
+            doc: { bookNo, snapshot, entered, ...(override ? { duesOverride: override } : {}) },
+            studentPatch: {
+              ...toStudentSet(patch),
+              status: 'inactive',
+              inactiveReason: 'left_with_tc',
+            },
+          };
+        },
+        audit: async (made, session) => {
+          await recordAudit(
+            deps,
+            req,
+            {
+              action: 'issue',
+              entity: 'transfer_certificate',
+              entityId: String(made._id),
+              newValue: {
+                slNo: made.slNo,
+                fy,
+                admissionNo: snapshot.admissionNo,
+                name: snapshot.name,
+              },
+            },
+            { critical: true, session },
+          );
+          if (override)
+            await recordAudit(
+              deps,
+              req,
+              {
+                action: 'override',
+                entity: 'tc_dues',
+                entityId: String(made._id),
+                newValue: { duePaise: override.duePaise },
+                reason: override.reason,
+              },
+              { critical: true, session },
+            );
+        },
+      });
+      res.status(replay ? 200 : 201).json({ ...shapeTc(tc), replay });
+    }),
+  );
+
+  router.get(
+    '/tc',
+    ...view,
+    wrap(async (req, res) => {
+      const q = listQuery.parse(req.query);
+      const { rows, total } = await store.listTc({ tenantId: req.user.tenantId, ...q });
+      res.json({ rows: rows.map((r) => shapeTc(r)), total, page: q.page, pageSize: q.pageSize });
+    }),
+  );
+  router.get(
+    '/tc/:id',
+    ...view,
+    wrap(async (req, res) => {
+      const tc = await store.getTc(req.user.tenantId, objectId.parse(req.params.id));
+      if (!tc) throw notFound('Transfer Certificate');
+      res.json(shapeTc(tc));
+    }),
+  );
+  // Printing another copy: it is labelled DUPLICATE with a copy number, and audited.
+  router.post(
+    '/tc/:id/reprint',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const tc = await store.reprintTc(req.user.tenantId, objectId.parse(req.params.id));
+      if (!tc) throw notFound('Transfer Certificate');
+      await recordAudit(deps, req, {
+        action: 'reprint',
+        entity: 'transfer_certificate',
+        entityId: String(tc._id),
+        newValue: { slNo: tc.slNo, copyNo: tc.duplicateCount },
+      });
+      res.json(shapeTc(tc, { copyNo: tc.duplicateCount }));
+    }),
+  );
+  router.post(
+    '/tc/:id/cancel',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const { reason } = cancelBody.parse(req.body);
+      const tc = await store.cancelTc({
+        tenantId: req.user.tenantId,
+        id: objectId.parse(req.params.id),
+        reason,
+        user: req.user,
+        audit: (made, session) =>
+          recordAudit(
+            deps,
+            req,
+            {
+              action: 'cancel',
+              entity: 'transfer_certificate',
+              entityId: String(made._id),
+              newValue: { slNo: made.slNo },
+              reason,
+            },
+            { critical: true, session },
+          ),
+      });
+      if (!tc) throw notFound('Issued Transfer Certificate');
+      res.json(shapeTc(tc));
+    }),
+  );
+
+  // ---- Bonafide
+  router.post(
+    '/bonafide',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const key = idemKey.parse(req.get('Idempotency-Key'));
+      const body = bonafideBody.parse(req.body);
+      const tenantId = req.user.tenantId;
+      const first = await store.findBonafideByKey(tenantId, key);
+      if (first) return res.status(200).json({ ...shapeBonafide(first), replay: true });
+      const fy = getFinancialYear(new Date());
+      const { bonafide, replay } = await store.issueBonafide({
+        tenantId,
+        studentId: objectId.parse(body.studentId),
+        fy,
+        idempotencyKey: key,
+        user: req.user,
+        prepare: async (s) => {
+          if (!s) throw notFound('Student');
+          if (s.status !== 'active')
+            throw new AppError(
+              'STUDENT_INACTIVE',
+              409,
+              'A Bonafide certificate is only for students who are studying now.',
+            );
+          return {
+            snapshot: {
+              admissionNo: s.admissionNo,
+              name: s.name,
+              fatherName: s.fatherName ?? '',
+              gender: s.gender ?? '',
+              classKey: s.classKey,
+              section: s.section ?? '',
+              dob: s.dateOfBirth ? new Date(s.dateOfBirth).toISOString().slice(0, 10) : '',
+            },
+            academicYear: body.academicYear ?? fy,
+            purpose: body.purpose,
+            dateOfIssue: body.dateOfIssue ?? todayIst(),
+            makeNumber: (seq) => bonafideNumber(fy, seq),
+          };
+        },
+        audit: (made, session) =>
+          recordAudit(
+            deps,
+            req,
+            {
+              action: 'issue',
+              entity: 'bonafide',
+              entityId: String(made._id),
+              newValue: { number: made.number, admissionNo: made.snapshot.admissionNo },
+            },
+            { critical: true, session },
+          ),
+      });
+      res.status(replay ? 200 : 201).json({ ...shapeBonafide(bonafide), replay });
+    }),
+  );
+  router.get(
+    '/bonafide',
+    ...view,
+    wrap(async (req, res) => {
+      const q = listQuery.parse(req.query);
+      const { rows, total } = await store.listBonafide({ tenantId: req.user.tenantId, ...q });
+      res.json({
+        rows: rows.map((r) => shapeBonafide(r)),
+        total,
+        page: q.page,
+        pageSize: q.pageSize,
+      });
+    }),
+  );
+  router.get(
+    '/bonafide/:id',
+    ...view,
+    wrap(async (req, res) => {
+      const b = await store.getBonafide(req.user.tenantId, objectId.parse(req.params.id));
+      if (!b) throw notFound('Bonafide certificate');
+      res.json(shapeBonafide(b));
+    }),
+  );
+  router.post(
+    '/bonafide/:id/reprint',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const b = await store.reprintBonafide(req.user.tenantId, objectId.parse(req.params.id));
+      if (!b) throw notFound('Bonafide certificate');
+      await recordAudit(deps, req, {
+        action: 'reprint',
+        entity: 'bonafide',
+        entityId: String(b._id),
+        newValue: { number: b.number, copyNo: b.duplicateCount },
+      });
+      res.json(shapeBonafide(b, { copyNo: b.duplicateCount }));
+    }),
+  );
+
+  return router;
+}

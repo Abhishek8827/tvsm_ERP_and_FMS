@@ -26,6 +26,13 @@ const studentSchema = new mongoose.Schema(
     contactNo: { type: String, trim: true },
     address: { type: String, trim: true },
     category: { type: String, trim: true }, // GEN / OBC / SC / ST
+    // Printed on the Transfer Certificate (fields 5 and 7). Filled at import / on the student
+    // form, or by the Admin while making a TC (then saved here, so it is asked only once).
+    nationality: { type: String, trim: true },
+    firstAdmissionDate: { type: Date },
+    firstAdmissionClass: { type: String, enum: [...CLASS_KEYS, null] },
+    pen: { type: String, trim: true }, // Permanent Education Number
+    aparId: { type: String, trim: true }, // APAAR ID
     caste: { type: String, trim: true },
     samagraId: { type: String, trim: true },
     aadhaar: { type: String, trim: true }, // full number stored; API only returns last 4 (Admin/Principal)

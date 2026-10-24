@@ -24,6 +24,11 @@ const EMPTY = {
   bankAccount: '',
   ifsc: '',
   formNo: '',
+  nationality: '',
+  firstAdmissionDate: '',
+  firstAdmissionClass: '',
+  pen: '',
+  aparId: '',
   isNewAdmission: false,
   isRTE: false,
   status: 'active',
@@ -70,6 +75,7 @@ export function StudentForm() {
         ...EMPTY,
         ...Object.fromEntries(Object.entries(s).filter(([, v]) => v !== null)),
         dateOfBirth: s.dateOfBirth ? s.dateOfBirth.slice(0, 10) : '',
+        firstAdmissionDate: s.firstAdmissionDate ? s.firstAdmissionDate.slice(0, 10) : '',
       });
     }
   }
@@ -218,6 +224,34 @@ export function StudentForm() {
             value={form.samagraId}
             onChange={set('samagraId')}
             error={err('samagraId')}
+          />
+          <Input
+            label="Nationality (printed on the TC)"
+            placeholder="Indian"
+            value={form.nationality}
+            onChange={set('nationality')}
+            error={err('nationality')}
+          />
+          <Input
+            label="Date of first admission"
+            type="date"
+            value={form.firstAdmissionDate}
+            onChange={set('firstAdmissionDate')}
+            error={err('firstAdmissionDate')}
+          />
+          <Select
+            label="Class at first admission"
+            options={blank('Choose').concat(CLASS_OPTIONS)}
+            value={form.firstAdmissionClass}
+            onChange={set('firstAdmissionClass')}
+            error={err('firstAdmissionClass')}
+          />
+          <Input label="PEN" value={form.pen} onChange={set('pen')} error={err('pen')} />
+          <Input
+            label="APAAR ID"
+            value={form.aparId}
+            onChange={set('aparId')}
+            error={err('aparId')}
           />
           <Input
             label="Form no"

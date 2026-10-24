@@ -109,6 +109,10 @@ export function StudentProfile() {
           <Row label="Category" value={s.category} />
           <Row label="Samagra ID" value={s.samagraId} />
           <Row label="Form no" value={s.formNo} />
+          <Row label="Nationality" value={s.nationality} />
+          <Row label="First admission" value={s.firstAdmissionDate?.slice(0, 10)} />
+          <Row label="PEN" value={s.pen} />
+          <Row label="APAAR ID" value={s.aparId} />
           {role === 'admin' && (
             <>
               <Row label="Aadhaar" value={s.aadhaar} />

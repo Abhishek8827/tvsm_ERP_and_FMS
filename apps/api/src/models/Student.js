@@ -35,7 +35,13 @@ const studentSchema = new mongoose.Schema(
     isNewAdmission: { type: Boolean, default: false }, // admission fee is charged only if true
     isRTE: { type: Boolean, default: false }, // Excel REMARK = "RTE" means true
     usesTransport: { type: Boolean, default: false },
-    village: { type: String, trim: true }, // decides the bus fee
+    village: { type: String, trim: true }, // decides the bus fee (set in the Transport module)
+    // Transport module: the bus fee is charged for months transportFrom..transportUntil
+    // ('YYYY-MM', both included; no transportUntil = still on the bus). A student flagged
+    // usesTransport but with no transportFrom (old Excel import) is charged nothing until the
+    // Admin enters him in the Transport module.
+    transportFrom: { type: String, match: /^\d{4}-\d{2}$/ },
+    transportUntil: { type: String, match: /^\d{4}-\d{2}$/ },
     status: { type: String, enum: ['active', 'inactive'], default: 'active' },
     // Only when inactive: did the student take a Transfer Certificate?
     inactiveReason: {

@@ -26,7 +26,10 @@ export function chargesForStudent({
   const row = chart.classFees.find((c) => c.classKey === student.classKey);
   if (!row) throw new AppError('NO_CLASS_FEE', 409, 'The fee chart has no fee for this class.');
   let transportMonthly = 0;
-  if (kinds.includes('transport') && student.usesTransport) {
+  // WHY transportFrom: the bus fee starts only after the Admin enters the student in the
+  // Transport module (with the month he starts); until then nothing is charged.
+  const onBus = !!student.transportFrom;
+  if (kinds.includes('transport') && onBus) {
     const village = chart.villages.find((v) => v.name === student.village?.toUpperCase());
     if (!village)
       throw new AppError(
@@ -55,7 +58,11 @@ export function chargesForStudent({
     (c) =>
       heads.includes(c.head) &&
       // "2026-10-15" <= "2026-10-31": compare the YYYY-MM part only.
-      (asOf === null || !MONTHLY.includes(c.head) || c.dueDate.slice(0, 7) <= asOf.slice(0, 7)),
+      (asOf === null || !MONTHLY.includes(c.head) || c.dueDate.slice(0, 7) <= asOf.slice(0, 7)) &&
+      // The bus fee is charged only from the month he starts to the month he stops.
+      (c.head !== 'transport' ||
+        (c.dueDate.slice(0, 7) >= student.transportFrom &&
+          (!student.transportUntil || c.dueDate.slice(0, 7) <= student.transportUntil))),
   );
 }
 
@@ -166,4 +173,25 @@ export async function postLastMonth({ deps, tenantId, student, fy, kind }) {
     fy,
     monthly.filter((c) => c.dueDate === lastDue),
   );
+}
+
+/**
+ * A whole-year rebate (RTE, By Management, Scholarship) lowers EVERY month of the year, but only
+ * the months up to today are posted. This posts the rest of the year's monthly charges for the
+ * head(s) of `kind` so the rebate can cover them. Future months are not due yet, so "due till
+ * today" does not change. Safe to repeat (charges are never added twice).
+ */
+export async function postFullYear({ deps, tenantId, student, fy, kind }) {
+  const chart = await deps.feeStore.get(tenantId, fy);
+  if (!chart) return 0;
+  let all;
+  try {
+    all = chargesForStudent({ student, chart, fy, kinds: [kind], asOf: null });
+  } catch (err) {
+    if (err instanceof AppError) return 0; // the rebate step explains what is missing
+    throw err;
+  }
+  const monthly = all.filter((c) => MONTHLY.includes(c.head));
+  if (monthly.length === 0) return 0;
+  return deps.chargeStore.postMany(tenantId, student._id, fy, monthly);
 }

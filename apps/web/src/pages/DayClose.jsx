@@ -41,7 +41,7 @@ function TodayCard({ role }) {
   const q = useQuery({
     queryKey: ['day-close', 'summary'],
     queryFn: () => api('/api/day-close/summary'),
-    refetchInterval: 30_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 30_000),
   });
   const refresh = () => queryClient.invalidateQueries({ queryKey: ['day-close'] });
   const parsed = parseRupees(counted);

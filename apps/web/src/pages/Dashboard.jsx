@@ -18,7 +18,7 @@ function TodayCollection() {
   const q = useQuery({
     queryKey: ['receipts', 'today', today],
     queryFn: () => api(`/api/receipts?from=${today}&to=${today}&pageSize=1`),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
     retry: false,
   });
   return (
@@ -48,7 +48,7 @@ function Overview() {
   const q = useQuery({
     queryKey: ['dashboard', 'overview'],
     queryFn: () => api('/api/dashboard/overview'),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
     retry: false,
   });
   if (q.isPending) return <Spinner label="Loading the overview" />;
@@ -168,7 +168,7 @@ export function Dashboard() {
   const health = useQuery({
     queryKey: ['health'],
     queryFn: () => api('/api/health'),
-    refetchInterval: 30_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 30_000),
     retry: false,
   });
   return (

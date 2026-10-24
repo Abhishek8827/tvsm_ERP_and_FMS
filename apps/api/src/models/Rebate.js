@@ -20,8 +20,16 @@ const rebateSchema = new mongoose.Schema(
     // the fee MODULE (admission belongs to the school module) so the fee engine is unchanged.
     rebateType: { type: String, enum: ['school', 'transport', 'admission', null], default: null },
     // 'oldest' = lowers the oldest unpaid fee first; 'last' = lowers the LAST month's fee first
-    // (for BC / OTP style rebates that the school adjusts in the final month).
-    adjustOn: { type: String, enum: ['oldest', 'last'], default: 'oldest' },
+    // (BC / OTP); 'all' = lowers every month of the year (RTE / Management / Scholarship).
+    adjustOn: { type: String, enum: ['oldest', 'last', 'all'], default: 'oldest' },
+    // Why it was given (bc | otp | rte | management | scholarship | other). Older rows have none.
+    category: {
+      type: String,
+      enum: ['bc', 'otp', 'rte', 'management', 'scholarship', 'other', null],
+    },
+    // BC: the sibling whose fee the rebate is for. OTP: the receipt of the one-time payment.
+    sibling: { _id: false, admissionNo: String, name: String, classKey: String },
+    receiptNo: { type: String },
     totalPaise: { type: Number, required: true },
     lines: [
       {

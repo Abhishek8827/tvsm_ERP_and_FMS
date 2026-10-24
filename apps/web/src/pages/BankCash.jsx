@@ -551,7 +551,7 @@ function StaffView({ isAdmin }) {
   const q = useQuery({
     queryKey: ['money', 'overview'],
     queryFn: () => api('/api/money/overview'),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
   });
   if (q.isPending) return <Spinner label="Loading balances" />;
   if (q.isError) return <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />;

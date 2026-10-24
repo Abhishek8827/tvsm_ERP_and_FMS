@@ -647,7 +647,7 @@ export function Expenses() {
   const pending = useQuery({
     queryKey: ['money', 'pending'],
     queryFn: () => api('/api/money/pending'),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
   });
   const tabs = [
     ['vouchers', 'Expense vouchers'],

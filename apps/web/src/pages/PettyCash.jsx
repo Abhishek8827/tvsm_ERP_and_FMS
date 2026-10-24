@@ -198,7 +198,7 @@ function CashierView() {
   const q = useQuery({
     queryKey: ['petty', 'summary'],
     queryFn: () => api('/api/petty/summary'),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
   });
   if (q.isPending) return <Spinner label="Loading petty cash" />;
   if (q.isError) return <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />;

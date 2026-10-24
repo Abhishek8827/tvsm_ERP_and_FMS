@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { formatINR } from '@erp/shared';
 import { api } from '../api/client';
-import { Badge, Button, Card, ConfirmDialog, Table, useToast } from '../components/ui';
+import { Badge, Button, Card, ConfirmDialog, ErrorState, Table, useToast } from '../components/ui';
 import { errorText } from '../lib/rupees';
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
@@ -27,7 +27,7 @@ function Cancellations() {
   const query = useQuery({
     queryKey: ['receipt-cancellations', 'requested'],
     queryFn: () => api('/api/receipt-cancellations?status=requested&pageSize=50'),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
   });
   const decide = useMutation({
     mutationFn: () =>
@@ -149,7 +149,7 @@ function PendingVouchers() {
   const query = useQuery({
     queryKey: ['vouchers', 'pending-approvals'],
     queryFn: () => api('/api/vouchers?status=pending&pageSize=50'),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
   });
   const columns = [
     {
@@ -194,12 +194,14 @@ function PendingReversals() {
   const query = useQuery({
     queryKey: ['money', 'pending'],
     queryFn: () => api('/api/money/pending'),
-    refetchInterval: 60_000,
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
   });
   return (
     <Card title="Expense reversal requests">
       {query.isPending && <p className="text-sm text-ink-muted">Loading…</p>}
-      {query.isError && <p className="text-sm text-danger">{errorText(query.error)}</p>}
+      {query.isError && (
+        <ErrorState message={errorText(query.error)} onRetry={() => void query.refetch()} />
+      )}
       {query.data && (
         <p className="text-sm">
           {query.data.reversals === 0 ? (

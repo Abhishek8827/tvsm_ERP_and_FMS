@@ -52,6 +52,24 @@ describe('Principal approvals', () => {
     expect(await screen.findByText(/waiting\./)).toBeInTheDocument();
   });
 
+  it('allows retrying a failed reversal request without automatic retrying', async () => {
+    let attempts = 0;
+    api.mockImplementation(async (url) => {
+      if (url.startsWith('/api/receipt-cancellations?')) return cancels;
+      if (url.startsWith('/api/vouchers')) return { total: 0, rows: [] };
+      if (url === '/api/money/pending') {
+        attempts += 1;
+        if (attempts === 1) throw new Error('Temporary server error');
+        return { vouchers: 0, reversals: 2 };
+      }
+      return { ok: true };
+    });
+    show();
+    await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText(/waiting\./)).toBeInTheDocument();
+    expect(attempts).toBe(2);
+  });
+
   it('approve asks first, then calls the approve endpoint', async () => {
     show();
     await userEvent.click(await screen.findByRole('button', { name: 'Approve' }));

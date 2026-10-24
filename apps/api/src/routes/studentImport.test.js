@@ -158,4 +158,36 @@ describe('student Excel import', () => {
     const r2 = await send(app, Buffer.from('not excel'), false);
     expect(r2.body.error.code).toBe('BAD_FILE');
   });
+
+  it('imports Nationality, first admission date and class, PEN and APAAR ID; rejects a bad first-admission class', async () => {
+    const { app, saved } = build();
+    const file = await xlsx([
+      row({
+        'SCH.': 2001,
+        "STUDENT'S NAME": 'Chitra',
+        CLASS: '7',
+        NATIONALITY: 'Indian',
+        'DATE OF FIRST ADMISSION': '04/07/2019',
+        'CLASS AT FIRST ADMISSION': '1ST',
+        PEN: 'PEN123',
+        'APAAR ID': 'AP-9988',
+      }),
+      row({
+        'SCH.': 2002,
+        "STUDENT'S NAME": 'Dev',
+        CLASS: '7',
+        'CLASS AT FIRST ADMISSION': 'Mars',
+      }),
+    ]);
+    const done = await send(app, file, true);
+    expect(done.body).toMatchObject({ created: 1, skipped: 1 });
+    expect(saved[0]).toMatchObject({
+      nationality: 'Indian',
+      firstAdmissionClass: '1',
+      pen: 'PEN123',
+      aparId: 'AP-9988',
+    });
+    expect(saved[0].firstAdmissionDate.toISOString().slice(0, 10)).toBe('2019-07-04');
+    expect(JSON.stringify(done.body.errors[0])).toMatch(/CLASS AT FIRST ADMISSION/);
+  });
 });

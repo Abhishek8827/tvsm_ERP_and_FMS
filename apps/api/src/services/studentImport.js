@@ -22,6 +22,11 @@ export const TEMPLATE_HEADERS = [
   'AADHAAR NO.',
   'BANK AC.',
   'IFSC',
+  'NATIONALITY',
+  'DATE OF FIRST ADMISSION',
+  'CLASS AT FIRST ADMISSION',
+  'PEN',
+  'APAAR ID',
   'FORM NO.',
   'STATUS',
   'TRANSPORT',
@@ -52,6 +57,14 @@ const COLUMN = {
   AADHARNO: 'aadhaar',
   BANKAC: 'bankAccount',
   IFSC: 'ifsc',
+  NATIONALITY: 'nationality',
+  DATEOFFIRSTADMISSION: 'firstAdmissionDate',
+  FIRSTADMISSIONDATE: 'firstAdmissionDate',
+  CLASSATFIRSTADMISSION: 'firstAdmissionClass',
+  FIRSTADMISSIONCLASS: 'firstAdmissionClass',
+  PEN: 'pen',
+  APAARID: 'aparId',
+  APARID: 'aparId',
   FORMNO: 'formNo',
   STATUS: 'status',
   TRANSPORT: 'transport',
@@ -70,7 +83,7 @@ function text(v) {
   if (v instanceof Date) return '';
   return String(v).trim();
 }
-function parseDob(v) {
+function parseDob(v, what = 'Date of birth') {
   if (v === null || v === undefined || v === '') return { value: undefined };
   if (v instanceof Date && !Number.isNaN(v.getTime())) return { value: v };
   const m = String(v)
@@ -81,7 +94,7 @@ function parseDob(v) {
     const date = new Date(Date.UTC(y, mo - 1, d));
     if (date.getUTCMonth() === mo - 1 && date.getUTCDate() === d) return { value: date };
   }
-  return { error: 'Date of birth is not a valid date' };
+  return { error: `${what} is not a valid date` };
 }
 
 /**
@@ -134,6 +147,14 @@ export function parseStudentSheet(sheet) {
     }
     const dob = parseDob(raw.dob);
     if (dob.error) problems.push(dob.error);
+    const firstAdm = parseDob(raw.firstAdmissionDate, 'Date of first admission');
+    if (firstAdm.error) problems.push(firstAdm.error);
+    let firstAdmissionClass;
+    if (t('firstAdmissionClass')) {
+      firstAdmissionClass = normalizeClass(raw.firstAdmissionClass);
+      if (!firstAdmissionClass)
+        problems.push(`CLASS AT FIRST ADMISSION "${t('firstAdmissionClass')}" is not recognised`);
+    }
     const contactNo = t('contactNo');
     if (contactNo && !/^\d{10}$/.test(contactNo)) problems.push('CONTACT NO. must be 10 digits');
     const aadhaar = t('aadhaar');
@@ -183,6 +204,11 @@ export function parseStudentSheet(sheet) {
       aadhaar,
       bankAccount: t('bankAccount'),
       ifsc: t('ifsc'),
+      nationality: t('nationality'),
+      firstAdmissionDate: firstAdm.value,
+      firstAdmissionClass,
+      pen: t('pen'),
+      aparId: t('aparId'),
       formNo: t('formNo'),
       village,
       inactiveReason,

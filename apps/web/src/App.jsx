@@ -12,9 +12,10 @@ import { CollectFee } from './pages/CollectFee';
 import { ExpenseVoucher } from './pages/ExpenseVoucher';
 import { Expenses } from './pages/Expenses';
 import { PettyCash } from './pages/PettyCash';
-import { Transport } from './pages/Transport';
-import { Rebates } from './pages/Rebates';
 import { Cashbook } from './pages/Cashbook';
+import { TcBonafide } from './pages/TcBonafide';
+import { Rebates } from './pages/Rebates';
+import { Transport } from './pages/Transport';
 import { FeeStructure } from './pages/FeeStructure';
 import { FeesDatabase } from './pages/FeesDatabase';
 import { UsersSettings } from './pages/UsersSettings';
@@ -97,6 +98,7 @@ export function App() {
               i.key !== 'rebates' &&
               i.key !== 'transport' &&
               i.key !== 'cashbook' &&
+              i.key !== 'tc-bonafide' &&
               i.key !== 'day-close' &&
               i.key !== 'approvals' &&
               i.key !== 'users-settings',
@@ -118,6 +120,7 @@ export function App() {
         )}
         <Route path="/transport" element={<Transport />} />
         <Route path="/cashbook" element={<Cashbook />} />
+        <Route path="/tc-bonafide" element={<TcBonafide />} />
         <Route path="/day-close" element={<DayClose />} />
         {role === 'principal' && <Route path="/approvals" element={<Approvals />} />}
         {role === 'admin' && <Route path="/users-settings" element={<UsersSettings />} />}

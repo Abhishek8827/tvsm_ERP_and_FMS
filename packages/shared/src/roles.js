@@ -66,6 +66,22 @@ export const NAV_ITEMS = [
     availableFromStep: 8,
   },
   {
+    key: 'transport',
+    label: 'Transport',
+    path: '/transport',
+    // Everyone can look (the Cashier needs it at the counter); only the Admin changes it.
+    roles: ROLES,
+    availableFromStep: 8,
+  },
+  {
+    key: 'cashbook',
+    label: 'Cashbook',
+    path: '/cashbook',
+    // The school's daily notebook as a report. Everyone can look; only the Admin edits settings.
+    roles: ROLES,
+    availableFromStep: 8,
+  },
+  {
     key: 'expenses',
     label: 'Expenses',
     path: '/expenses',

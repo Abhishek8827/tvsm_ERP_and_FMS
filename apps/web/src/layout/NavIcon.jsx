@@ -46,6 +46,12 @@ const P = {
       <circle cx="16" cy="13.5" r=".6" />
     </>
   ),
+  cashbook: (
+    <>
+      <path d="M6 4h11a1 1 0 0 1 1 1v15H7a1 1 0 0 1-1-1V4Z" />
+      <path d="M9 9h6M9 13h6" />
+    </>
+  ),
   expenses: <path d="M7 17 17 7M9 7h8v8" />,
   'petty-cash': (
     <>

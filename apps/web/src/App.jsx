@@ -14,6 +14,7 @@ import { Expenses } from './pages/Expenses';
 import { PettyCash } from './pages/PettyCash';
 import { Transport } from './pages/Transport';
 import { Rebates } from './pages/Rebates';
+import { Cashbook } from './pages/Cashbook';
 import { FeeStructure } from './pages/FeeStructure';
 import { FeesDatabase } from './pages/FeesDatabase';
 import { UsersSettings } from './pages/UsersSettings';
@@ -95,6 +96,7 @@ export function App() {
               i.key !== 'fees-database' &&
               i.key !== 'rebates' &&
               i.key !== 'transport' &&
+              i.key !== 'cashbook' &&
               i.key !== 'day-close' &&
               i.key !== 'approvals' &&
               i.key !== 'users-settings',
@@ -115,6 +117,7 @@ export function App() {
           <Route path="/rebates" element={<Rebates />} />
         )}
         <Route path="/transport" element={<Transport />} />
+        <Route path="/cashbook" element={<Cashbook />} />
         <Route path="/day-close" element={<DayClose />} />
         {role === 'principal' && <Route path="/approvals" element={<Approvals />} />}
         {role === 'admin' && <Route path="/users-settings" element={<UsersSettings />} />}

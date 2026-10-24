@@ -7,6 +7,8 @@ import { Clock } from './Clock';
 import { Footer } from './Footer';
 
 const ROLE_LABEL = { admin: 'Admin', principal: 'Principal', cashier: 'Cashier' };
+// The centre of the top bar: the cashier works at the fee counter.
+const HEADER_LABEL = { admin: 'Admin', principal: 'Principal', cashier: 'Counter 1' };
 /** Steps already built. Anything later is shown with a "Soon" tag, never as a dead link. */
 export const CURRENT_STEP = 8;
 const KEY = 'erp.sidebarCollapsed';
@@ -172,29 +174,46 @@ export function AppShell() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-line bg-surface px-3 py-2 md:px-6">
-          <Hamburger
-            className="md:hidden"
-            aria-label="Open menu"
-            aria-expanded={open}
-            aria-controls="mobile-menu"
-            onClick={() => setOpen(true)}
-          />
-          <Hamburger
-            className="hidden md:flex"
-            aria-label={collapsed ? 'Show sidebar' : 'Hide sidebar'}
-            aria-expanded={!collapsed}
-            onClick={toggleDesktop}
-          />
-          <span className="flex min-w-0 items-center gap-2 font-semibold">
+        {/* Three columns: menu + school name | the role in the middle | clock + who is signed in. */}
+        <header className="sticky top-0 z-30 grid grid-cols-[1fr_auto_1fr] items-center gap-2 border-b border-line bg-surface px-3 py-2 shadow-sm md:px-6">
+          <div className="flex min-w-0 items-center gap-2">
+            <Hamburger
+              className="md:hidden"
+              aria-label="Open menu"
+              aria-expanded={open}
+              aria-controls="mobile-menu"
+              onClick={() => setOpen(true)}
+            />
+            <Hamburger
+              className="hidden md:flex"
+              aria-label={collapsed ? 'Show sidebar' : 'Hide sidebar'}
+              aria-expanded={!collapsed}
+              onClick={toggleDesktop}
+            />
             <img src="/logo.jpg" alt="" className="h-8 w-auto rounded md:hidden" />
-            <span className="truncate">TVSM School ERP</span>
-          </span>
-          <div className="ml-auto flex items-center gap-4">
+            <span className="hidden truncate text-sm font-semibold text-ink lg:block">
+              TVSM School ERP
+            </span>
+          </div>
+          <p
+            data-testid="header-role"
+            className="rounded-full bg-sidebar px-5 py-1.5 text-center text-sm font-semibold tracking-wide text-white"
+          >
+            {HEADER_LABEL[role]}
+          </p>
+          <div className="flex min-w-0 items-center justify-end gap-3">
             <Clock />
-            <div className="hidden text-right text-xs leading-tight sm:block">
-              <p className="font-medium">{user.name}</p>
-              <p className="text-ink-muted">{ROLE_LABEL[role]}</p>
+            <div className="hidden items-center gap-2 border-l border-line pl-3 sm:flex">
+              <span
+                aria-hidden="true"
+                className="flex h-8 w-8 items-center justify-center rounded-full bg-app text-sm font-semibold text-ink"
+              >
+                {(user.name ?? '?').trim().charAt(0).toUpperCase()}
+              </span>
+              <div className="min-w-0 text-xs leading-tight">
+                <p className="truncate font-medium">{user.name}</p>
+                <p className="text-ink-muted">{ROLE_LABEL[role]}</p>
+              </div>
             </div>
           </div>
         </header>

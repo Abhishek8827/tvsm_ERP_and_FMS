@@ -50,4 +50,25 @@ describe('Sidebar', () => {
     at('/');
     expect(screen.queryByRole('link', { name: /Rebates/ })).toBeNull();
   });
+  it('the middle of the top bar names the role: Admin, Principal, Counter 1', () => {
+    for (const [r, label] of [
+      ['admin', 'Admin'],
+      ['principal', 'Principal'],
+      ['cashier', 'Counter 1'],
+    ]) {
+      role = r;
+      const { unmount } = at('/');
+      expect(screen.getByTestId('header-role')).toHaveTextContent(label);
+      unmount();
+    }
+  });
+  it('everyone has Transport and Cashbook links', () => {
+    for (const r of ['admin', 'principal', 'cashier']) {
+      role = r;
+      const { unmount } = at('/');
+      expect(screen.getByRole('link', { name: /Transport/ })).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Cashbook/ })).toBeInTheDocument();
+      unmount();
+    }
+  });
 });

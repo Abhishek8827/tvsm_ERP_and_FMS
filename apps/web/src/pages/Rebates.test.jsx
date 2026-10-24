@@ -74,17 +74,22 @@ describe('Rebates screen', () => {
     show();
     expect(await screen.findByText('No rebates yet')).toBeInTheDocument();
   });
-  it('ticking a type opens its amount box; the rebate is sent in paise with the reason', async () => {
-    route({
-      '/api/rebates?': list,
-      '/api/students?': { rows: [{ id: 's1', name: 'Asha', admissionNo: '7', classKey: '5th' }] },
-      '/api/rebates': { created: [rebate()], failed: [] },
-    });
+  const asha = { id: 's1', name: 'Asha', fatherName: 'Raj', admissionNo: '7', classKey: '5th', section: 'A', address: 'Dhanora', contactNo: '99', status: 'active' }; // prettier-ignore
+  const ravi = { ...asha, id: 's2', name: 'Ravi', admissionNo: '8', classKey: '2' };
+  const giveRoutes = () => ({
+    '/api/rebates?': list,
+    '/api/rebates/lookup/7': asha,
+    '/api/rebates/lookup/8': ravi,
+    '/api/rebates': { created: [rebate()], failed: [] },
+  });
+  it('scholar number shows the details; ticking a type opens its amount box; paise + reason are sent', async () => {
+    route(giveRoutes());
     show();
     await userEvent.click(await screen.findByRole('button', { name: 'Give rebate' }));
     const dlg = within(await screen.findByRole('dialog'));
-    await userEvent.type(dlg.getByLabelText('Student'), 'Asha');
-    await userEvent.click(await dlg.findByRole('button', { name: /Asha/ }));
+    await userEvent.type(dlg.getByLabelText('Scholar number (Sch. ID)'), '7');
+    expect(await dlg.findByText('Dhanora')).toBeInTheDocument();
+    expect(dlg.getByText('Raj')).toBeInTheDocument();
     expect(dlg.queryByLabelText('School fees rebate (₹)')).toBeNull();
     await userEvent.click(dlg.getByLabelText('School fees'));
     await userEvent.click(dlg.getByLabelText('Admission fees'));
@@ -93,7 +98,7 @@ describe('Rebates screen', () => {
     await userEvent.selectOptions(dlg.getByLabelText('Reduce which fee'), 'last');
     const give = dlg.getByRole('button', { name: 'Give rebate' });
     expect(give).toBeDisabled(); // reason missing
-    await userEvent.type(dlg.getByLabelText(/Reason/), 'BC');
+    await userEvent.type(dlg.getByLabelText(/Reason/), 'staff child');
     await userEvent.click(give);
     const post = api.mock.calls.find((c) => c[0] === '/api/rebates' && c[1]?.method === 'POST');
     expect(post[1].body).toEqual({
@@ -102,9 +107,61 @@ describe('Rebates screen', () => {
         { type: 'school', amountPaise: 50000 },
         { type: 'admission', amountPaise: 150050 },
       ],
-      reason: 'BC',
+      reason: 'staff child',
+      category: 'other',
       adjustOn: 'last',
     });
+  });
+  it('BC asks for the sibling (shows name and class) and OTP asks for the receipt number', async () => {
+    route(giveRoutes());
+    show();
+    await userEvent.click(await screen.findByRole('button', { name: 'Give rebate' }));
+    const dlg = within(await screen.findByRole('dialog'));
+    await userEvent.type(dlg.getByLabelText('Scholar number (Sch. ID)'), '7');
+    await dlg.findByText('Dhanora');
+    await userEvent.click(dlg.getByLabelText('School fees'));
+    await userEvent.type(dlg.getByLabelText('School fees rebate (₹)'), '500');
+    await userEvent.type(dlg.getByLabelText(/Reason/), 'BC');
+    await userEvent.selectOptions(dlg.getByLabelText('Rebate category'), 'bc');
+    expect(dlg.queryByLabelText('Reduce which fee')).toBeNull();
+    const give = dlg.getByRole('button', { name: 'Give rebate' });
+    expect(give).toBeDisabled(); // sibling missing
+    await userEvent.type(dlg.getByLabelText("Sibling's scholar number"), '8');
+    expect(await dlg.findByText('Ravi')).toBeInTheDocument();
+    expect(give).toBeEnabled();
+    await userEvent.click(give);
+    const post = api.mock.calls.find((c) => c[0] === '/api/rebates' && c[1]?.method === 'POST');
+    expect(post[1].body).toMatchObject({ category: 'bc', siblingNo: '8' });
+  });
+  it('OTP needs the receipt number before the button works', async () => {
+    route(giveRoutes());
+    show();
+    await userEvent.click(await screen.findByRole('button', { name: 'Give rebate' }));
+    const dlg = within(await screen.findByRole('dialog'));
+    await userEvent.type(dlg.getByLabelText('Scholar number (Sch. ID)'), '7');
+    await dlg.findByText('Dhanora');
+    await userEvent.click(dlg.getByLabelText('School fees'));
+    await userEvent.type(dlg.getByLabelText('School fees rebate (₹)'), '500');
+    await userEvent.type(dlg.getByLabelText(/Reason/), 'OTP');
+    await userEvent.selectOptions(dlg.getByLabelText('Rebate category'), 'otp');
+    const give = dlg.getByRole('button', { name: 'Give rebate' });
+    expect(give).toBeDisabled();
+    await userEvent.type(dlg.getByLabelText(/Receipt number/), '2054');
+    expect(give).toBeEnabled();
+  });
+  it('an unknown scholar number says so and keeps Give rebate disabled', async () => {
+    route({
+      '/api/rebates/lookup/99': () => {
+        throw Object.assign(new Error('Student not found'), { status: 404 });
+      },
+      ...giveRoutes(),
+    });
+    show();
+    await userEvent.click(await screen.findByRole('button', { name: 'Give rebate' }));
+    const dlg = within(await screen.findByRole('dialog'));
+    await userEvent.type(dlg.getByLabelText('Scholar number (Sch. ID)'), '99');
+    expect(await dlg.findByText('Scholar number not found.')).toBeInTheDocument();
+    expect(dlg.getByRole('button', { name: 'Give rebate' })).toBeDisabled();
   });
   it('import: check the file first, then import', async () => {
     route({

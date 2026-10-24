@@ -2,7 +2,14 @@ import express, { Router } from 'express';
 import { readSheet } from 'read-excel-file/universal';
 import writeXlsxFile from 'write-excel-file/node';
 import { z } from 'zod';
-import { classLabel, getFinancialYear, istDateString } from '@erp/shared';
+import {
+  REBATE_ADJUST_KEYS,
+  REBATE_CATEGORIES,
+  REBATE_CATEGORY_KEYS,
+  classLabel,
+  getFinancialYear,
+  istDateString,
+} from '@erp/shared';
 import { requireRole } from '../middleware/requireRole.js';
 import { recordAudit } from '../services/audit.js';
 import {
@@ -11,6 +18,7 @@ import {
   REBATE_TYPE_KEYS,
   giveRebate,
   parseRebateSheet,
+  resolveExtras,
   shapeRebate,
 } from '../services/rebates.js';
 import { AppError, notFound } from '../utils/errors.js';
@@ -45,8 +53,14 @@ const createBody = z.object({
     .max(3),
   // min 2: short real reasons like "BC" must be allowed.
   reason: z.string().trim().min(2, 'Write the reason').max(300),
-  adjustOn: z.enum(['oldest', 'last']).default('oldest'),
+  // Why it is given. BC needs siblingNo, OTP needs receiptNo (checked against real records).
+  category: z.enum(REBATE_CATEGORY_KEYS).default('other'),
+  siblingNo: z.string().trim().max(30).optional(),
+  receiptNo: z.string().trim().max(40).optional(),
+  // Only used for category "other"; the other categories decide it themselves.
+  adjustOn: z.enum(REBATE_ADJUST_KEYS).default('oldest'),
 });
+const ADJUST_LABEL = { last: 'Last month', all: 'All months', oldest: 'Oldest unpaid' };
 const importQuery = z.object({ commit: z.enum(['true', 'false']).default('false') });
 
 /**
@@ -64,6 +78,28 @@ export function rebatesRouter(deps, authenticate) {
       next(err);
     }
   };
+
+  // Scholar number -> the student's details, shown on the Give-rebate form before saving.
+  router.get(
+    '/rebates/lookup/:admissionNo',
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const no = z.string().trim().min(1).max(30).parse(req.params.admissionNo);
+      const [s] = await deps.studentStore.findByAdmissionNos(req.user.tenantId, [no]);
+      if (!s) throw notFound('Student');
+      res.json({
+        id: String(s._id),
+        admissionNo: s.admissionNo,
+        name: s.name,
+        fatherName: s.fatherName ?? '',
+        classKey: s.classKey,
+        section: s.section ?? '',
+        address: s.address ?? '',
+        contactNo: s.contactNo ?? '',
+        status: s.status,
+      });
+    }),
+  );
 
   router.get(
     '/rebates',
@@ -94,6 +130,9 @@ export function rebatesRouter(deps, authenticate) {
         'Class',
         'Rebate type',
         'Amount (₹)',
+        'Category',
+        'Sibling Sch. ID',
+        'Receipt no',
         'Adjusted on',
         'Reason',
         'Status',
@@ -110,7 +149,10 @@ export function rebatesRouter(deps, authenticate) {
           r.student?.classKey ? classLabel(r.student.classKey) : '',
           label(r.type) ?? r.type,
           r.totalPaise / 100,
-          r.type === 'late_fee' ? '' : r.adjustOn === 'last' ? 'Last month' : 'Oldest unpaid',
+          r.category ? (REBATE_CATEGORIES[r.category]?.label ?? '') : '',
+          r.sibling?.admissionNo ?? '',
+          r.receiptNo ?? '',
+          r.type === 'late_fee' ? '' : (ADJUST_LABEL[r.adjustOn] ?? 'Oldest unpaid'),
           r.reason,
           r.status === 'reversed' ? `Reversed: ${r.reversedReason ?? ''}` : 'Active',
           istDateString(new Date(r.createdAt)),
@@ -142,7 +184,7 @@ export function rebatesRouter(deps, authenticate) {
       const rows = [
         REBATE_IMPORT_HEADERS.map((value) => ({ value, fontWeight: 'bold' })),
         // One example line so the Admin sees the format (clearly not real data: SCH. ID is text).
-        ['1234', 'school', 500, 'BC rebate', 'last'],
+        ['1234', 'school', 500, 'BC rebate', 'BC', '5678', '', ''],
       ];
       const buffer = await writeXlsxFile(rows).toBuffer();
       res
@@ -165,6 +207,14 @@ export function rebatesRouter(deps, authenticate) {
       const student = await deps.studentStore.findById(tenantId, body.studentId);
       if (!student) throw notFound('Student');
       const fy = body.fy ?? getFinancialYear(new Date());
+      const extras = await resolveExtras({
+        deps,
+        tenantId,
+        student,
+        category: body.category,
+        siblingNo: body.siblingNo,
+        receiptNo: body.receiptNo,
+      });
       const created = [];
       const failed = [];
       for (const item of body.items) {
@@ -178,6 +228,8 @@ export function rebatesRouter(deps, authenticate) {
             amountPaise: item.amountPaise,
             reason: body.reason,
             adjustOn: body.adjustOn,
+            category: body.category,
+            ...extras,
           });
           created.push(shapeRebate(saved));
         } catch (err) {
@@ -247,6 +299,21 @@ export function rebatesRouter(deps, authenticate) {
           });
           continue;
         }
+        let extras;
+        try {
+          extras = await resolveExtras({
+            deps,
+            tenantId,
+            student,
+            category: r.category,
+            siblingNo: r.siblingNo,
+            receiptNo: r.receiptNo,
+          });
+        } catch (err) {
+          if (!(err instanceof AppError)) throw err;
+          errors.push({ row: r.row, message: `SCH. ${r.admissionNo}: ${err.message}` });
+          continue;
+        }
         ready += 1;
         if (commit !== 'true') continue;
         try {
@@ -259,6 +326,8 @@ export function rebatesRouter(deps, authenticate) {
             amountPaise: r.amountPaise,
             reason: r.reason,
             adjustOn: r.adjustOn,
+            category: r.category,
+            ...extras,
           });
           created += 1;
         } catch (err) {

@@ -1,7 +1,7 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { classLabel, formatINR } from '@erp/shared';
+import { REBATE_CATEGORIES, REBATE_CATEGORY_KEYS, classLabel, formatINR } from '@erp/shared';
 import { api } from '../api/client';
 import { useAuth } from '../auth/AuthContext';
 import {
@@ -33,8 +33,15 @@ const TYPE_LABEL = {
 };
 const ADJUST_OPTIONS = [
   { value: 'oldest', label: 'Oldest unpaid fee first (normal)' },
-  { value: 'last', label: "Last month's fee (BC, OTP and similar)" },
+  { value: 'last', label: "Last month's fee" },
+  { value: 'all', label: 'All months of the year' },
 ];
+const ADJUST_LABEL = { oldest: 'Oldest unpaid', last: 'Last month', all: 'All months' };
+const ADJUST_HINT = {
+  last: "Lowers the last month's fee of the year.",
+  all: 'Lowers every month of the year (the months not started yet are posted for this).',
+  other: 'You choose below which fee it lowers.',
+};
 
 async function download(path, name, notify) {
   try {
@@ -133,9 +140,23 @@ export function Rebates() {
       render: (r) =>
         r.type === 'late_fee'
           ? r.periods.join(', ')
-          : r.adjustOn === 'last'
-            ? 'Last month'
-            : 'Oldest unpaid',
+          : (ADJUST_LABEL[r.adjustOn] ?? 'Oldest unpaid'),
+    },
+    {
+      key: 'cat',
+      header: 'Category',
+      render: (r) => (
+        <div>
+          {r.category ? REBATE_CATEGORIES[r.category]?.label : '-'}
+          {r.sibling && (
+            <p className="text-xs text-ink-muted">
+              Sibling: {r.sibling.name} (Sch. {r.sibling.admissionNo},{' '}
+              {classLabel(r.sibling.classKey)})
+            </p>
+          )}
+          {r.receiptNo && <p className="text-xs text-ink-muted">Receipt: {r.receiptNo}</p>}
+        </div>
+      ),
     },
     { key: 'reason', header: 'Reason', render: (r) => r.reason },
     {
@@ -303,31 +324,50 @@ export function Rebates() {
   );
 }
 
-/** Pick a student by typing, tick the rebate types (an amount box opens for each), give a reason. */
+/** Looks a student up by scholar number (waits a moment after typing; no request while empty). */
+function useScholar(text) {
+  const [no, setNo] = useState('');
+  useEffect(() => {
+    const t = window.setTimeout(() => setNo(text.trim()), 400);
+    return () => window.clearTimeout(t);
+  }, [text]);
+  const query = useQuery({
+    queryKey: ['rebate-lookup', no],
+    enabled: no.length > 0,
+    retry: false,
+    queryFn: () => api(`/api/rebates/lookup/${encodeURIComponent(no)}`),
+  });
+  const waiting = text.trim() !== no || (no.length > 0 && query.isPending);
+  return { student: text.trim() === no ? (query.data ?? null) : null, waiting, query, no };
+}
+
+/**
+ * Give rebate: type the scholar number (the student's details appear), choose why (category),
+ * tick what it is on and the amount, and write a reason. BC asks for the sibling, OTP for the
+ * receipt number. The category also decides which months it lowers (see the hint under it).
+ */
 function GiveDialog({ onClose }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const [text, setText] = useState('');
-  const [q, setQ] = useState('');
-  const [student, setStudent] = useState(null);
+  const [schNo, setSchNo] = useState('');
+  const [category, setCategory] = useState('other');
+  const [sibNo, setSibNo] = useState('');
+  const [receiptNo, setReceiptNo] = useState('');
   const [ticked, setTicked] = useState({}); // type -> amount text
   const [reason, setReason] = useState('');
   const [adjustOn, setAdjustOn] = useState('oldest');
-  useEffect(() => {
-    const t = window.setTimeout(() => setQ(text.trim()), 300);
-    return () => window.clearTimeout(t);
-  }, [text]);
-  const found = useQuery({
-    queryKey: ['rebate-student-search', q],
-    enabled: q.length >= 2 && !student,
-    queryFn: () => api(`/api/students?status=active&pageSize=8&q=${encodeURIComponent(q)}`),
-  });
+  const main = useScholar(schNo);
+  const sib = useScholar(sibNo);
+  const student = main.student;
+  const needs = REBATE_CATEGORIES[category].needs;
   const items = Object.entries(ticked).map(([type, text]) => ({ type, parsed: parseRupees(text) }));
   const ready =
     !!student &&
     items.length > 0 &&
     items.every((i) => !i.parsed.error && i.parsed.paise > 0) &&
-    reason.trim().length >= 2;
+    reason.trim().length >= 2 &&
+    (needs !== 'sibling' || (!!sib.student && sib.student.id !== student.id)) &&
+    (needs !== 'receipt' || receiptNo.trim().length > 0);
   const save = useMutation({
     mutationFn: () =>
       api('/api/rebates', {
@@ -336,6 +376,9 @@ function GiveDialog({ onClose }) {
           studentId: student.id,
           items: items.map((i) => ({ type: i.type, amountPaise: i.parsed.paise })),
           reason: reason.trim(),
+          category,
+          ...(needs === 'sibling' ? { siblingNo: sib.student.admissionNo } : {}),
+          ...(needs === 'receipt' ? { receiptNo: receiptNo.trim() } : {}),
           adjustOn,
         },
       }),
@@ -356,6 +399,14 @@ function GiveDialog({ onClose }) {
       else next[type] = '';
       return next;
     });
+  const lookupNote = (l, label) =>
+    l.waiting ? (
+      <p className="mt-1 text-xs text-ink-muted">Searching…</p>
+    ) : l.query.isError ? (
+      <p className="mt-1 text-xs text-danger">
+        {l.query.error?.status === 404 ? `${label} not found.` : errorText(l.query.error)}
+      </p>
+    ) : null;
   return (
     <Dialog
       open
@@ -373,56 +424,88 @@ function GiveDialog({ onClose }) {
       }
     >
       <div className="flex flex-col gap-3">
-        {student ? (
-          <div className="flex items-center justify-between rounded-lg border border-line bg-app p-3">
+        <div>
+          <Input
+            label="Scholar number (Sch. ID)"
+            value={schNo}
+            onChange={(e) => setSchNo(e.target.value)}
+          />
+          {lookupNote(main, 'Scholar number')}
+        </div>
+        {student && (
+          <dl className="grid gap-x-4 gap-y-1 rounded-lg border border-line bg-app p-3 text-sm sm:grid-cols-2">
             <div>
-              <p className="font-medium">{student.name}</p>
-              <p className="text-xs text-ink-muted">
-                Sch. {student.admissionNo} · {classLabel(student.classKey)}
-              </p>
+              <dt className="text-xs text-ink-muted">Student</dt>
+              <dd className="font-medium">{student.name}</dd>
             </div>
-            <button
-              type="button"
-              className="text-sm text-brand hover:underline"
-              onClick={() => setStudent(null)}
-            >
-              Change
-            </button>
-          </div>
-        ) : (
+            <div>
+              <dt className="text-xs text-ink-muted">Father</dt>
+              <dd>{student.fatherName || '-'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-ink-muted">Class</dt>
+              <dd>
+                {classLabel(student.classKey)}
+                {student.section ? ` - ${student.section}` : ''}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-ink-muted">Contact</dt>
+              <dd>{student.contactNo || '-'}</dd>
+            </div>
+            <div className="sm:col-span-2">
+              <dt className="text-xs text-ink-muted">Address</dt>
+              <dd>{student.address || '-'}</dd>
+            </div>
+            {student.status !== 'active' && (
+              <div className="sm:col-span-2">
+                <Badge tone="warning">This student is {student.status}</Badge>
+              </div>
+            )}
+          </dl>
+        )}
+
+        <Select
+          label="Rebate category"
+          value={category}
+          onChange={(e) => setCategory(e.target.value)}
+          options={REBATE_CATEGORY_KEYS.map((k) => ({
+            value: k,
+            label: REBATE_CATEGORIES[k].label,
+          }))}
+        />
+        <p className="-mt-2 text-xs text-ink-muted">
+          {ADJUST_HINT[REBATE_CATEGORIES[category].adjustOn ?? 'other']}
+        </p>
+
+        {needs === 'sibling' && (
           <div>
             <Input
-              label="Student"
-              placeholder="Type name or Sch. ID (2+ letters)"
-              value={text}
-              onChange={(e) => setText(e.target.value)}
+              label="Sibling's scholar number"
+              value={sibNo}
+              onChange={(e) => setSibNo(e.target.value)}
             />
-            {found.isPending && q.length >= 2 && (
-              <p className="mt-2 text-sm text-ink-muted">Searching…</p>
-            )}
-            {found.isError && <p className="mt-2 text-sm text-danger">{errorText(found.error)}</p>}
-            {found.data && found.data.rows.length === 0 && (
-              <p className="mt-2 text-sm text-ink-muted">No active student found.</p>
-            )}
-            {found.data && found.data.rows.length > 0 && (
-              <ul className="mt-2 divide-y divide-line rounded-lg border border-line">
-                {found.data.rows.map((s) => (
-                  <li key={s.id}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-app"
-                      onClick={() => setStudent(s)}
-                    >
-                      <span>{s.name}</span>
-                      <span className="text-xs text-ink-muted">
-                        Sch. {s.admissionNo} · {classLabel(s.classKey)}
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+            {lookupNote(sib, 'Sibling')}
+            {sib.student && (
+              <p className="mt-1 text-sm">
+                {sib.student.id === student?.id ? (
+                  <span className="text-danger">The sibling must be a different student.</span>
+                ) : (
+                  <>
+                    <b>{sib.student.name}</b> · {classLabel(sib.student.classKey)}
+                  </>
+                )}
+              </p>
             )}
           </div>
+        )}
+        {needs === 'receipt' && (
+          <Input
+            label="Receipt number of the one time payment"
+            placeholder="e.g. S-FY2026-27/2054 or 2054"
+            value={receiptNo}
+            onChange={(e) => setReceiptNo(e.target.value)}
+          />
         )}
 
         <fieldset className="flex flex-col gap-2">
@@ -452,20 +535,23 @@ function GiveDialog({ onClose }) {
           ))}
         </fieldset>
 
-        <Select
-          label="Reduce which fee"
-          options={ADJUST_OPTIONS}
-          value={adjustOn}
-          onChange={(e) => setAdjustOn(e.target.value)}
-        />
+        {category === 'other' && (
+          <Select
+            label="Reduce which fee"
+            options={ADJUST_OPTIONS}
+            value={adjustOn}
+            onChange={(e) => setAdjustOn(e.target.value)}
+          />
+        )}
         <Input
-          label="Reason (required, e.g. BC, OTP, staff child)"
+          label="Reason (required)"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
         <p className="text-xs text-ink-muted">
-          A rebate can never be more than what is still unpaid. Admission rebate always lowers the
-          admission fee. It is recorded with your reason and can be reversed later.
+          A rebate can never be more than the fee of the months it covers that is still unpaid.
+          Admission rebate always lowers the admission fee. It is recorded with your reason and can
+          be reversed later.
         </p>
       </div>
     </Dialog>
@@ -495,9 +581,11 @@ function ImportPanel({ onDone }) {
       <Card title="1. Get the template">
         <p className="text-sm text-ink-muted">
           One row per rebate: SCH. ID, REBATE TYPE (school / transport / admission), AMOUNT (₹) and
-          REASON. The optional ADJUST ON column can say "last" for BC / OTP style rebates that
-          reduce the last month's fee (empty = oldest unpaid fee first). The same rebate (student,
-          type, amount, reason) is never given twice, so importing a file again is safe.
+          REASON. Optional CATEGORY (BC, OTP, RTE, By Management, Scholarship, Other): BC needs
+          SIBLING SCH. ID, OTP needs RECEIPT NO. The category decides which months are lowered;
+          without a category the ADJUST ON column ("last", "all" or empty = oldest unpaid first) is
+          used. The same rebate (student, type, amount, reason) is never given twice, so importing a
+          file again is safe.
         </p>
         <div className="mt-3">
           <Button

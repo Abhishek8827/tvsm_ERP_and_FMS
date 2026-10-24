@@ -70,6 +70,9 @@ export function makeRebateStore() {
       audit,
       rebateType = null,
       adjustOn = 'oldest',
+      category = null,
+      sibling = undefined,
+      receiptNo = undefined,
     }) {
       const session = await mongoose.startSession();
       try {
@@ -103,6 +106,9 @@ export function makeRebateStore() {
                 kind,
                 rebateType,
                 adjustOn,
+                category,
+                sibling,
+                receiptNo,
                 reason,
                 lines,
                 periods,

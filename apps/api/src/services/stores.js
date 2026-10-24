@@ -184,6 +184,39 @@ export function makeStudentStore() {
       }).lean(),
     findByAdmissionNos: (tenantId, list) =>
       Student.find({ tenantId, admissionNo: { $in: list } }).lean(),
+    /**
+     * The Transport module list. state: 'on' (on the bus now), 'stopped' (was on the bus),
+     * 'pending' (flagged as bus student in the old Excel but not entered in the module yet),
+     * or none = all three. Numbers sort as numbers.
+     */
+    async listTransport(tenantId, { q, state, page = 1, pageSize = 25, all = false } = {}) {
+      const f = { tenantId, status: 'active' };
+      const states = {
+        on: { usesTransport: true, transportFrom: { $exists: true, $ne: null } },
+        stopped: { usesTransport: false, transportFrom: { $exists: true, $ne: null } },
+        pending: {
+          usesTransport: true,
+          $or: [{ transportFrom: { $exists: false } }, { transportFrom: null }],
+        },
+      };
+      // addTextSearch fills f.$and, so the text filter goes first and "any transport" joins it.
+      addTextSearch(f, q);
+      if (state) Object.assign(f, states[state]);
+      else
+        f.$and = [
+          ...(f.$and ?? []),
+          { $or: [{ usesTransport: true }, { transportFrom: { $exists: true, $ne: null } }] },
+        ];
+      const cursor = Student.find(f)
+        .select(
+          'admissionNo name fatherName classKey section contactNo address village usesTransport transportFrom transportUntil',
+        )
+        .collation(NUMERIC)
+        .sort({ admissionNo: 1 });
+      if (!all) cursor.skip((page - 1) * pageSize).limit(pageSize);
+      const [rows, total] = await Promise.all([cursor.lean(), Student.countDocuments(f)]);
+      return { rows, total };
+    },
     async createMany(tenantId, docs) {
       const made = await Student.insertMany(
         docs.map((d) => ({ ...d, tenantId, nameLower: d.name.toLowerCase() })),
@@ -233,6 +266,8 @@ export function makeChargeStore() {
         .lean();
       return new Set(rows.map((r) => `${r.studentId}|${r.head}`));
     },
+    // Used when a student leaves the bus: unpaid, unreferenced transport months are removed.
+    deleteByIds: (tenantId, ids) => Charge.deleteMany({ tenantId, _id: { $in: ids } }),
     // Adds many single charges at once; existing ones (same student/head/period) are left alone.
     async postBatch(tenantId, fy, items) {
       if (items.length === 0) return 0;
@@ -391,6 +426,16 @@ export function makeReceiptStore() {
         }
       }
       throw lastError;
+    },
+    // A receipt of this student by its full number ("S-FY2026-27/2054") or just the digits
+    // ("2054"). Cancelled receipts are not returned (they carry no money).
+    async findForStudentByNumber(tenantId, studentId, text) {
+      const t = String(text).trim();
+      const or = [{ number: t }];
+      if (/^\d{1,9}$/.test(t)) or.push({ seq: Number(t) });
+      const rows = await Receipt.find({ tenantId, studentId, $or: or }).lean();
+      const gone = new Set((await cancelledReceiptIds(tenantId, { studentId })).map(String));
+      return rows.find((r) => !gone.has(String(r._id))) ?? null;
     },
     async findById(tenantId, id) {
       const receipt = await Receipt.findOne({ tenantId, _id: id }).lean();

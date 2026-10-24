@@ -54,6 +54,7 @@ function build({
   const rebates = [];
   const students = [
     { _id: ID, admissionNo: '7', name: 'Asha', classKey: '5th', section: 'A', status: 'active' },
+    { _id: 'b'.repeat(24), admissionNo: '8', name: 'Ravi', classKey: '2', status: 'active' },
   ];
   const deps = {
     verifyToken: async (t) => ({ uid: t, role: t, tenantId: TENANT }),
@@ -62,6 +63,10 @@ function build({
     studentStore: {
       findById: async (_t, id) => students.find((s) => s._id === id) ?? null,
       findByAdmissionNos: async (_t, nos) => students.filter((s) => nos.includes(s.admissionNo)),
+    },
+    receiptStore: {
+      findForStudentByNumber: async (_t, _s, text) =>
+        ['S-FY2026-27/0011', '11'].includes(text) ? { number: 'S-FY2026-27/0011' } : null,
     },
     feeStore: { get: async () => chart },
     chargeStore: {
@@ -82,7 +87,17 @@ function build({
           (r) =>
             r.rebateType === q.rebateType && r.totalPaise === q.totalPaise && r.reason === q.reason,
         ),
-      create: async ({ build: b, reason, kind, rebateType, adjustOn, audit: log }) => {
+      create: async ({
+        build: b,
+        reason,
+        kind,
+        rebateType,
+        adjustOn,
+        category,
+        sibling,
+        receiptNo,
+        audit: log,
+      }) => {
         const lines = b([]);
         const doc = {
           _id: `r${rebates.length + 1}`,
@@ -92,6 +107,9 @@ function build({
           kind,
           rebateType,
           adjustOn,
+          category,
+          sibling,
+          receiptNo,
           status: 'active',
           fy: '2026-27',
           studentId: ID,
@@ -294,7 +312,7 @@ describe('parseRebateSheet', () => {
       ['6', 'school', 10, ''],
       ['1', 'school fees', 500, 'bc', 'last'],
     ]);
-    expect(out.rows).toEqual([
+    expect(out.rows).toMatchObject([
       {
         row: 2,
         admissionNo: '1',
@@ -313,5 +331,79 @@ describe('parseRebateSheet', () => {
       },
     ]);
     expect(out.errors.map((e) => e.row)).toEqual([4, 5, 6, 7, 8]);
+  });
+});
+
+describe('Rebate categories', () => {
+  const post = (app, b) => request(app).post('/api/rebates').set(as('admin')).send(body(b));
+  it('looks a student up by scholar number (Admin only); unknown number is 404', async () => {
+    const { app } = build();
+    const ok = await request(app).get('/api/rebates/lookup/7').set(as('admin'));
+    expect(ok.body).toMatchObject({ name: 'Asha', admissionNo: '7', classKey: '5th' });
+    expect((await request(app).get('/api/rebates/lookup/999').set(as('admin'))).status).toBe(404);
+    expect((await request(app).get('/api/rebates/lookup/7').set(as('principal'))).status).toBe(403);
+  });
+  it('BC needs a real sibling (not the same student); name and class are copied in', async () => {
+    const { app, rebates } = build();
+    expect((await post(app, { category: 'bc' })).status).toBe(422);
+    expect((await post(app, { category: 'bc', siblingNo: '7' })).body.error.code).toBe(
+      'BAD_SIBLING',
+    );
+    expect((await post(app, { category: 'bc', siblingNo: '99' })).body.error.code).toBe(
+      'SIBLING_NOT_FOUND',
+    );
+    const ok = await post(app, { category: 'bc', siblingNo: '8' });
+    expect(ok.status).toBe(201);
+    expect(rebates[0].sibling).toEqual({ admissionNo: '8', name: 'Ravi', classKey: '2' });
+    expect(rebates[0].adjustOn).toBe('last'); // BC lowers the last month
+  });
+  it("OTP needs this student's receipt number (full number or digits)", async () => {
+    const { app, rebates } = build();
+    expect((await post(app, { category: 'otp' })).body.error.code).toBe('RECEIPT_REQUIRED');
+    expect((await post(app, { category: 'otp', receiptNo: '55' })).body.error.code).toBe(
+      'RECEIPT_NOT_FOUND',
+    );
+    expect((await post(app, { category: 'otp', receiptNo: '11' })).status).toBe(201);
+    expect(rebates[0].receiptNo).toBe('S-FY2026-27/0011');
+  });
+  it('RTE / Management / Scholarship cover the whole year, even months not posted yet', async () => {
+    const chart = {
+      fy: '2026-27',
+      classFees: [{ classKey: '5th', monthlyTuitionPaise: 100000, admissionPaise: 0 }],
+      villages: [],
+      formFeePaise: 0,
+    };
+    const { app, charges, rebates } = build({ charges: [tuition(1, '2026-06-15')], chart });
+    // 10 fee months + the posted test month = Rs 11,000: before this fix it said "more than due".
+    const res = await post(app, {
+      category: 'rte',
+      reason: 'RTE',
+      items: [{ type: 'school', amountPaise: 1100000 }],
+    });
+    expect(res.status).toBe(201);
+    expect(rebates[0].adjustOn).toBe('all');
+    expect(charges.filter((c) => c.head === 'tuition')).toHaveLength(11);
+    expect(rebates[0].lines).toHaveLength(11);
+  });
+  it('import reads CATEGORY / SIBLING SCH. ID / RECEIPT NO and rejects a BC row without a sibling', async () => {
+    const { app, rebates } = build();
+    const buf = await xlsx([
+      [
+        'SCH. ID',
+        'REBATE TYPE',
+        'AMOUNT (₹)',
+        'REASON',
+        'CATEGORY',
+        'SIBLING SCH. ID',
+        'RECEIPT NO',
+      ],
+      ['7', 'school', 100, 'BC', 'BC', '8', ''],
+      ['7', 'school', 200, 'OTP', 'OTP', '', '11'],
+      ['7', 'school', 300, 'BC again', 'BC', '', ''],
+    ]);
+    const done = await upload(app, 'admin', buf, 'true');
+    expect(done.body.created).toBe(2);
+    expect(done.body.errors.map((e) => e.row)).toEqual([4]);
+    expect(rebates.map((r) => r.category)).toEqual(['bc', 'otp']);
   });
 });

@@ -15,6 +15,7 @@ import { makeRebateStore } from './services/rebateStore.js';
 import { startMonthlyPlanJob } from './services/monthlyPlan.js';
 import { makeDayCloseStore } from './services/dayCloseStore.js';
 import { makeCashbookStore } from './services/cashbookStore.js';
+import { makeCertificateStore } from './services/certificateStore.js';
 import { makeMoneyStore } from './services/moneyStore.js';
 import { createLogger } from './utils/logger.js';
 async function main() {
@@ -40,6 +41,7 @@ async function main() {
         rebateStore: makeRebateStore(),
         dayCloseStore: makeDayCloseStore(),
         cashbookStore: makeCashbookStore(),
+        certificateStore: makeCertificateStore(),
         auditStore: makeAuditStore(),
       }
     : undefined;

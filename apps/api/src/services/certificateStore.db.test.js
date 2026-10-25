@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Student } from '../models/Student.js';
+import { CertificateRequest } from '../models/CertificateRequest.js';
 import { TransferCertificate } from '../models/TransferCertificate.js';
 import { makeCertificateStore } from './certificateStore.js';
 
@@ -171,11 +172,14 @@ describe.skipIf(!haveDb)('certificate store on a real database', () => {
     expect((await TransferCertificate.findOne({ tenantId: T, _id: tc._id }).lean()).slNo).toBe(143);
   });
 
-  it('duplicate copies are counted', async () => {
+  it('the first print is the original, later prints are counted duplicates', async () => {
     const T = fresh();
     const { tc } = await issueTc(T, await mkStudent(T, 1));
-    expect((await store.reprintTc(T, tc._id)).duplicateCount).toBe(1);
-    expect((await store.reprintTc(T, tc._id)).duplicateCount).toBe(2);
+    expect(await store.printTc(T, tc._id)).toMatchObject({ copyNo: null });
+    expect((await store.printTc(T, tc._id)).copyNo).toBe(1);
+    expect((await store.printTc(T, tc._id)).copyNo).toBe(2);
+    await store.cancelTc({ tenantId: T, id: tc._id, reason: 'mistake', user });
+    expect(await store.printTc(T, tc._id)).toBeNull();
   });
 
   it('Bonafide numbers run 001, 002 ... per year and a retry reuses the first', async () => {
@@ -195,5 +199,93 @@ describe.skipIf(!haveDb)('certificate store on a real database', () => {
     const s = await mkStudent(T, 1);
     await issueBon(T, s);
     expect((await issueTc(T, s)).tc.slNo).toBe(143);
+  });
+
+  // ---------- requests: the Principal approves before a number is given
+  const mkRequest = (T, student, k = key()) =>
+    store.createRequest({
+      tenantId: T,
+      kind: 'tc',
+      studentId: student._id,
+      fy: FY,
+      payload: { studentId: String(student._id) },
+      preview: { snapshot: { name: student.name } },
+      studentName: student.name,
+      admissionNo: student.admissionNo,
+      idempotencyKey: k,
+      requestedBy: 'u1',
+      requestedByName: 'Admin',
+    });
+
+  it('a request takes no number; the same key returns the first request', async () => {
+    const T = fresh();
+    const s = await mkStudent(T, 1);
+    const k = key();
+    const one = await mkRequest(T, s, k);
+    const two = await mkRequest(T, s, k);
+    expect(two.replay).toBe(true);
+    expect(String(two.request._id)).toBe(String(one.request._id));
+    expect(await TransferCertificate.countDocuments({ tenantId: T })).toBe(0);
+  });
+
+  it('only one waiting request per student; after a rejection a new one is allowed', async () => {
+    const T = fresh();
+    const s = await mkStudent(T, 1);
+    const first = await mkRequest(T, s);
+    await expect(mkRequest(T, s)).rejects.toMatchObject({ code: 'REQUEST_PENDING' });
+    await store.rejectRequest({ tenantId: T, id: first.request._id, reason: 'wrong', user });
+    expect((await mkRequest(T, s)).replay).toBe(false);
+  });
+
+  it('approving inside the issue transaction numbers the TC once; a closed request rolls it back', async () => {
+    const T = fresh();
+    const s = await mkStudent(T, 1);
+    const { request } = await mkRequest(T, s);
+    const approveIt = (id) =>
+      issueTc(T, s, {
+        key: `req-${request._id}`,
+        audit: async (made, session) => {
+          const done = await store.markRequestApproved({
+            tenantId: T,
+            id,
+            certificateId: made._id,
+            certificateNumber: String(made.slNo),
+            user,
+            session,
+          });
+          if (!done) throw new Error('REQUEST_CLOSED');
+        },
+      });
+    const out = await approveIt(request._id);
+    expect(out.tc.slNo).toBe(143);
+    expect(
+      await CertificateRequest.findOne({ tenantId: T, _id: request._id }).lean(),
+    ).toMatchObject({
+      status: 'approved',
+      certificateNumber: '143',
+    });
+    // a rejected request cannot be approved: nothing is created and no number is used
+    const s2 = await mkStudent(T, 2);
+    const r2 = (await mkRequest(T, s2)).request;
+    await store.rejectRequest({ tenantId: T, id: r2._id, reason: 'no', user });
+    await expect(
+      issueTc(T, s2, {
+        audit: async (made, session) => {
+          if (
+            !(await store.markRequestApproved({
+              tenantId: T,
+              id: r2._id,
+              certificateId: made._id,
+              certificateNumber: 'x',
+              user,
+              session,
+            }))
+          )
+            throw new Error('REQUEST_CLOSED');
+        },
+      }),
+    ).rejects.toThrow('REQUEST_CLOSED');
+    expect(await TransferCertificate.countDocuments({ tenantId: T })).toBe(1);
+    expect((await issueTc(T, await mkStudent(T, 3))).tc.slNo).toBe(144);
   });
 });

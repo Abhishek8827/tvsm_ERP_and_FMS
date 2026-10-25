@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { BonafideCertificate } from '../models/BonafideCertificate.js';
+import { CertificateRequest } from '../models/CertificateRequest.js';
 import { CertificateSettings } from '../models/CertificateSettings.js';
 import { Counter } from '../models/Counter.js';
 import { Student } from '../models/Student.js';
@@ -66,6 +67,22 @@ function certFilter({ tenantId, q, status }, nameField) {
     f.$or = [{ [`${nameField}.name`]: rx }, { [`${nameField}.admissionNo`]: rx }];
   }
   return f;
+}
+
+/** First print = original (marks the time); later prints = duplicate copies (counted). */
+async function printOnce(Model, tenantId, id) {
+  const first = await Model.findOneAndUpdate(
+    { tenantId, _id: id, status: 'issued', originalPrintedAt: null },
+    { $set: { originalPrintedAt: new Date() } },
+    { new: true },
+  ).lean();
+  if (first) return { cert: first, copyNo: null };
+  const dup = await Model.findOneAndUpdate(
+    { tenantId, _id: id, status: 'issued' },
+    { $inc: { duplicateCount: 1 } },
+    { new: true },
+  ).lean();
+  return dup ? { cert: dup, copyNo: dup.duplicateCount } : null;
 }
 
 /** Data access for TC and Bonafide certificates (and the TC settings). */
@@ -150,13 +167,8 @@ export function makeCertificateStore() {
     listTc: ({ tenantId, q, status, page: p = 1, pageSize = 25 }) =>
       page(TransferCertificate, certFilter({ tenantId, q, status }, 'snapshot'), p, pageSize),
     getTc: (tenantId, id) => TransferCertificate.findOne({ tenantId, _id: id }).lean(),
-    // A duplicate copy is printed: count it (the copy number printed on the page).
-    reprintTc: (tenantId, id) =>
-      TransferCertificate.findOneAndUpdate(
-        { tenantId, _id: id, status: 'issued' },
-        { $inc: { duplicateCount: 1 } },
-        { new: true },
-      ).lean(),
+    // The FIRST print is the original; each print after it is a DUPLICATE copy (counted).
+    printTc: (tenantId, id) => printOnce(TransferCertificate, tenantId, id),
     /** Cancels a TC (number stays used) and puts the student back on the active rolls. */
     async cancelTc({ tenantId, id, reason, user, audit }) {
       return inTxn(
@@ -224,11 +236,79 @@ export function makeCertificateStore() {
     listBonafide: ({ tenantId, q, status, page: p = 1, pageSize = 25 }) =>
       page(BonafideCertificate, certFilter({ tenantId, q, status }, 'snapshot'), p, pageSize),
     getBonafide: (tenantId, id) => BonafideCertificate.findOne({ tenantId, _id: id }).lean(),
-    reprintBonafide: (tenantId, id) =>
-      BonafideCertificate.findOneAndUpdate(
-        { tenantId, _id: id, status: 'issued' },
-        { $inc: { duplicateCount: 1 } },
-        { new: true },
+    printBonafide: (tenantId, id) => printOnce(BonafideCertificate, tenantId, id),
+
+    // ---------- requests (the Principal approves before a number is given)
+    findRequestByKey: (tenantId, idempotencyKey) =>
+      CertificateRequest.findOne({ tenantId, idempotencyKey }).lean(),
+    pendingRequestFor: (tenantId, studentId, kind) =>
+      CertificateRequest.findOne({ tenantId, studentId, kind, status: 'pending' }).lean(),
+    /** Saves a request. A lost race on the key returns the winner; a second waiting request for the same student and kind is refused. */
+    async createRequest(doc) {
+      try {
+        const [made] = await CertificateRequest.create([doc], { ordered: true });
+        return { request: made.toObject(), replay: false };
+      } catch (err) {
+        if (!isDuplicateKey(err)) throw err;
+        const same = await CertificateRequest.findOne({
+          tenantId: doc.tenantId,
+          idempotencyKey: doc.idempotencyKey,
+        }).lean();
+        if (same) return { request: same, replay: true };
+        throw Object.assign(new Error('A request is already waiting for this student.'), {
+          code: 'REQUEST_PENDING',
+        });
+      }
+    },
+    listRequests: ({ tenantId, kind, status, q, page: p = 1, pageSize = 25 }) => {
+      const f = { tenantId };
+      if (kind) f.kind = kind;
+      if (status) f.status = status;
+      if (q) {
+        const rx = new RegExp(escapeRx(q), 'i');
+        f.$or = [{ studentName: rx }, { admissionNo: rx }];
+      }
+      return page(CertificateRequest, f, p, pageSize);
+    },
+    getRequest: (tenantId, id) => CertificateRequest.findOne({ tenantId, _id: id }).lean(),
+    /** Marks a request approved INSIDE the issuing transaction; null if it is no longer pending. */
+    markRequestApproved: ({ tenantId, id, certificateId, certificateNumber, user, session }) =>
+      CertificateRequest.findOneAndUpdate(
+        { tenantId, _id: id, status: 'pending' },
+        {
+          $set: {
+            status: 'approved',
+            certificateId: String(certificateId),
+            certificateNumber,
+            decidedBy: String(user.id),
+            decidedByName: user.name,
+            decidedAt: new Date(),
+          },
+        },
+        { new: true, session },
       ).lean(),
+    async rejectRequest({ tenantId, id, reason, user, audit }) {
+      return inTxn(
+        async (session) => {
+          const r = await CertificateRequest.findOneAndUpdate(
+            { tenantId, _id: id, status: 'pending' },
+            {
+              $set: {
+                status: 'rejected',
+                rejectReason: reason,
+                decidedBy: String(user.id),
+                decidedByName: user.name,
+                decidedAt: new Date(),
+              },
+            },
+            { new: true, session },
+          ).lean();
+          if (!r) return null;
+          if (audit) await audit(r, session);
+          return r;
+        },
+        async () => null,
+      );
+    },
   };
 }

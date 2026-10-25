@@ -118,6 +118,8 @@ export function shapeTc(t, { copyNo } = {}) {
     duplicateCount: t.duplicateCount ?? 0,
     copyNo: copyNo ?? null,
     issuedByName: t.issuedByName ?? null,
+    approvedByName: t.approvedByName ?? null,
+    originalPrinted: Boolean(t.originalPrintedAt),
     createdAt: t.createdAt,
   };
 }
@@ -137,6 +139,30 @@ export function shapeBonafide(b, { copyNo } = {}) {
     duplicateCount: b.duplicateCount ?? 0,
     copyNo: copyNo ?? null,
     issuedByName: b.issuedByName ?? null,
+    approvedByName: b.approvedByName ?? null,
+    originalPrinted: Boolean(b.originalPrintedAt),
     createdAt: b.createdAt,
+  };
+}
+
+/** A TC or Bonafide request: what the Admin asked for, and what the Principal decided. */
+export function shapeRequest(r) {
+  return {
+    id: String(r._id),
+    kind: r.kind,
+    studentId: String(r.studentId),
+    studentName: r.studentName,
+    admissionNo: r.admissionNo,
+    fy: r.fy,
+    status: r.status,
+    preview: r.preview,
+    duesOverride: r.duesOverride ?? null,
+    requestedByName: r.requestedByName ?? null,
+    decidedByName: r.decidedByName ?? null,
+    decidedAt: r.decidedAt ?? null,
+    rejectReason: r.rejectReason ?? null,
+    certificateId: r.certificateId ?? null,
+    certificateNumber: r.certificateNumber ?? null,
+    createdAt: r.createdAt,
   };
 }

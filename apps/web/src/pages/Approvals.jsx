@@ -5,7 +5,7 @@ import { formatINR } from '@erp/shared';
 import { api } from '../api/client';
 import { Badge, Button, Card, ConfirmDialog, ErrorState, Table, useToast } from '../components/ui';
 import { errorText } from '../lib/rupees';
-
+import { PendingCertificates } from './CertificateApprovals';
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const when = (d) =>
   d
@@ -230,6 +230,7 @@ export function Approvals() {
       </div>
       <Cancellations />
       <PendingVouchers />
+      <PendingCertificates />
       <PendingReversals />
     </div>
   );

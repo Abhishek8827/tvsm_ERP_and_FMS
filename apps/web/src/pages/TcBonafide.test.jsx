@@ -39,13 +39,13 @@ const draft = (o = {}) => ({
   ...o,
 }); // prettier-ignore
 
-function show() {
+function show(path = '/') {
   return render(
     <QueryClientProvider
       client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
     >
       <ToastProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[path]}>
           <TcBonafide />
         </MemoryRouter>
       </ToastProvider>
@@ -201,7 +201,12 @@ describe('TC & Bonafide screen: Admin', () => {
     route({
       '/api/certificate-requests?': reqList(),
       '/api/students?': { rows: [student], total: 1 },
-      '/api/tc/draft/s1': draft({ pendingPaise: 150000 }),
+      '/api/tc/draft/s1': draft({
+        pendingPaise: 150000,
+        unpaid: [
+          { period: '2026-04', dueDate: '2026-04-15', duePaise: 150000, lateFeePaise: 0, items: [{ head: 'tuition', duePaise: 150000 }] },
+        ],
+      }), // prettier-ignore
       '/api/certificate-requests/tc': (url, opts) => {
         posts.push(opts);
         return req();
@@ -210,6 +215,10 @@ describe('TC & Bonafide screen: Admin', () => {
     show();
     await pickStudent(user);
     expect(await screen.findByText(/Fees are still due: ₹1,500/)).toBeInTheDocument();
+    // the Admin can see WHICH month and head is unpaid
+    const unpaid = screen.getByRole('table', { name: 'Unpaid months' });
+    expect(within(unpaid).getByText('2026-04')).toBeInTheDocument();
+    expect(within(unpaid).getByText(/tuition ₹1,500/)).toBeInTheDocument();
     await fill(user, /9\. Annual exam/, 'Passed');
     await fill(user, /11\. Subjects/, 'English');
     await fill(user, /15\. Working days/, '220');
@@ -360,6 +369,24 @@ describe('TC & Bonafide screen: Admin', () => {
   });
 });
 
+describe('TC & Bonafide screen: opened from a link', () => {
+  it('?tab=bonafide opens the Bonafide tab (the Approvals inbox links there)', async () => {
+    mockRole = 'principal';
+    api.mockReset();
+    route({
+      '/api/certificate-requests?': reqList(
+        req({ kind: 'bonafide', preview: { snapshot, purpose: 'Passport' } }),
+      ),
+    });
+    show('/?tab=bonafide');
+    expect(
+      await screen.findByRole('tab', { name: 'Bonafide', selected: true }),
+    ).toBeInTheDocument();
+    await screen.findByRole('row', { name: /Aarav/ });
+    expect(api).toHaveBeenCalledWith(expect.stringContaining('kind=bonafide'));
+  });
+});
+
 describe('TC & Bonafide screen: Principal decides, Cashier only looks', () => {
   beforeEach(() => {
     api.mockReset();
@@ -380,6 +407,9 @@ describe('TC & Bonafide screen: Principal decides, Cashier only looks', () => {
       },
     });
     show();
+    // the Principal lands on the requests that are waiting for a decision
+    await screen.findByRole('row', { name: /Aarav/ });
+    expect(api).toHaveBeenCalledWith(expect.stringContaining('status=pending&'));
     // no ask-card, no Settings, no print for the Principal
     expect(screen.queryByLabelText(/Find student/)).toBeNull();
     expect(screen.queryByRole('tab', { name: 'Settings' })).toBeNull();

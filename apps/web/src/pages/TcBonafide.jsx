@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   CLASSES,
   TC_CONDUCT,
@@ -274,6 +275,30 @@ function TcForm({ draft, student, onSent, onBack }) {
           <p className="font-medium text-danger">
             Fees are still due: {money(due)} (late fee included).
           </p>
+          {draft.unpaid?.length > 0 && (
+            <table className="mb-3 w-full text-left" aria-label="Unpaid months">
+              <thead className="text-xs uppercase text-ink-muted">
+                <tr>
+                  <th className="py-1 pr-3 font-medium">Month</th>
+                  <th className="py-1 pr-3 font-medium">Unpaid</th>
+                  <th className="py-1 text-right font-medium">Late fee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {draft.unpaid.map((u) => (
+                  <tr key={u.period}>
+                    <td className="py-1 pr-3">{u.period}</td>
+                    <td className="py-1 pr-3">
+                      {u.items.map((x) => `${x.head} ${money(x.duePaise)}`).join(', ') || '-'}
+                    </td>
+                    <td className="py-1 text-right">
+                      {u.lateFeePaise > 0 ? money(u.lateFeePaise) : '-'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
           <p className="mb-3 text-ink-muted">
             A TC is normally given only after all dues are paid. To ask for it anyway, write the
             reason. The Principal sees it, and it is saved on the TC and in the audit log.
@@ -950,7 +975,8 @@ function RequestsPanel({ kind, isAdmin, isPrincipal, onPick, onGoIssued }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [q, setQ] = useState('');
-  const [status, setStatus] = useState('');
+  // The Principal opens this page to decide, so the waiting requests are what they see first.
+  const [status, setStatus] = useState(isPrincipal ? 'pending' : '');
   const [view, setView] = useState(null);
   const [rejectFor, setRejectFor] = useState(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -1325,7 +1351,9 @@ export function TcBonafide() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
   const isPrincipal = role === 'principal';
-  const [tab, setTab] = useState('tc');
+  // /tc-bonafide?tab=bonafide opens the Bonafide tab (the Approvals inbox links here).
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState(params.get('tab') === 'bonafide' ? 'bonafide' : 'tc');
   const tabs = [
     ['tc', 'Transfer Certificates'],
     ['bonafide', 'Bonafide'],

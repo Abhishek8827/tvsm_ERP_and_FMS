@@ -346,6 +346,10 @@ describe('TC request and approval', () => {
     expect(d.status).toBe(200);
     expect(d.body.pendingPaise).toBeGreaterThan(0);
     expect(d.body).toMatchObject({ bookNo: '7', nextSl: 143, missing: [] });
+    expect(d.body.unpaid).toHaveLength(1);
+    expect(d.body.unpaid[0]).toMatchObject({ period: '2026-04', duePaise: 70000 });
+    expect(d.body.unpaid[0].items).toEqual([{ head: 'tuition', duePaise: 70000 }]);
+    expect(d.body.dueNowPaise + d.body.lateFeePaise).toBe(d.body.pendingPaise);
     expect(d.body.defaults.qualifiedForPromotion).toBe('Yes, to next class');
     const bare = await request(app).get(`/api/tc/draft/${B}`).set(as('admin'));
     expect(bare.body.missing.map((m) => m.key)).toEqual(

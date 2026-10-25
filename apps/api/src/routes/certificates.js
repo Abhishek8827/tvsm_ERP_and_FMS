@@ -310,6 +310,18 @@ export function certificatesRouter(deps, authenticate) {
         aparId: student.aparId ?? '',
         missing: missingTcFields(withDefault),
         pendingPaise: pendingPaise(dues),
+        // Why the dues are what they are: the same numbers as the student's fee ledger.
+        dueNowPaise: dues.totals.dueNow,
+        lateFeePaise: dues.totals.lateFee,
+        unpaid: dues.instalments
+          .filter((i) => (i.isDue && i.due > 0) || i.lateFee > 0)
+          .map((i) => ({
+            period: i.period,
+            dueDate: i.dueDate,
+            duePaise: i.due,
+            lateFeePaise: i.lateFee,
+            items: i.items.filter((x) => x.due > 0).map((x) => ({ head: x.head, duePaise: x.due })),
+          })),
         duesPaidUpto: snapshot.duesPaidUpto,
         bookNo: settings.tcBookNo,
         nextSl: settings.tcStartSl,

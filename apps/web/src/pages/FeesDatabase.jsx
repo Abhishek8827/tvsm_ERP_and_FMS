@@ -120,7 +120,7 @@ const amt = (v) => (v > 0 ? money(v) : '-');
  * Every column of the school's sheet. `show` = visible at first; the user can tick any column on
  * or off (remembered in this browser). Excel export always has ALL columns.
  */
-function buildColumnDefs({ head }) {
+function buildColumnDefs({ head, uptoLabel }) {
   const c = (r) => r.cols;
   return [
     { key: 'sno', group: 'Basic', label: 'S.No', show: true, render: (r) => r._n },
@@ -144,6 +144,12 @@ function buildColumnDefs({ head }) {
             {r.name}
           </Link>
           {r.fatherName && <p className="text-xs text-ink-muted">S/o {r.fatherName}</p>}
+          {r.planPosted && (r.dueNowPaise > 0 || r.lateFeePaise > 0) && (
+            <p className="text-xs text-ink-muted" data-testid="due-summary">
+              Due till {uptoLabel}: {money(r.dueNowPaise)} + penalty {money(r.lateFeePaise)} ={' '}
+              <b className="text-ink">{money((r.dueNowPaise ?? 0) + (r.lateFeePaise ?? 0))}</b>
+            </p>
+          )}
         </div>
       ),
     },
@@ -448,7 +454,12 @@ export function FeesDatabase() {
     </button>
   );
 
-  const defs = useMemo(() => buildColumnDefs({ head }), [sort, dir]); // eslint-disable-line react-hooks/exhaustive-deps
+  const uptoLabel = filters.upto
+    ? (monthOptions(getFinancialYear(new Date()))
+        .find((m) => m.value === filters.upto)
+        ?.label.replace('Up to ', '') ?? 'today')
+    : 'today';
+  const defs = useMemo(() => buildColumnDefs({ head, uptoLabel }), [sort, dir, uptoLabel]); // eslint-disable-line react-hooks/exhaustive-deps
   const shown = new Set(visible ?? defs.filter((d) => d.show).map((d) => d.key));
   function toggleCol(key) {
     const next = new Set(shown);

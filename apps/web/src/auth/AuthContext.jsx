@@ -12,6 +12,11 @@ import { useIdleTimeout } from './useIdleTimeout';
 
 export const IDLE_TIMEOUT_MS = 10 * 60 * 1000; // decision: 10 minutes on shared counter PCs
 
+// When `pnpm dev` starts, the web side is ready before the API (it connects to the database
+// first), so the very first sign-in check can hit a closed door. One patient, sequential wait
+// (about 15 seconds in total) instead of a 502 screen. Not a retry storm: one call at a time.
+const STARTUP_RETRY = [500, 1000, 2000, 3000, 4000, 5000];
+
 const AuthContext = createContext(null);
 
 /** Never reveal whether an email exists: wrong email and wrong password look the same. */
@@ -61,7 +66,6 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
 
   useEffect(() => {
     if (!service) return undefined;
-    let active = true;
     configureAuth(service.getToken, () => {
       setNotice('Your session has expired. Please sign in again.');
       void service.signOut();
@@ -73,9 +77,7 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
         return;
       }
       try {
-        const result = await api('/api/auth/me');
-        if (!active) return;
-        const { user: me } = result;
+        const { user: me } = await api('/api/auth/me', { retryDelays: STARTUP_RETRY });
         setUser(me);
         setLoadError(null);
         setStatus('signedIn');
@@ -84,7 +86,6 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
           void sessionEvent('login');
         }
       } catch (err) {
-        if (!active) return;
         if (err.status === 401 || err.status === 403) {
           // Signed in with Firebase but not allowed into this school's system.
           setNotice(err.message);
@@ -96,7 +97,6 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
       }
     });
     return () => {
-      active = false;
       unsubscribe?.();
       configureAuth(null);
     };

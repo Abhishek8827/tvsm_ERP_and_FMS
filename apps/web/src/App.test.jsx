@@ -235,7 +235,9 @@ describe("sign-out and next login", () => {
   it("after sign out, the next login always lands on the dashboard (not the old page)", async () => {
     mockApi({ me: USERS.admin });
     renderApp(fakeService({ signedIn: true }), { path: "/audit-log" });
-    expect(await screen.findByText("Coming soon")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Audit Log" }),
+    ).toBeInTheDocument();
     await userEvent.click(
       screen.getAllByRole("button", { name: "Sign out" })[0],
     );
@@ -264,10 +266,20 @@ describe("signed-in shell", () => {
     expect(await screen.findByText("All systems normal")).toBeInTheDocument();
   });
 
-  it('screens not built yet say "Coming soon" instead of being dead', async () => {
+  it("the Reports screen opens for the Admin and is a real page, not a placeholder", async () => {
     mockApi({ me: USERS.admin });
     renderApp(fakeService({ signedIn: true }), { path: "/reports" });
-    expect(await screen.findByText("Coming soon")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "Reports" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Coming soon")).not.toBeInTheDocument();
+  });
+
+  it("the Cashier typing /reports or /audit-log lands on the dashboard", async () => {
+    renderApp(fakeService({ signedIn: true }), { path: "/reports" });
+    expect(
+      await screen.findByRole("heading", { name: "Dashboard" }),
+    ).toBeInTheDocument();
   });
 });
 

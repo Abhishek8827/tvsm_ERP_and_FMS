@@ -6,6 +6,10 @@ import { App } from './App';
 import { AuthProvider } from './auth/AuthContext';
 import { createFirebaseService } from './auth/firebaseService';
 import { ToastProvider } from './components/ui';
+import '@fontsource/roboto/400.css';
+import '@fontsource/roboto/500.css';
+import '@fontsource/roboto/600.css';
+import '@fontsource/roboto/700.css';
 import './styles/index.css';
 // Created once. Null when the Firebase keys are missing; the app then says so on screen.
 const authService = createFirebaseService();

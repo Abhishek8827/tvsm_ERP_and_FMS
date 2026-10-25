@@ -206,17 +206,31 @@ export function makeReportsStore() {
 
     /** Memo: approved vouchers not yet paid, on `asOn`. */
     async payables(tenantId, asOn) {
-      const [approved, paid] = await Promise.all([
-        ExpenseVoucher.aggregate([
-          { $match: { tenantId, status: "approved", date: { $lte: asOn } } },
-          { $group: { _id: null, paise: { $sum: "$amountPaise" } } },
-        ]),
-        ExpensePayment.aggregate([
-          { $match: { tenantId, status: "active", date: { $lte: asOn } } },
-          { $group: { _id: null, paise: { $sum: "$amountPaise" } } },
-        ]),
-      ]);
-      return Math.max(0, (approved[0]?.paise ?? 0) - (paid[0]?.paise ?? 0));
+      const approved = await ExpenseVoucher.find({
+        tenantId,
+        status: "approved",
+        date: { $lte: asOn },
+      })
+        .select("_id amountPaise")
+        .lean();
+      const approvedTotal = approved.reduce(
+        (sum, row) => sum + (row.amountPaise ?? 0),
+        0,
+      );
+      if (approved.length === 0) return 0;
+      const paid = await ExpensePayment.find({
+        tenantId,
+        status: "active",
+        date: { $lte: asOn },
+        voucherId: { $in: approved.map((row) => row._id) },
+      })
+        .select("voucherId amountPaise")
+        .lean();
+      const paidTotal = paid.reduce(
+        (sum, row) => sum + (row.amountPaise ?? 0),
+        0,
+      );
+      return Math.max(0, approvedTotal - paidTotal);
     },
 
     /** Every money movement of the range as Day Book entries (receipts + the money ledger). */

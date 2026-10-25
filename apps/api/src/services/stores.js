@@ -86,7 +86,14 @@ export function makeAuditStore() {
           .lean(),
         AuditLog.countDocuments(match),
       ]);
-      const ids = [...new Set(rows.map((r) => r.userId).filter(Boolean))];
+      const ids = [
+        ...new Set(
+          rows
+            .map((r) => String(r.userId))
+            .filter(Boolean)
+            .filter((id) => /^[a-f0-9]{24}$/i.test(id)),
+        ),
+      ];
       const users = ids.length
         ? await User.find({ tenantId, _id: { $in: ids } })
             .select("name")
@@ -107,9 +114,13 @@ export function makeAuditStore() {
         AuditLog.distinct("userId", { tenantId }),
         AuditLog.distinct("entity", { tenantId }),
       ]);
+      const ids = (userIds ?? [])
+        .filter(Boolean)
+        .map((id) => String(id))
+        .filter((id) => /^[a-f0-9]{24}$/i.test(id));
       const users = await User.find({
         tenantId,
-        _id: { $in: userIds.filter(Boolean) },
+        _id: { $in: ids },
       })
         .select("name role")
         .sort({ name: 1 })

@@ -10,15 +10,13 @@ function zodFields(err) {
   return fields;
 }
 export const notFoundHandler = (req, res) => {
-  res
-    .status(404)
-    .json({
-      error: {
-        code: "NOT_FOUND",
-        message: "Route not found.",
-        requestId: req.id,
-      },
-    });
+  res.status(404).json({
+    error: {
+      code: "NOT_FOUND",
+      message: "Route not found.",
+      requestId: req.id,
+    },
+  });
 };
 export function createErrorHandler(logger, isProduction) {
   return (err, req, res, _next) => {

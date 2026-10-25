@@ -80,6 +80,12 @@ const tcSchema = new mongoose.Schema(
     idempotencyKey: { type: String, required: true, immutable: true },
     issuedBy: { type: String, immutable: true },
     issuedByName: { type: String, immutable: true },
+    // Who asked for it and who approved it (the Principal approves before it can be printed).
+    requestId: { type: String, immutable: true },
+    approvedByName: { type: String, immutable: true },
+    approvedAt: { type: Date, immutable: true },
+    // The first print is the ORIGINAL; every print after it is a DUPLICATE copy.
+    originalPrintedAt: Date,
   },
   { timestamps: true },
 );

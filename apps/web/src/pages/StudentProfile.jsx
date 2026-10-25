@@ -76,6 +76,12 @@ export function StudentProfile() {
             Adm. no {s.admissionNo} | {classLabel(s.classKey)}
             {s.section ? ` - ${s.section}` : ''}
           </p>
+          {t && ledger.data?.planPosted && (
+            <p className="mt-1 text-sm text-ink-muted" data-testid="due-summary">
+              Due till today: {formatINR(t.dueNow)} + penalty (late fee) {formatINR(t.lateFee)} ={' '}
+              <b className="text-ink">Total due {formatINR(t.dueNow + t.lateFee)}</b>
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {s.status === 'active' ? (
@@ -168,7 +174,7 @@ export function StudentProfile() {
                     <th className="px-4 py-3 font-medium">Due date</th>
                     <th className="px-4 py-3 font-medium">Charges</th>
                     <th className="px-4 py-3 text-right font-medium">Due</th>
-                    <th className="px-4 py-3 text-right font-medium">Late fee</th>
+                    <th className="px-4 py-3 text-right font-medium">Penalty (late fee)</th>
                     <th className="px-4 py-3 font-medium">Status</th>
                   </tr>
                 </thead>

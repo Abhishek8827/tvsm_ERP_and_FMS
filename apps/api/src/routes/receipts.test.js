@@ -169,11 +169,13 @@ describe('collecting fees', () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it('only the Cashier can collect (Admin / Principal get 403, no token gets 401)', async () => {
-    const { app } = build();
-    for (const who of ['admin', 'principal'])
-      expect((await collect(app, { input: { newPaise: rs(1000) } }, who)).status).toBe(403);
+  it('Cashier and Admin can collect; Principal gets 403, no token gets 401', async () => {
+    const { app, receipts } = build();
+    expect((await collect(app, { input: { newPaise: rs(1000) } }, 'principal')).status).toBe(403);
     expect((await request(app).post('/api/receipts').send({})).status).toBe(401);
+    const a = await collect(app, { input: { newPaise: rs(1000) } }, 'admin');
+    expect(a.status).toBe(201);
+    expect(receipts).toHaveLength(1);
   });
 
   it('a closed day takes no receipt (409 DAY_CLOSED) and saves nothing', async () => {

@@ -182,7 +182,7 @@ export function receiptsRouter(deps, authenticate) {
     '/receipts',
     rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-7', legacyHeaders: false }),
     authenticate,
-    requireRole('cashier'),
+    requireRole('cashier', 'admin'),
     async (req, res, next) => {
       try {
         const key = idemKey.parse(req.get('Idempotency-Key'));

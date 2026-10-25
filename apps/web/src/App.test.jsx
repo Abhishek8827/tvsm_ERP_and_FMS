@@ -115,7 +115,7 @@ describe('sign-in', () => {
       const forbidden = {
         cashier: ['Data Import', 'Approvals', 'Users & Settings'],
         principal: ['Collect Fee', 'Data Import', 'Users & Settings'],
-        admin: ['Collect Fee', 'Approvals'],
+        admin: ['Approvals'],
       }[role];
       for (const label of forbidden) expect(mainNav().queryByText(label)).toBeNull();
       expect(mainNav().getByText('Dashboard')).toBeInTheDocument();

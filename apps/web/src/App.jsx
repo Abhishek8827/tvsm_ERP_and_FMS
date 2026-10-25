@@ -130,7 +130,9 @@ export function App() {
         <Route path="/receipts/:id" element={<ReceiptView />} />
         {role === 'cashier' && <Route path="/receipts" element={<Receipts />} />}
         {role === 'admin' && <Route path="/fees-receipts" element={<Receipts />} />}
-        {role === 'cashier' && <Route path="/collect-fee" element={<CollectFee />} />}
+        {(role === 'cashier' || role === 'admin') && (
+          <Route path="/collect-fee" element={<CollectFee />} />
+        )}
         {role === 'admin' && <Route path="/data-import" element={<DataImport />} />}
         {role === 'admin' && <Route path="/data-import/students" element={<ImportStudents />} />}
         {role === 'admin' && <Route path="/data-import/old-fees" element={<ImportOldFees />} />}

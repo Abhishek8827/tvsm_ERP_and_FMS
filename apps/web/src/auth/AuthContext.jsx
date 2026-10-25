@@ -91,7 +91,13 @@ export function AuthProvider({ service, idleMs = IDLE_TIMEOUT_MS, children }) {
           setNotice(err.message);
           await service.signOut();
         } else {
-          setLoadError(err.message);
+          // 502/503/504 or no answer = the API is not up (still starting, or restarting).
+          const down = [502, 503, 504, 0].includes(err.status);
+          setLoadError(
+            down
+              ? 'The server is not ready yet. It may still be starting. Wait a few seconds and press Try again.'
+              : err.message,
+          );
           setStatus('error');
         }
       }

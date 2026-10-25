@@ -149,7 +149,7 @@ describe('sign-in', () => {
     configureRetry([]); // the real client retries quietly; this test is about the final failure
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('x')));
     renderApp(fakeService({ signedIn: true }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(/Could not reach the server/);
+    expect(await screen.findByRole('alert')).toHaveTextContent(/server is not ready yet/);
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 

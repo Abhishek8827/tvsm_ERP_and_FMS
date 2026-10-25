@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --watch --env-file-if-exists=.env src/server.js",
+    "dev": "node --env-file-if-exists=.env src/server.js",
+    "dev:watch": "node --watch --watch-path=./src --env-file-if-exists=.env src/server.js",
     "start": "node src/server.js",
     "test": "vitest run",
     "fees:seed": "node --env-file-if-exists=.env src/scripts/seedFeeStructure.js",

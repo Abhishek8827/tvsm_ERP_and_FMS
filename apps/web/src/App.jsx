@@ -12,7 +12,9 @@ import { CollectFee } from "./pages/CollectFee";
 import { ExpenseVoucher } from "./pages/ExpenseVoucher";
 import { Expenses } from "./pages/Expenses";
 import { PettyCash } from "./pages/PettyCash";
+import { AuditLog } from "./pages/AuditLog";
 import { Cashbook } from "./pages/Cashbook";
+import { Reports } from "./pages/Reports";
 import { TcBonafide } from "./pages/TcBonafide";
 import { Rebates } from "./pages/Rebates";
 import { Transport } from "./pages/Transport";
@@ -102,6 +104,8 @@ export function App() {
               i.key !== "rebates" &&
               i.key !== "transport" &&
               i.key !== "cashbook" &&
+              i.key !== "reports" &&
+              i.key !== "audit-log" &&
               i.key !== "tc-bonafide" &&
               i.key !== "day-close" &&
               i.key !== "approvals" &&
@@ -124,6 +128,12 @@ export function App() {
         )}
         <Route path="/transport" element={<Transport />} />
         <Route path="/cashbook" element={<Cashbook />} />
+        {(role === "admin" || role === "principal") && (
+          <Route path="/reports" element={<Reports />} />
+        )}
+        {(role === "admin" || role === "principal") && (
+          <Route path="/audit-log" element={<AuditLog />} />
+        )}
         <Route path="/tc-bonafide" element={<TcBonafide />} />
         <Route path="/day-close" element={<DayClose />} />
         {role === "principal" && (

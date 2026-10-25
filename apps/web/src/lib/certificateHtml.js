@@ -38,6 +38,14 @@ function letterhead() {
   return `<div class="head"><img src="/logo.jpg" alt=""><div class="t"><strong>${esc(SCHOOL.name)}</strong><div>${esc(SCHOOL.addressLine)}</div><div>Affiliation No. ${esc(SCHOOL.affiliationNo)}${SCHOOL.schoolCode ? ` · School Code ${esc(SCHOOL.schoolCode)}` : ''}</div></div></div>`;
 }
 
+// DUPLICATE COPY n for a reprint; PENDING APPROVAL for a request the Principal has not approved yet.
+const markHtml = (copyNo, pending) =>
+  pending
+    ? '<div class="mark"><span>PENDING APPROVAL - NOT VALID</span></div>'
+    : copyNo
+      ? `<div class="mark"><span>DUPLICATE COPY ${esc(copyNo)}</span></div>`
+      : '';
+
 /** The 23 numbered fields of a TC, in the order of the school's form. */
 export function tcFields(tc) {
   const s = tc.snapshot;
@@ -88,8 +96,8 @@ export function tcHtml(tc, { copyNo } = {}) {
   return `<div class="page">${letterhead()}
 <div class="title">TRANSFER CERTIFICATE</div>
 <div class="note">(Issued under the rules of the Board. No corrections allowed.)</div>
-${copyNo ? `<div class="mark"><span>DUPLICATE COPY ${esc(copyNo)}</span></div>` : ''}
-<div class="ref"><span>Sl. No.: <b>${esc(String(tc.slNo).padStart(4, '0'))}</b></span><span>Book No.: <b>${esc(tc.bookNo)}</b></span><span>Admission No.: <b>${esc(tc.snapshot.admissionNo)}</b></span><span>Date of issue: <b>${esc(dmy(tc.entered.dateOfIssue))}</b></span></div>
+${markHtml(copyNo, tc.slNo == null)}
+<div class="ref"><span>Sl. No.: <b>${tc.slNo == null ? 'On approval' : esc(String(tc.slNo).padStart(4, '0'))}</b></span><span>Book No.: <b>${esc(tc.bookNo)}</b></span><span>Admission No.: <b>${esc(tc.snapshot.admissionNo)}</b></span><span>Date of issue: <b>${esc(dmy(tc.entered.dateOfIssue))}</b></span></div>
 <table><tbody>${rows}</tbody></table>
 <p class="decl">Certified that the above information is in accordance with the school records.${cleared}</p>
 ${signLines(['Class Teacher', 'Checked by', 'Principal', 'School seal'])}
@@ -104,9 +112,9 @@ export function bonafideHtml(b, { copyNo } = {}) {
   const s = b.snapshot;
   const cls = `${classLabel(s.classKey)}${s.section ? `-${s.section}` : ''}`;
   return `<div class="page">${letterhead()}
-<div class="ref"><span>No. <b>${esc(b.number)}</b></span><span>Date: <b>${esc(dMonY(b.dateOfIssue))}</b></span></div>
+<div class="ref"><span>No. <b>${b.number ? esc(b.number) : 'On approval'}</b></span><span>Date: <b>${esc(dMonY(b.dateOfIssue))}</b></span></div>
 <div class="title">BONAFIDE CERTIFICATE</div>
-${copyNo ? `<div class="mark"><span>DUPLICATE COPY ${esc(copyNo)}</span></div>` : ''}
+${markHtml(copyNo, !b.number)}
 <p class="body">This is to certify that <b>${esc(s.name)}</b>, ${relation(s.gender)} <b>${esc(s.fatherName)}</b>, Admission No. <b>${esc(s.admissionNo)}</b>, born on <b>${esc(dMonY(s.dob))}</b>, is a bonafide student of this school, studying in Class <b>${esc(cls)}</b> during the academic year <b>${esc(b.academicYear)}</b>.<br>This certificate is issued on request for <b>${esc(b.purpose)}</b>.</p>
 <div class="sign" style="margin-top:90px"><div>School seal</div><div>Principal</div></div>
 <div class="foot">Computer generated from TVSM School ERP · Verify at school office${copyNo ? ` · Duplicate copy ${esc(copyNo)}` : ''}</div></div>`;

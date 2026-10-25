@@ -54,6 +54,7 @@ function build({ charges = [] } = {}) {
   }; // prettier-ignore
   const tcs = [];
   const bons = [];
+  const reqs = [];
   let sl = 0;
   const settings = { tcBookNo: '7', tcStartSl: 143 };
   const certificateStore = {
@@ -63,22 +64,52 @@ function build({ charges = [] } = {}) {
     activeTcForStudent: async (_t, id) => tcs.find((t) => t.studentId === id && t.status === 'issued'),
     findTcByKey: async (_t, k) => tcs.find((t) => t.idempotencyKey === k),
     findBonafideByKey: async (_t, k) => bons.find((t) => t.idempotencyKey === k),
-    async issueTc({ studentId, fy, startSl, idempotencyKey, prepare, audit: au }) {
+    findRequestByKey: async (_t, k) => reqs.find((r) => r.idempotencyKey === k),
+    pendingRequestFor: async (_t, studentId, kind) =>
+      reqs.find((r) => r.studentId === studentId && r.kind === kind && r.status === 'pending'),
+    async createRequest(doc) {
+      const r = { ...doc, _id: `${'2'.repeat(23)}${reqs.length + 1}`, status: 'pending', createdAt: new Date() };
+      reqs.push(r);
+      return { request: r, replay: false };
+    },
+    listRequests: async ({ kind, status }) => {
+      const rows = reqs.filter((r) => (!kind || r.kind === kind) && (!status || r.status === status));
+      return { rows, total: rows.length };
+    },
+    getRequest: async (_t, id) => reqs.find((r) => r._id === id),
+    markRequestApproved: async ({ id, certificateId, certificateNumber, user }) => {
+      const r = reqs.find((x) => x._id === id && x.status === 'pending');
+      if (!r) return null;
+      return Object.assign(r, { status: 'approved', certificateId: String(certificateId), certificateNumber, decidedByName: user.name });
+    },
+    async rejectRequest({ id, reason, user, audit: au }) {
+      const r = reqs.find((x) => x._id === id && x.status === 'pending');
+      if (!r) return null;
+      Object.assign(r, { status: 'rejected', rejectReason: reason, decidedByName: user.name });
+      await au(r);
+      return r;
+    },
+    async issueTc({ studentId, fy, startSl, idempotencyKey, user, prepare, audit: au }) {
       const student = students[studentId];
       const { doc, studentPatch } = await prepare(student, tcs.some((t) => t.studentId === studentId && t.status === 'issued'));
       sl = sl === 0 ? startSl : sl + 1;
-      const tc = { ...doc, _id: `${'0'.repeat(21)}${sl}`, fy, slNo: sl, studentId, status: 'issued', idempotencyKey, duplicateCount: 0 };
-      tcs.push(tc);
+      const tc = { ...doc, _id: `${'0'.repeat(21)}${sl}`, fy, slNo: sl, studentId, status: 'issued', idempotencyKey, duplicateCount: 0, issuedByName: user.name, originalPrintedAt: null };
       Object.assign(student, studentPatch);
       await au(tc);
+      tcs.push(tc);
       return { tc, replay: false };
     },
     listTc: async () => ({ rows: tcs, total: tcs.length }),
     getTc: async (_t, id) => tcs.find((t) => t._id === id),
-    reprintTc: async (_t, id) => {
+    printTc: async (_t, id) => {
       const t = tcs.find((x) => x._id === id && x.status === 'issued');
-      if (t) t.duplicateCount += 1;
-      return t;
+      if (!t) return null;
+      if (!t.originalPrintedAt) {
+        t.originalPrintedAt = new Date();
+        return { cert: t, copyNo: null };
+      }
+      t.duplicateCount += 1;
+      return { cert: t, copyNo: t.duplicateCount };
     },
     async cancelTc({ id, reason, audit: au }) {
       const t = tcs.find((x) => x._id === id && x.status === 'issued');
@@ -88,20 +119,25 @@ function build({ charges = [] } = {}) {
       await au(t);
       return t;
     },
-    async issueBonafide({ studentId, fy, idempotencyKey, prepare, audit: au }) {
+    async issueBonafide({ studentId, fy, idempotencyKey, user, prepare, audit: au }) {
       const { makeNumber, ...doc } = await prepare(students[studentId]);
       const seq = bons.length + 1;
-      const b = { ...doc, _id: `${'1'.repeat(23)}${seq}`, fy, seq, number: makeNumber(seq), studentId, status: 'issued', idempotencyKey };
-      bons.push(b);
+      const b = { ...doc, _id: `${'1'.repeat(23)}${seq}`, fy, seq, number: makeNumber(seq), studentId, status: 'issued', idempotencyKey, issuedByName: user.name, originalPrintedAt: null };
       await au(b);
+      bons.push(b);
       return { bonafide: b, replay: false };
     },
     listBonafide: async () => ({ rows: bons, total: bons.length }),
     getBonafide: async (_t, id) => bons.find((t) => t._id === id),
-    reprintBonafide: async (_t, id) => {
-      const b = bons.find((x) => x._id === id);
-      if (b) b.duplicateCount = (b.duplicateCount ?? 0) + 1;
-      return b;
+    printBonafide: async (_t, id) => {
+      const b = bons.find((x) => x._id === id && x.status === 'issued');
+      if (!b) return null;
+      if (!b.originalPrintedAt) {
+        b.originalPrintedAt = new Date();
+        return { cert: b, copyNo: null };
+      }
+      b.duplicateCount = (b.duplicateCount ?? 0) + 1;
+      return { cert: b, copyNo: b.duplicateCount };
     },
   }; // prettier-ignore
   const auth = {
@@ -119,25 +155,48 @@ function build({ charges = [] } = {}) {
     },
     certificateStore,
   };
-  return { app: createApp(env, createLogger('silent'), auth), audit, students, tcs, settings };
+  return {
+    app: createApp(env, createLogger('silent'), auth),
+    audit,
+    students,
+    tcs,
+    bons,
+    reqs,
+    charges,
+    settings,
+  };
 }
 const dueCharge = [
   { head: 'tuition', period: '2026-04', dueDate: '2026-04-15', amountPaise: 70000 },
 ];
-const post = (app, who, key, b) =>
-  request(app).post('/api/tc').set(as(who)).set('Idempotency-Key', key).send(b);
+// The Admin asks for a TC; the Principal decides.
+const ask = (app, key, b, who = 'admin') =>
+  request(app)
+    .post('/api/certificate-requests/tc')
+    .set(as(who))
+    .set('Idempotency-Key', key)
+    .send(b);
+const approve = (app, id, who = 'principal') =>
+  request(app).post(`/api/certificate-requests/${id}/approve`).set(as(who));
+const reject = (app, id, reason, who = 'principal') =>
+  request(app).post(`/api/certificate-requests/${id}/reject`).set(as(who)).send({ reason });
+/** Asks and approves in one go; returns the TC. */
+const issue = async (app, key = 'key-12345678', b = body()) => {
+  const r = await ask(app, key, b);
+  return (await approve(app, r.body.id)).body.certificate;
+};
 
 beforeEach(() => vi.useFakeTimers({ toFake: ['Date'], now: new Date('2026-10-13T06:00:00Z') }));
 afterEach(() => vi.useRealTimers());
 
-describe('Transfer Certificate', () => {
-  it('only the Admin may generate, reprint, cancel or open the draft (others get 403)', async () => {
+describe('TC request and approval', () => {
+  it('Admin asks, Principal decides: nobody else may (403), and the Cashier cannot ask', async () => {
     const { app } = build();
     for (const who of ['principal', 'cashier']) {
-      expect((await post(app, who, 'key-12345678', body())).status).toBe(403);
+      expect((await ask(app, 'key-12345678', body(), who)).status).toBe(403);
       expect((await request(app).get(`/api/tc/draft/${A}`).set(as(who))).status).toBe(403);
       expect(
-        (await request(app).post('/api/tc/000000000000000000000001/reprint').set(as(who))).status,
+        (await request(app).post('/api/tc/000000000000000000000001/print').set(as(who))).status,
       ).toBe(403);
       expect(
         (
@@ -156,29 +215,41 @@ describe('Transfer Certificate', () => {
         ).status,
       ).toBe(403);
     }
-  });
-
-  it('Principal and Cashier can list and view', async () => {
-    const { app } = build();
-    await post(app, 'admin', 'key-12345678', body());
-    for (const who of ['principal', 'cashier']) {
-      const l = await request(app).get('/api/tc').set(as(who));
-      expect(l.status).toBe(200);
-      expect(l.body.rows).toHaveLength(1);
-      expect((await request(app).get('/api/tc/000000000000000000000143').set(as(who))).status).toBe(
-        200,
-      );
+    const r = await ask(app, 'key-12345678', body());
+    for (const who of ['admin', 'cashier']) {
+      expect((await approve(app, r.body.id, who)).status).toBe(403);
+      expect((await reject(app, r.body.id, 'not right', who)).status).toBe(403);
     }
   });
 
-  it('issues with the first Sl. No. from settings, prints the snapshot and makes the student inactive', async () => {
-    const { app, students, audit } = build();
-    const r = await post(app, 'admin', 'key-12345678', body());
+  it('a request is only a request: no number, no TC, the student stays active', async () => {
+    const { app, students, tcs, audit } = build();
+    const r = await ask(app, 'key-12345678', body());
     expect(r.status).toBe(201);
-    expect(r.body).toMatchObject({ slNo: 143, bookNo: '7', status: 'issued' });
-    expect(r.body.snapshot).toMatchObject({
-      name: 'Aarav',
-      dob: '2014-03-14',
+    expect(r.body).toMatchObject({ kind: 'tc', status: 'pending', studentName: 'Aarav' });
+    expect(r.body.preview.snapshot).toMatchObject({ name: 'Aarav', dob: '2014-03-14' });
+    expect(tcs).toHaveLength(0);
+    expect(students[A].status).toBe('active');
+    expect(audit.some((a) => a.action === 'create' && a.entity === 'certificate_request')).toBe(
+      true,
+    );
+  });
+
+  it('approval gives the first Sl. No., makes the student inactive and records both people', async () => {
+    const { app, students, audit, reqs } = build();
+    const r = await ask(app, 'key-12345678', body());
+    const done = await approve(app, r.body.id);
+    expect(done.status).toBe(200);
+    expect(done.body).toMatchObject({ status: 'approved', certificateNumber: '0143' });
+    expect(done.body.certificate).toMatchObject({
+      slNo: 143,
+      bookNo: '7',
+      status: 'issued',
+      issuedByName: 'admin',
+      approvedByName: 'principal',
+      originalPrinted: false,
+    });
+    expect(done.body.certificate.snapshot).toMatchObject({
       dobInWords: 'Fourteenth March Two Thousand Fourteen',
       lastClassInWords: '7 (Seventh)',
       firstAdmissionClass: '1st',
@@ -186,55 +257,87 @@ describe('Transfer Certificate', () => {
       feeConcession: 'BC (sibling) - Sibling 2',
     });
     expect(students[A]).toMatchObject({ status: 'inactive', inactiveReason: 'left_with_tc' });
-    expect(audit.some((a) => a.action === 'issue' && a.entity === 'transfer_certificate')).toBe(
-      true,
-    );
+    expect(reqs[0].decidedByName).toBe('principal');
+    for (const action of ['approve', 'issue'])
+      expect(audit.some((a) => a.action === action)).toBe(true);
   });
 
-  it('a retry with the same Idempotency-Key returns the same TC, not a second one', async () => {
+  it('approving twice (double click) returns the same TC and uses no second number', async () => {
     const { app, tcs } = build();
-    const one = await post(app, 'admin', 'key-12345678', body());
-    const two = await post(app, 'admin', 'key-12345678', body());
+    const r = await ask(app, 'key-12345678', body());
+    const one = await approve(app, r.body.id);
+    const two = await approve(app, r.body.id);
     expect(two.status).toBe(200);
-    expect(two.body).toMatchObject({ id: one.body.id, replay: true });
+    expect(two.body.certificate.id).toBe(one.body.certificate.id);
     expect(tcs).toHaveLength(1);
   });
 
-  it('needs the Idempotency-Key header', async () => {
-    const { app } = build();
-    expect((await request(app).post('/api/tc').set(as('admin')).send(body())).status).toBe(400);
+  it('a rejected request takes no number; a new request can be made and gets the first number', async () => {
+    const { app, tcs, students } = build();
+    const r = await ask(app, 'key-12345678', body());
+    expect((await reject(app, r.body.id, 'x')).status).toBe(400); // reason needs 3 letters
+    const rej = await reject(app, r.body.id, 'Wrong class entered');
+    expect(rej.body).toMatchObject({ status: 'rejected', rejectReason: 'Wrong class entered' });
+    expect(tcs).toHaveLength(0);
+    expect((await approve(app, r.body.id)).status).toBe(409);
+    expect((await reject(app, r.body.id, 'again again')).status).toBe(409);
+    const again = await ask(app, 'key-87654321', body());
+    expect(again.status).toBe(201);
+    expect((await approve(app, again.body.id)).body.certificate.slNo).toBe(143);
+    expect(students[A].status).toBe('inactive');
   });
 
-  it('a second TC for the same student is refused', async () => {
-    const { app } = build();
-    await post(app, 'admin', 'key-12345678', body());
-    const r = await post(app, 'admin', 'key-87654321', body());
-    expect(r.status).toBe(409);
-    expect(r.body.error?.code ?? r.body.code).toBe('TC_EXISTS');
+  it('a retry with the same Idempotency-Key returns the same request; the header is required', async () => {
+    const { app, reqs } = build();
+    const one = await ask(app, 'key-12345678', body());
+    const two = await ask(app, 'key-12345678', body());
+    expect(two.status).toBe(200);
+    expect(two.body).toMatchObject({ id: one.body.id, replay: true });
+    expect(reqs).toHaveLength(1);
+    expect(
+      (await request(app).post('/api/certificate-requests/tc').set(as('admin')).send(body()))
+        .status,
+    ).toBe(400);
   });
 
-  it('blocks when fees are due and lets the Admin override with a reason (audited)', async () => {
+  it('only one waiting request per student, and none once a valid TC exists', async () => {
+    const { app } = build();
+    await ask(app, 'key-12345678', body());
+    const second = await ask(app, 'key-87654321', body());
+    expect(second.status).toBe(409);
+    expect(JSON.stringify(second.body)).toContain('REQUEST_PENDING');
+    const { app: app2 } = build();
+    await issue(app2);
+    const after = await ask(app2, 'key-87654321', body());
+    expect(after.status).toBe(409);
+    expect(JSON.stringify(after.body)).toContain('TC_EXISTS');
+  });
+
+  it('blocks when fees are due; with a reason the Principal sees it, and approval is audited as an override', async () => {
     const { app, audit } = build({ charges: dueCharge });
-    const blocked = await post(app, 'admin', 'key-12345678', body());
+    const blocked = await ask(app, 'key-12345678', body());
     expect(blocked.status).toBe(409);
     expect(JSON.stringify(blocked.body)).toContain('DUES_PENDING');
-    const shortReason = await post(
-      app,
-      'admin',
-      'key-22222222',
-      body({ duesOverrideReason: 'ok' }),
-    );
-    expect(shortReason.status).toBe(400);
-    const done = await post(
-      app,
-      'admin',
-      'key-33333333',
-      body({ duesOverrideReason: 'Principal allowed' }),
-    );
-    expect(done.status).toBe(201);
-    expect(done.body.duesOverride).toMatchObject({ reason: 'Principal allowed' });
-    expect(done.body.duesOverride.duePaise).toBeGreaterThan(0);
+    expect((await ask(app, 'key-22222222', body({ duesOverrideReason: 'ok' }))).status).toBe(400);
+    const r = await ask(app, 'key-33333333', body({ duesOverrideReason: 'Principal allowed' }));
+    expect(r.status).toBe(201);
+    expect(r.body.duesOverride).toMatchObject({ reason: 'Principal allowed' });
+    expect(r.body.duesOverride.duePaise).toBeGreaterThan(0);
+    const done = await approve(app, r.body.id);
+    expect(done.body.certificate.duesOverride).toMatchObject({ reason: 'Principal allowed' });
     expect(audit.find((a) => a.action === 'override')?.reason).toBe('Principal allowed');
+  });
+
+  it('dues are checked again at approval: fees that became due since the request block it', async () => {
+    const { app, charges, tcs } = build();
+    const r = await ask(app, 'key-12345678', body());
+    charges.push(...dueCharge);
+    const done = await approve(app, r.body.id);
+    expect(done.status).toBe(409);
+    expect(JSON.stringify(done.body)).toContain('DUES_PENDING');
+    expect(tcs).toHaveLength(0);
+    // the Principal can still reject it
+    expect((await reject(app, r.body.id, 'Fees pending now')).status).toBe(200);
   });
 
   it('draft shows pending dues and the defaults; missing fields are listed', async () => {
@@ -256,14 +359,13 @@ describe('Transfer Certificate', () => {
     );
   });
 
-  it('refuses while student details are missing, then saves what the Admin typed back to the student', async () => {
+  it('refuses while details are missing; what the Admin typed is saved to the student only on approval', async () => {
     const { app, students } = build();
-    const miss = await post(app, 'admin', 'key-12345678', body({ studentId: B }));
+    const miss = await ask(app, 'key-12345678', body({ studentId: B }));
     expect(miss.status).toBe(400);
     expect(Object.keys(miss.body.error?.fields ?? miss.body.fields ?? {})).toContain('fatherName');
-    const filled = await post(
+    const filled = await ask(
       app,
-      'admin',
       'key-11111111',
       body({
         studentId: B,
@@ -276,28 +378,56 @@ describe('Transfer Certificate', () => {
       }),
     );
     expect(filled.status).toBe(201);
-    expect(filled.body.snapshot).toMatchObject({
+    expect(students[B].fatherName).toBeUndefined(); // nothing saved yet
+    const done = await approve(app, filled.body.id);
+    expect(done.body.certificate.snapshot).toMatchObject({
       fatherName: 'Ram',
       dob: '2013-05-01',
       nationality: 'Indian',
     });
     expect(students[B]).toMatchObject({ fatherName: 'Ram', category: 'OBC', status: 'inactive' });
-    const r = await post(app, 'admin', 'key-87654321', body({ aparId: '1234-5678', pen: 'P1' }));
-    expect(r.status).toBe(201);
+    const r = await ask(app, 'key-87654321', body({ aparId: '1234-5678', pen: 'P1' }));
+    await approve(app, r.body.id);
     expect(students[A]).toMatchObject({ aparId: '1234-5678', pen: 'P1' });
   });
 
   it('days present cannot be more than working days; compulsory fields are enforced', async () => {
     const { app } = build();
-    expect((await post(app, 'admin', 'key-12345678', body({ daysPresent: 300 }))).status).toBe(400);
-    expect((await post(app, 'admin', 'key-12345679', body({ lastExam: '' }))).status).toBe(400);
-    expect((await post(app, 'admin', 'key-12345670', body({ conduct: 'Bad' }))).status).toBe(400);
+    expect((await ask(app, 'key-12345678', body({ daysPresent: 300 }))).status).toBe(400);
+    expect((await ask(app, 'key-12345679', body({ lastExam: '' }))).status).toBe(400);
+    expect((await ask(app, 'key-12345670', body({ conduct: 'Bad' }))).status).toBe(400);
   });
 
-  it('duplicate copy counts up and is audited; cancel reactivates the student and needs a reason', async () => {
+  it('Principal and Cashier can list requests and TCs; status filter works', async () => {
+    const { app } = build();
+    const r = await ask(app, 'key-12345678', body());
+    for (const who of ['principal', 'cashier']) {
+      const l = await request(app).get('/api/certificate-requests?status=pending').set(as(who));
+      expect(l.status).toBe(200);
+      expect(l.body.rows).toHaveLength(1);
+      expect(
+        (await request(app).get(`/api/certificate-requests/${r.body.id}`).set(as(who))).status,
+      ).toBe(200);
+    }
+    await approve(app, r.body.id);
+    expect(
+      (await request(app).get('/api/certificate-requests?status=pending').set(as('admin'))).body
+        .total,
+    ).toBe(0);
+    for (const who of ['principal', 'cashier']) {
+      expect((await request(app).get('/api/tc').set(as(who))).body.rows).toHaveLength(1);
+      expect((await request(app).get('/api/tc/000000000000000000000143').set(as(who))).status).toBe(
+        200,
+      );
+    }
+  });
+
+  it('first print is the original, later prints are duplicates; all audited; cancel reactivates and needs a reason', async () => {
     const { app, students, audit } = build();
-    const tc = (await post(app, 'admin', 'key-12345678', body())).body;
-    const dup = await request(app).post(`/api/tc/${tc.id}/reprint`).set(as('admin'));
+    const tc = await issue(app);
+    const first = await request(app).post(`/api/tc/${tc.id}/print`).set(as('admin'));
+    expect(first.body).toMatchObject({ copyNo: null, originalPrinted: true, duplicateCount: 0 });
+    const dup = await request(app).post(`/api/tc/${tc.id}/print`).set(as('admin'));
     expect(dup.body).toMatchObject({ duplicateCount: 1, copyNo: 1 });
     expect(audit.some((a) => a.action === 'reprint')).toBe(true);
     expect(
@@ -310,59 +440,86 @@ describe('Transfer Certificate', () => {
       .send({ reason: 'Issued by mistake' });
     expect(c.body).toMatchObject({ status: 'cancelled', cancelReason: 'Issued by mistake' });
     expect(students[A]).toMatchObject({ status: 'active', inactiveReason: null });
-    expect((await request(app).post(`/api/tc/${tc.id}/reprint`).set(as('admin'))).status).toBe(404);
+    expect((await request(app).post(`/api/tc/${tc.id}/print`).set(as('admin'))).status).toBe(404);
   });
 
   it('an already inactive student may still get a TC', async () => {
     const { app } = build();
-    const r = await post(app, 'admin', 'key-12345678', body({ studentId: 'c'.repeat(24) }));
+    const r = await ask(app, 'key-12345678', body({ studentId: 'c'.repeat(24) }));
     expect(r.status).toBe(201);
+    expect((await approve(app, r.body.id)).status).toBe(200);
   });
 });
 
-describe('Bonafide', () => {
-  const bon = (app, who, key, b) =>
-    request(app).post('/api/bonafide').set(as(who)).set('Idempotency-Key', key).send(b);
-  it('Admin generates BON/FY2026-27/001 even with dues; Principal and Cashier cannot', async () => {
-    const { app } = build({ charges: dueCharge });
+describe('Bonafide request and approval', () => {
+  const askBon = (app, who, key, b) =>
+    request(app)
+      .post('/api/certificate-requests/bonafide')
+      .set(as(who))
+      .set('Idempotency-Key', key)
+      .send(b);
+  it('Admin asks even with dues; the Principal approves and the number is BON/FY2026-27/001', async () => {
+    const { app, bons } = build({ charges: dueCharge });
     for (const who of ['principal', 'cashier'])
       expect(
-        (await bon(app, who, 'key-12345678', { studentId: A, purpose: 'Passport' })).status,
+        (await askBon(app, who, 'key-12345678', { studentId: A, purpose: 'Passport' })).status,
       ).toBe(403);
-    const r = await bon(app, 'admin', 'key-12345678', { studentId: A, purpose: 'Passport' });
+    const r = await askBon(app, 'admin', 'key-12345678', { studentId: A, purpose: 'Passport' });
     expect(r.status).toBe(201);
-    expect(r.body).toMatchObject({
+    expect(r.body).toMatchObject({ kind: 'bonafide', status: 'pending' });
+    expect(bons).toHaveLength(0);
+    const done = await approve(app, r.body.id);
+    expect(done.body.certificate).toMatchObject({
       number: 'BON/FY2026-27/001',
       academicYear: '2026-27',
       dateOfIssue: '2026-10-13',
+      approvedByName: 'principal',
     });
-    expect(r.body.snapshot).toMatchObject({ name: 'Aarav', dob: '2014-03-14', gender: 'MALE' });
-    const next = await bon(app, 'admin', 'key-87654321', { studentId: A, purpose: 'Bank' });
-    expect(next.body.number).toBe('BON/FY2026-27/002');
-  });
-  it('only for active students', async () => {
-    const { app } = build();
-    const r = await bon(app, 'admin', 'key-12345678', {
-      studentId: 'c'.repeat(24),
-      purpose: 'Passport',
+    expect(done.body.certificate.snapshot).toMatchObject({
+      name: 'Aarav',
+      dob: '2014-03-14',
+      gender: 'MALE',
     });
-    expect(r.status).toBe(409);
+    const r2 = await askBon(app, 'admin', 'key-87654321', { studentId: A, purpose: 'Bank' });
+    expect((await approve(app, r2.body.id)).body.certificate.number).toBe('BON/FY2026-27/002');
   });
-  it('a purpose is required', async () => {
+  it('rejecting takes no number; the same student cannot have two waiting requests', async () => {
     const { app } = build();
-    expect((await bon(app, 'admin', 'key-12345678', { studentId: A, purpose: '' })).status).toBe(
+    const r = await askBon(app, 'admin', 'key-12345678', { studentId: A, purpose: 'Passport' });
+    expect(
+      (await askBon(app, 'admin', 'key-87654321', { studentId: A, purpose: 'Bank' })).status,
+    ).toBe(409);
+    expect((await reject(app, r.body.id, 'Not needed')).body.status).toBe('rejected');
+    const next = await askBon(app, 'admin', 'key-11111111', { studentId: A, purpose: 'Bank' });
+    expect((await approve(app, next.body.id)).body.certificate.number).toBe('BON/FY2026-27/001');
+  });
+  it('only for active students; a purpose is required', async () => {
+    const { app } = build();
+    expect(
+      (
+        await askBon(app, 'admin', 'key-12345678', {
+          studentId: 'c'.repeat(24),
+          purpose: 'Passport',
+        })
+      ).status,
+    ).toBe(409);
+    expect((await askBon(app, 'admin', 'key-12345679', { studentId: A, purpose: '' })).status).toBe(
       400,
     );
   });
-  it('everyone can list; only the Admin can print a duplicate', async () => {
+  it('everyone can list; only the Admin prints: original first, then duplicates', async () => {
     const { app } = build();
-    const b = (await bon(app, 'admin', 'key-12345678', { studentId: A, purpose: 'Passport' })).body;
+    const r = await askBon(app, 'admin', 'key-12345678', { studentId: A, purpose: 'Passport' });
+    const b = (await approve(app, r.body.id)).body.certificate;
     expect((await request(app).get('/api/bonafide').set(as('cashier'))).body.total).toBe(1);
     expect(
-      (await request(app).post(`/api/bonafide/${b.id}/reprint`).set(as('principal'))).status,
+      (await request(app).post(`/api/bonafide/${b.id}/print`).set(as('principal'))).status,
     ).toBe(403);
     expect(
-      (await request(app).post(`/api/bonafide/${b.id}/reprint`).set(as('admin'))).body.copyNo,
+      (await request(app).post(`/api/bonafide/${b.id}/print`).set(as('admin'))).body.copyNo,
+    ).toBeNull();
+    expect(
+      (await request(app).post(`/api/bonafide/${b.id}/print`).set(as('admin'))).body.copyNo,
     ).toBe(1);
   });
 });
@@ -375,7 +532,7 @@ describe('TC settings', () => {
       tcBookNo: '8',
       tcStartSl: 200,
     });
-    await post(app, 'admin', 'key-12345678', body());
+    await issue(app);
     const locked = await put({ tcBookNo: '8', tcStartSl: 300 });
     expect(locked.status).toBe(409);
     expect((await put({ tcBookNo: '9', tcStartSl: 200 })).status).toBe(200); // Book No. may change

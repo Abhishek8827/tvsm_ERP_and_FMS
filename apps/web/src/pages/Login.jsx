@@ -59,7 +59,7 @@ export function Login() {
     if (busy) return;
     const next = {};
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()))
-      next.email = 'Enter a valid school email address.';
+      next.email = 'Enter a valid email address.';
     if (!password) next.password = 'Enter your password.';
     setErrors(next);
     setFormError('');
@@ -67,8 +67,8 @@ export function Login() {
     setBusy(true);
     try {
       await signIn(email.trim(), password);
-    } catch {
-      setFormError('We could not sign you in. Check your details and try again.');
+    } catch (error) {
+      setFormError(error.message);
       setBusy(false);
     }
   }

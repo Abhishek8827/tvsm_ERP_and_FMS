@@ -86,15 +86,18 @@ async function send(path, opts, forceRefresh) {
 }
 /** One attempt, plus quiet retries on a network drop or a gateway error when that is safe. */
 async function sendWithRetry(path, opts, forceRefresh) {
+  // `opts.retryDelays` = a longer, one-after-another wait for a call that must survive the API
+  // still starting up (the sign-in check). Tests that switched retries off keep them off.
+  const delays = retryDelays.length ? (opts.retryDelays ?? retryDelays) : retryDelays;
   for (let i = 0; ; i += 1) {
-    const last = i >= retryDelays.length || !safeToRetry(opts);
+    const last = i >= delays.length || !safeToRetry(opts);
     try {
       const res = await send(path, opts, forceRefresh);
       if (!GATEWAY.includes(res.status) || last) return res;
     } catch (err) {
       if (err?.code !== 'NETWORK_ERROR' || last) throw err;
     }
-    await wait(retryDelays[i]);
+    await wait(delays[i]);
   }
 }
 

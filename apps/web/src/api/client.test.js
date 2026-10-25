@@ -63,6 +63,19 @@ describe('api client', () => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
     });
 
+    it('a call can ask for a longer wait (the API still starting up) and then succeeds', async () => {
+      fetchMock
+        .mockResolvedValueOnce(json(502, {}))
+        .mockResolvedValueOnce(json(502, {}))
+        .mockResolvedValueOnce(json(502, {}))
+        .mockResolvedValueOnce(json(502, {}))
+        .mockResolvedValueOnce(json(200, { ok: 1 }));
+      await expect(api('/api/auth/me', { retryDelays: [0, 0, 0, 0, 0] })).resolves.toEqual({
+        ok: 1,
+      });
+      expect(fetchMock).toHaveBeenCalledTimes(5);
+    });
+
     it('a network drop is retried too, and gives up after the last retry', async () => {
       fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
       await expect(api('/api/x')).rejects.toMatchObject({ code: 'NETWORK_ERROR' });

@@ -13,13 +13,15 @@ const settingsSchema = new mongoose.Schema(
     tcBookNo: { type: String, default: '' },
     tcStartSl: { type: Number, default: 1, min: 1 },
     history: [
-      {
-        _id: false,
-        at: { type: Date, default: () => new Date() },
-        byName: String,
-        tcBookNo: String,
-        tcStartSl: Number,
-      },
+      new mongoose.Schema(
+        {
+          at: { type: Date, default: () => new Date() },
+          byName: String,
+          tcBookNo: String,
+          tcStartSl: Number,
+        },
+        { _id: false, tenantScope: false },
+      ),
     ],
   },
   { timestamps: true },

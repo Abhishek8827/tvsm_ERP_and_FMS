@@ -35,7 +35,7 @@ const tcSchema = new mongoose.Schema(
           duesPaidUpto: String, // "September 2026" or "Nil"
           feeConcession: String,
         },
-        { _id: false },
+        { _id: false, tenantScope: false },
       ),
       required: true,
       immutable: true,
@@ -58,7 +58,7 @@ const tcSchema = new mongoose.Schema(
           reason: String, // 22
           remarks: String, // 23
         },
-        { _id: false },
+        { _id: false, tenantScope: false },
       ),
       required: true,
       immutable: true,
@@ -67,7 +67,7 @@ const tcSchema = new mongoose.Schema(
     duesOverride: {
       type: new mongoose.Schema(
         { reason: String, byName: String, duePaise: Number },
-        { _id: false },
+        { _id: false, tenantScope: false },
       ),
       immutable: true,
     },

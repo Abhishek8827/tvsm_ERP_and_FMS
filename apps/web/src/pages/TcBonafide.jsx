@@ -81,7 +81,18 @@ function StudentPicker({ onPick, onlyActive }) {
 }
 
 /** On-screen preview in its own page (iframe) so the print CSS cannot leak into the app. */
-function PreviewDialog({ open, title, html, onClose, onPrint, printing, canPrint, extra }) {
+function PreviewDialog({
+  open,
+  title,
+  html,
+  onClose,
+  onPrint,
+  printing,
+  canPrint,
+  extra,
+  notice,
+  footer,
+}) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -106,14 +117,15 @@ function PreviewDialog({ open, title, html, onClose, onPrint, printing, canPrint
             </Button>
           </div>
         </div>
+        {notice}
         <iframe
           title="Certificate preview"
           className="min-h-0 flex-1 rounded border border-line bg-white"
           srcDoc={`<!doctype html><html><head><meta charset="utf-8"><style>${CERT_CSS} body{padding:8px}</style></head><body>${html}</body></html>`}
         />
-        {!canPrint && (
+        {footer !== null && !canPrint && (
           <p className="text-xs text-ink-muted">
-            You can look at this certificate here. Only the Admin can print it.
+            {footer ?? 'You can look at this certificate here. Only the Admin can print it.'}
           </p>
         )}
       </div>
@@ -125,7 +137,7 @@ function PreviewDialog({ open, title, html, onClose, onPrint, printing, canPrint
 
 const TC_STATUS = { issued: ['success', 'Issued'], cancelled: ['danger', 'Cancelled'] };
 
-function TcForm({ draft, student, onIssued, onBack }) {
+function TcForm({ draft, student, onSent, onBack }) {
   const { notify } = useToast();
   const keyRef = useRef(newIdempotencyKey());
   const d = draft.defaults;
@@ -194,15 +206,15 @@ function TcForm({ draft, student, onIssued, onBack }) {
         'aparId',
       ])
         if (String(f[k] ?? '').trim()) body[k] = String(f[k]).trim();
-      return api('/api/tc', {
+      return api('/api/certificate-requests/tc', {
         method: 'POST',
         body,
         idempotencyKey: keyRef.current,
       });
     },
-    onSuccess: (tc) => {
-      notify(`Transfer Certificate ${slText(tc.slNo)} issued.`, 'success');
-      onIssued(tc);
+    onSuccess: (r) => {
+      notify('Request sent to the Principal for approval.', 'success');
+      onSent(r);
     },
     onError: (e) => {
       setErrors(e.fields ?? {});
@@ -263,11 +275,11 @@ function TcForm({ draft, student, onIssued, onBack }) {
             Fees are still due: {money(due)} (late fee included).
           </p>
           <p className="mb-3 text-ink-muted">
-            A TC is normally given only after all dues are paid. To issue it anyway, write the
-            reason. It is saved on the TC and in the audit log.
+            A TC is normally given only after all dues are paid. To ask for it anyway, write the
+            reason. The Principal sees it, and it is saved on the TC and in the audit log.
           </p>
           <Input
-            label="Reason to issue with dues pending"
+            label="Reason to ask for the TC with dues pending"
             value={f.duesOverrideReason}
             onChange={set('duesOverrideReason')}
             error={err('duesOverrideReason')}
@@ -275,7 +287,7 @@ function TcForm({ draft, student, onIssued, onBack }) {
         </div>
       ) : (
         <div className="rounded-card border border-success/40 bg-success/5 p-3 text-sm text-success">
-          No fee dues pending. This TC can be issued.
+          No fee dues pending. This request can be sent.
         </div>
       )}
 
@@ -448,12 +460,13 @@ function TcForm({ draft, student, onIssued, onBack }) {
       </Card>
 
       <p className="text-sm text-ink-muted">
-        After issue the student becomes inactive and no more fees are posted. The Sl. No. is
-        <b> {slText(draft.nextSl)}</b> or the next free number of this year.
+        This goes to the Principal first. The Sl. No. is given only when the Principal approves
+        (next free number: <b>{slText(draft.nextSl)}</b> or later). After approval the student
+        becomes inactive, no more fees are posted, and you can print the certificate.
       </p>
       <div className="flex gap-2">
         <Button type="submit" loading={issue.isPending}>
-          Issue Transfer Certificate
+          Send for Principal approval
         </Button>
         <Button variant="secondary" onClick={onBack} disabled={issue.isPending}>
           Back
@@ -463,39 +476,32 @@ function TcForm({ draft, student, onIssued, onBack }) {
   );
 }
 
-function TcGenerate({ onIssued, onBack }) {
-  const [student, setStudent] = useState(null);
+function TcRequestForm({ student, onSent, onBack }) {
   const draft = useQuery({
-    queryKey: ['tc-draft', student?.id],
+    queryKey: ['tc-draft', student.id],
     queryFn: () => api(`/api/tc/draft/${student.id}`),
-    enabled: Boolean(student),
     gcTime: 0,
   });
   return (
     <div className="flex max-w-4xl flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ink">Generate Transfer Certificate</h2>
+        <h2 className="text-lg font-semibold text-ink">Transfer Certificate request</h2>
         <Button variant="secondary" onClick={onBack}>
-          Back to list
+          Choose another student
         </Button>
       </div>
       <Card title="Student">
-        {student ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p>
-              <b>{student.name}</b>{' '}
-              <span className="text-ink-muted">· Sch. {student.admissionNo}</span>
-            </p>
-            <Button variant="secondary" onClick={() => setStudent(null)}>
-              Change student
-            </Button>
-          </div>
-        ) : (
-          <StudentPicker onPick={setStudent} />
-        )}
+        <p>
+          <b>{student.name}</b> <span className="text-ink-muted">· Sch. {student.admissionNo}</span>
+          <span className="text-ink-muted">
+            {' '}
+            · {classLabel(student.classKey)}
+            {student.section ? ` - ${student.section}` : ''}
+          </span>
+        </p>
       </Card>
-      {student && draft.isLoading && <p className="text-sm text-ink-muted">Loading details...</p>}
-      {student && draft.isError && (
+      {draft.isLoading && <p className="text-sm text-ink-muted">Loading details...</p>}
+      {draft.isError && (
         <p role="alert" className="text-sm text-danger">
           {errorText(draft.error)}
         </p>
@@ -503,7 +509,7 @@ function TcGenerate({ onIssued, onBack }) {
       {draft.data?.existingTc && (
         <div role="alert" className="rounded-card border border-danger/40 bg-danger/5 p-4 text-sm">
           A Transfer Certificate (Sl. No. {slText(draft.data.existingTc.slNo)}) is already issued
-          for this student. Cancel it from the list first if it was a mistake.
+          for this student. Cancel it from the Issued list first if it was a mistake.
         </div>
       )}
       {draft.data && !draft.data.existingTc && (
@@ -511,7 +517,7 @@ function TcGenerate({ onIssued, onBack }) {
           key={student.id}
           draft={draft.data}
           student={student}
-          onIssued={onIssued}
+          onSent={onSent}
           onBack={onBack}
         />
       )}
@@ -519,15 +525,15 @@ function TcGenerate({ onIssued, onBack }) {
   );
 }
 
-function TcTab({ isAdmin }) {
+/** Issued Transfer Certificates: look, print (original first, then duplicates), cancel. */
+function TcIssued({ isAdmin, initialQ = '' }) {
   const qc = useQueryClient();
   const { notify } = useToast();
-  const [mode, setMode] = useState('list');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(initialQ);
   const [status, setStatus] = useState('');
-  const [view, setView] = useState(null); // { tc, copyNo, original }
+  const [view, setView] = useState(null); // the TC being looked at
   const [cancelFor, setCancelFor] = useState(null);
   const [cancelReason, setCancelReason] = useState('');
   const [printing, setPrinting] = useState(false);
@@ -554,8 +560,9 @@ function TcTab({ isAdmin }) {
       setPrinting(false);
     }
   };
-  const reprint = useMutation({
-    mutationFn: (id) => api(`/api/tc/${id}/reprint`, { method: 'POST' }),
+  // The first print is the original; the server counts every later one as a duplicate copy.
+  const print = useMutation({
+    mutationFn: (id) => api(`/api/tc/${id}/print`, { method: 'POST' }),
     onSuccess: async (tc) => {
       await refresh();
       await doPrint(tc, tc.copyNo);
@@ -578,18 +585,6 @@ function TcTab({ isAdmin }) {
     onError: (e) => notify(errorText(e), 'error'),
   });
 
-  if (mode === 'new')
-    return (
-      <TcGenerate
-        onBack={() => setMode('list')}
-        onIssued={async (tc) => {
-          await refresh();
-          setMode('list');
-          setView({ tc, copyNo: null, original: true });
-        }}
-      />
-    );
-
   const columns = [
     { key: 'sl', header: 'Sl. No.', render: (r) => <b>{slText(r.slNo)}</b> },
     {
@@ -609,6 +604,9 @@ function TcTab({ isAdmin }) {
       render: (r) => (
         <span className="flex flex-wrap gap-1">
           <Badge tone={TC_STATUS[r.status][0]}>{TC_STATUS[r.status][1]}</Badge>
+          {r.status === 'issued' && !r.originalPrinted && (
+            <Badge tone="info">Not printed yet</Badge>
+          )}
           {r.duesOverride && <Badge tone="warning">Dues pending</Badge>}
           {r.duplicateCount > 0 && <Badge>{r.duplicateCount} duplicate(s)</Badge>}
         </span>
@@ -619,20 +617,17 @@ function TcTab({ isAdmin }) {
       header: '',
       render: (r) => (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            variant="secondary"
-            onClick={() => setView({ tc: r, copyNo: null, original: false })}
-          >
+          <Button variant="secondary" onClick={() => setView(r)}>
             View
           </Button>
           {isAdmin && r.status === 'issued' && (
             <>
               <Button
-                variant="secondary"
-                loading={reprint.isPending && reprint.variables === r.id}
-                onClick={() => reprint.mutate(r.id)}
+                loading={print.isPending && print.variables === r.id}
+                variant={r.originalPrinted ? 'secondary' : 'primary'}
+                onClick={() => print.mutate(r.id)}
               >
-                Print duplicate
+                {r.originalPrinted ? 'Print duplicate' : 'Print original'}
               </Button>
               <Button variant="danger" onClick={() => setCancelFor(r)}>
                 Cancel
@@ -648,7 +643,7 @@ function TcTab({ isAdmin }) {
     <div className="flex flex-col gap-4">
       <FilterBar>
         <Input
-          label="Search"
+          label="Search issued TCs"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -669,7 +664,6 @@ function TcTab({ isAdmin }) {
             { value: 'cancelled', label: 'Cancelled' },
           ]}
         />
-        {isAdmin && <Button onClick={() => setMode('new')}>Generate Transfer Certificate</Button>}
       </FilterBar>
       <Table
         columns={columns}
@@ -678,10 +672,8 @@ function TcTab({ isAdmin }) {
         loading={list.isLoading}
         error={list.isError ? errorText(list.error) : null}
         onRetry={() => list.refetch()}
-        emptyTitle="No Transfer Certificates yet"
-        emptyDescription={
-          isAdmin ? 'Use "Generate Transfer Certificate" to make the first one.' : undefined
-        }
+        emptyTitle="No Transfer Certificates issued yet"
+        emptyDescription="A certificate appears here after the Principal approves a request."
       />
       {list.data && (
         <Pagination
@@ -697,15 +689,15 @@ function TcTab({ isAdmin }) {
       )}
       <PreviewDialog
         open={Boolean(view)}
-        title={view ? `Transfer Certificate ${slText(view.tc.slNo)}` : ''}
-        html={view ? tcHtml(view.tc, { copyNo: view.copyNo }) : ''}
-        canPrint={isAdmin && view?.tc.status === 'issued' && view?.original}
-        printing={printing}
-        onPrint={() => doPrint(view.tc, null)}
+        title={view ? `Transfer Certificate ${slText(view.slNo)}` : ''}
+        html={view ? tcHtml(view) : ''}
+        canPrint={isAdmin && view?.status === 'issued'}
+        printing={printing || print.isPending}
+        onPrint={() => print.mutate(view.id)}
         onClose={() => setView(null)}
         extra={
-          view?.tc.status === 'cancelled' ? (
-            <Badge tone="danger">Cancelled: {view.tc.cancelReason}</Badge>
+          view?.status === 'cancelled' ? (
+            <Badge tone="danger">Cancelled: {view.cancelReason}</Badge>
           ) : null
         }
       />
@@ -727,24 +719,23 @@ function TcTab({ isAdmin }) {
 
 // ------------------------------------------------------------------ Bonafide
 
-function BonafideForm({ onIssued, onBack }) {
+function BonafideForm({ student, onSent, onBack }) {
   const { notify } = useToast();
   const keyRef = useRef(newIdempotencyKey());
-  const [student, setStudent] = useState(null);
   const [purpose, setPurpose] = useState('');
   const [academicYear, setAcademicYear] = useState(getFinancialYear(new Date()));
   const [dateOfIssue, setDateOfIssue] = useState(todayInput());
   const [errors, setErrors] = useState({});
-  const issue = useMutation({
+  const ask = useMutation({
     mutationFn: () =>
-      api('/api/bonafide', {
+      api('/api/certificate-requests/bonafide', {
         method: 'POST',
         body: { studentId: student.id, purpose: purpose.trim(), academicYear, dateOfIssue },
         idempotencyKey: keyRef.current,
       }),
-    onSuccess: (b) => {
-      notify(`Bonafide ${b.number} issued.`, 'success');
-      onIssued(b);
+    onSuccess: (r) => {
+      notify('Request sent to the Principal for approval.', 'success');
+      onSent(r);
     },
     onError: (e) => {
       setErrors(e.fields ?? {});
@@ -758,36 +749,25 @@ function BonafideForm({ onIssued, onBack }) {
     if (purpose.trim().length < 2) local.purpose = 'Write the purpose';
     if (!/^\d{4}-\d{2}$/.test(academicYear)) local.academicYear = 'Use a year like 2026-27';
     setErrors(local);
-    if (!student) return notify('Choose a student first.', 'error');
-    if (Object.keys(local).length === 0) issue.mutate();
+    if (Object.keys(local).length === 0) ask.mutate();
   };
   return (
     <form onSubmit={submit} noValidate className="flex max-w-3xl flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-ink">Generate Bonafide Certificate</h2>
+        <h2 className="text-lg font-semibold text-ink">Bonafide Certificate request</h2>
         <Button variant="secondary" onClick={onBack}>
-          Back to list
+          Choose another student
         </Button>
       </div>
-      <Card title="Student" subtitle="Only students who are studying now (active) can get one.">
-        {student ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p>
-              <b>{student.name}</b>{' '}
-              <span className="text-ink-muted">· Sch. {student.admissionNo}</span>
-              <span className="text-ink-muted">
-                {' '}
-                · Class {classLabel(student.classKey)}
-                {student.section ? ` - ${student.section}` : ''}
-              </span>
-            </p>
-            <Button variant="secondary" onClick={() => setStudent(null)}>
-              Change student
-            </Button>
-          </div>
-        ) : (
-          <StudentPicker onPick={setStudent} onlyActive />
-        )}
+      <Card title="Student">
+        <p>
+          <b>{student.name}</b> <span className="text-ink-muted">· Sch. {student.admissionNo}</span>
+          <span className="text-ink-muted">
+            {' '}
+            · {classLabel(student.classKey)}
+            {student.section ? ` - ${student.section}` : ''}
+          </span>
+        </p>
       </Card>
       <Card title="Details">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -813,24 +793,26 @@ function BonafideForm({ onIssued, onBack }) {
             error={errors.dateOfIssue}
           />
         </div>
-        <p className="mt-3 text-sm text-ink-muted">Dues are not checked for a Bonafide.</p>
+        <p className="mt-3 text-sm text-ink-muted">
+          Dues are not checked for a Bonafide. The number is given when the Principal approves.
+        </p>
       </Card>
       <div>
-        <Button type="submit" loading={issue.isPending}>
-          Generate certificate
+        <Button type="submit" loading={ask.isPending}>
+          Send for Principal approval
         </Button>
       </div>
     </form>
   );
 }
 
-function BonafideTab({ isAdmin }) {
+/** Issued Bonafide certificates: look, print (original first, then duplicates). */
+function BonafideIssued({ isAdmin, initialQ = '' }) {
   const qc = useQueryClient();
   const { notify } = useToast();
-  const [mode, setMode] = useState('list');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [q, setQ] = useState('');
+  const [q, setQ] = useState(initialQ);
   const [view, setView] = useState(null);
   const [printing, setPrinting] = useState(false);
   const list = useQuery({
@@ -853,26 +835,14 @@ function BonafideTab({ isAdmin }) {
       setPrinting(false);
     }
   };
-  const reprint = useMutation({
-    mutationFn: (id) => api(`/api/bonafide/${id}/reprint`, { method: 'POST' }),
+  const print = useMutation({
+    mutationFn: (id) => api(`/api/bonafide/${id}/print`, { method: 'POST' }),
     onSuccess: async (b) => {
       await refresh();
       await doPrint(b, b.copyNo);
     },
     onError: (e) => notify(errorText(e), 'error'),
   });
-
-  if (mode === 'new')
-    return (
-      <BonafideForm
-        onBack={() => setMode('list')}
-        onIssued={async (b) => {
-          await refresh();
-          setMode('list');
-          setView({ b, original: true });
-        }}
-      />
-    );
 
   const columns = [
     { key: 'no', header: 'Number', render: (r) => <b>{r.number}</b> },
@@ -888,20 +858,30 @@ function BonafideTab({ isAdmin }) {
     { key: 'purpose', header: 'Purpose', render: (r) => r.purpose },
     { key: 'date', header: 'Issued', render: (r) => dMonY(r.dateOfIssue) },
     {
+      key: 'status',
+      header: 'Status',
+      render: (r) => (
+        <span className="flex flex-wrap gap-1">
+          {!r.originalPrinted && <Badge tone="info">Not printed yet</Badge>}
+          {r.duplicateCount > 0 && <Badge>{r.duplicateCount} duplicate(s)</Badge>}
+        </span>
+      ),
+    },
+    {
       key: 'act',
       header: '',
       render: (r) => (
         <div className="flex flex-wrap justify-end gap-2">
-          <Button variant="secondary" onClick={() => setView({ b: r, original: false })}>
+          <Button variant="secondary" onClick={() => setView(r)}>
             View
           </Button>
           {isAdmin && (
             <Button
-              variant="secondary"
-              loading={reprint.isPending && reprint.variables === r.id}
-              onClick={() => reprint.mutate(r.id)}
+              variant={r.originalPrinted ? 'secondary' : 'primary'}
+              loading={print.isPending && print.variables === r.id}
+              onClick={() => print.mutate(r.id)}
             >
-              Print duplicate
+              {r.originalPrinted ? 'Print duplicate' : 'Print original'}
             </Button>
           )}
         </div>
@@ -912,7 +892,7 @@ function BonafideTab({ isAdmin }) {
     <div className="flex flex-col gap-4">
       <FilterBar>
         <Input
-          label="Search"
+          label="Search issued Bonafide"
           value={q}
           onChange={(e) => {
             setQ(e.target.value);
@@ -920,7 +900,6 @@ function BonafideTab({ isAdmin }) {
           }}
           placeholder="Name or Sch. no."
         />
-        {isAdmin && <Button onClick={() => setMode('new')}>Generate Bonafide</Button>}
       </FilterBar>
       <Table
         columns={columns}
@@ -929,8 +908,8 @@ function BonafideTab({ isAdmin }) {
         loading={list.isLoading}
         error={list.isError ? errorText(list.error) : null}
         onRetry={() => list.refetch()}
-        emptyTitle="No Bonafide certificates yet"
-        emptyDescription={isAdmin ? 'Use "Generate Bonafide" to make the first one.' : undefined}
+        emptyTitle="No Bonafide certificates issued yet"
+        emptyDescription="A certificate appears here after the Principal approves a request."
       />
       {list.data && (
         <Pagination
@@ -946,13 +925,326 @@ function BonafideTab({ isAdmin }) {
       )}
       <PreviewDialog
         open={Boolean(view)}
-        title={view ? `Bonafide ${view.b.number}` : ''}
-        html={view ? bonafideHtml(view.b) : ''}
-        canPrint={isAdmin && view?.original}
-        printing={printing}
-        onPrint={() => doPrint(view.b, null)}
+        title={view ? `Bonafide ${view.number}` : ''}
+        html={view ? bonafideHtml(view) : ''}
+        canPrint={isAdmin}
+        printing={printing || print.isPending}
+        onPrint={() => print.mutate(view.id)}
         onClose={() => setView(null)}
       />
+    </div>
+  );
+}
+
+// ------------------------------------------------------------------ Requests (Admin asks, Principal decides)
+
+const REQUEST_STATUS = {
+  pending: ['warning', 'Waiting for Principal'],
+  approved: ['success', 'Approved'],
+  rejected: ['danger', 'Rejected'],
+};
+
+function RequestsPanel({ kind, isAdmin, isPrincipal, onPick, onGoIssued }) {
+  const qc = useQueryClient();
+  const { notify } = useToast();
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('');
+  const [view, setView] = useState(null);
+  const [rejectFor, setRejectFor] = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const label = kind === 'tc' ? 'Transfer Certificate' : 'Bonafide';
+
+  const list = useQuery({
+    queryKey: ['cert-requests', kind, page, pageSize, q, status],
+    queryFn: () =>
+      api(
+        `/api/certificate-requests?kind=${kind}&page=${page}&pageSize=${pageSize}&q=${encodeURIComponent(q)}${status ? `&status=${status}` : ''}`,
+      ),
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 30_000),
+  });
+  const refreshAll = async () => {
+    await qc.invalidateQueries({ queryKey: ['cert-requests'] });
+    await qc.invalidateQueries({ queryKey: ['tc-list'] });
+    await qc.invalidateQueries({ queryKey: ['bonafide-list'] });
+    await qc.invalidateQueries({ queryKey: ['students'] });
+  };
+  const approve = useMutation({
+    mutationFn: (id) => api(`/api/certificate-requests/${id}/approve`, { method: 'POST' }),
+    onSuccess: async (r) => {
+      notify(
+        `Approved. ${kind === 'tc' ? `Sl. No. ${r.certificateNumber}` : r.certificateNumber} is ready for the Admin to print.`,
+        'success',
+      );
+      setView(null);
+      await refreshAll();
+    },
+    onError: (e) => notify(errorText(e), 'error'),
+  });
+  const reject = useMutation({
+    mutationFn: () =>
+      api(`/api/certificate-requests/${rejectFor.id}/reject`, {
+        method: 'POST',
+        body: { reason: rejectReason.trim() },
+      }),
+    onSuccess: async () => {
+      notify('Request rejected. No number was used.', 'success');
+      setRejectFor(null);
+      setView(null);
+      await refreshAll();
+    },
+    onError: (e) => notify(errorText(e), 'error'),
+  });
+
+  const columns = [
+    {
+      key: 'student',
+      header: 'Student',
+      render: (r) => (
+        <span>
+          {r.studentName} <span className="text-ink-muted">· Sch. {r.admissionNo}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'what',
+      header: kind === 'tc' ? 'Reason' : 'Purpose',
+      render: (r) => (kind === 'tc' ? r.preview.entered.reason : r.preview.purpose),
+    },
+    {
+      key: 'asked',
+      header: 'Asked by',
+      render: (r) => (
+        <span>
+          {r.requestedByName ?? '-'}{' '}
+          <span className="text-ink-muted">· {dmy(String(r.createdAt).slice(0, 10))}</span>
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (r) => (
+        <div className="flex flex-col gap-1">
+          <span className="flex flex-wrap gap-1">
+            <Badge tone={REQUEST_STATUS[r.status][0]}>
+              {REQUEST_STATUS[r.status][1]}
+              {r.status === 'approved' && r.certificateNumber ? ` · ${r.certificateNumber}` : ''}
+            </Badge>
+            {r.duesOverride && <Badge tone="warning">Dues pending</Badge>}
+          </span>
+          {r.status === 'rejected' && (
+            <span className="text-xs text-ink-muted">Reason: {r.rejectReason}</span>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'act',
+      header: '',
+      render: (r) => (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            variant={isPrincipal && r.status === 'pending' ? 'primary' : 'secondary'}
+            onClick={() => setView(r)}
+          >
+            {isPrincipal && r.status === 'pending' ? 'Review' : 'View'}
+          </Button>
+          {isAdmin && r.status === 'approved' && (
+            <Button onClick={() => onGoIssued(r.admissionNo)}>Print</Button>
+          )}
+        </div>
+      ),
+    },
+  ];
+
+  const html = view
+    ? kind === 'tc'
+      ? tcHtml({ ...view.preview, slNo: null, status: 'issued' })
+      : bonafideHtml({ ...view.preview, number: null })
+    : '';
+  const canDecide = isPrincipal && view?.status === 'pending';
+
+  return (
+    <div className="flex flex-col gap-4">
+      {isAdmin && (
+        <Card
+          title={`Ask for a new ${label}`}
+          subtitle={`Find the student, choose them, then fill the form. The Principal approves it online; after that you can print and sign it.${kind === 'bonafide' ? ' Only students who are studying now (active) can get one.' : ''}`}
+        >
+          <StudentPicker onPick={onPick} onlyActive={kind === 'bonafide'} />
+        </Card>
+      )}
+      <FilterBar>
+        <Input
+          label="Search requests"
+          value={q}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setPage(1);
+          }}
+          placeholder="Name or Sch. no."
+        />
+        <Select
+          label="Status"
+          value={status}
+          onChange={(e) => {
+            setStatus(e.target.value);
+            setPage(1);
+          }}
+          options={[
+            { value: '', label: 'All' },
+            { value: 'pending', label: 'Waiting for Principal' },
+            { value: 'approved', label: 'Approved' },
+            { value: 'rejected', label: 'Rejected' },
+          ]}
+        />
+      </FilterBar>
+      <Table
+        columns={columns}
+        rows={list.data?.rows}
+        rowKey={(r) => r.id}
+        loading={list.isLoading}
+        error={list.isError ? errorText(list.error) : null}
+        onRetry={() => list.refetch()}
+        emptyTitle={`No ${label} requests yet`}
+        emptyDescription={
+          isAdmin ? 'Search for a student above to make the first request.' : undefined
+        }
+      />
+      {list.data && (
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={list.data.total}
+          onPageChange={setPage}
+          onPageSizeChange={(n) => {
+            setPageSize(n);
+            setPage(1);
+          }}
+        />
+      )}
+      <PreviewDialog
+        open={Boolean(view)}
+        title={view ? `${label} request: ${view.studentName}` : ''}
+        html={html}
+        canPrint={false}
+        footer={null}
+        onClose={() => setView(null)}
+        notice={
+          view?.duesOverride ? (
+            <div
+              role="alert"
+              className="rounded-card border border-danger/40 bg-danger/5 p-3 text-sm"
+            >
+              <b className="text-danger">Fees are pending: {money(view.duesOverride.duePaise)}.</b>{' '}
+              Admin's reason: {view.duesOverride.reason}
+            </div>
+          ) : view?.status === 'rejected' ? (
+            <div role="alert" className="rounded-card bg-danger/5 p-3 text-sm text-danger">
+              Rejected by {view.decidedByName}: {view.rejectReason}
+            </div>
+          ) : null
+        }
+        extra={
+          canDecide ? (
+            <>
+              <Button
+                loading={approve.isPending}
+                disabled={reject.isPending}
+                onClick={() => approve.mutate(view.id)}
+              >
+                Approve
+              </Button>
+              <Button
+                variant="danger"
+                disabled={approve.isPending}
+                onClick={() => {
+                  setRejectReason('');
+                  setRejectFor(view);
+                }}
+              >
+                Reject
+              </Button>
+            </>
+          ) : view ? (
+            <Badge tone={REQUEST_STATUS[view.status][0]}>{REQUEST_STATUS[view.status][1]}</Badge>
+          ) : null
+        }
+      />
+      <ConfirmDialog
+        open={Boolean(rejectFor)}
+        title={rejectFor ? `Reject the ${label} request for ${rejectFor.studentName}?` : ''}
+        description="No number is used. The Admin sees your reason and can send a new request."
+        confirmLabel="Reject request"
+        tone="danger"
+        requireReason
+        onReasonChange={setRejectReason}
+        loading={reject.isPending}
+        onConfirm={() => reject.mutate()}
+        onCancel={() => setRejectFor(null)}
+      />
+    </div>
+  );
+}
+
+/** One certificate kind: the Requests (Admin asks, Principal decides) and the Issued list. */
+function CertTab({ kind, isAdmin, isPrincipal }) {
+  const [sub, setSub] = useState('requests');
+  const [student, setStudent] = useState(null);
+  const [issuedQ, setIssuedQ] = useState('');
+  const waiting = useQuery({
+    queryKey: ['cert-requests', 'waiting', kind],
+    queryFn: () => api(`/api/certificate-requests?kind=${kind}&status=pending&pageSize=1`),
+    refetchInterval: (query) => (query.state.status === 'error' ? false : 30_000),
+  });
+  if (student) {
+    const back = () => setStudent(null);
+    return kind === 'tc' ? (
+      <TcRequestForm student={student} onBack={back} onSent={back} />
+    ) : (
+      <BonafideForm student={student} onBack={back} onSent={back} />
+    );
+  }
+  const n = waiting.data?.total ?? 0;
+  const subs = [
+    ['requests', `Requests${n > 0 ? ` (${n} waiting)` : ''}`],
+    ['issued', 'Issued'],
+  ];
+  return (
+    <div className="flex flex-col gap-4">
+      <div role="tablist" aria-label="Requests or issued" className="flex gap-2">
+        {subs.map(([key, text]) => (
+          <button
+            key={key}
+            role="tab"
+            aria-selected={sub === key}
+            onClick={() => setSub(key)}
+            className={`rounded-full border px-4 py-1.5 text-sm font-medium ${sub === key ? 'border-brand bg-brand/10 text-brand' : 'border-line text-ink-muted hover:text-ink'}`}
+          >
+            {text}
+          </button>
+        ))}
+      </div>
+      {sub === 'requests' && (
+        <RequestsPanel
+          kind={kind}
+          isAdmin={isAdmin}
+          isPrincipal={isPrincipal}
+          onPick={setStudent}
+          onGoIssued={(admissionNo) => {
+            setIssuedQ(admissionNo);
+            setSub('issued');
+          }}
+        />
+      )}
+      {sub === 'issued' &&
+        (kind === 'tc' ? (
+          <TcIssued isAdmin={isAdmin} initialQ={issuedQ} />
+        ) : (
+          <BonafideIssued isAdmin={isAdmin} initialQ={issuedQ} />
+        ))}
     </div>
   );
 }
@@ -1025,10 +1317,14 @@ function SettingsTab() {
   );
 }
 
-/** TC & Bonafide. Admin makes, reprints and cancels; Principal and Cashier can only look. */
+/**
+ * TC & Bonafide. The Admin asks, the Principal approves online, then the Admin prints and signs.
+ * The Cashier can only look.
+ */
 export function TcBonafide() {
   const { role } = useAuth();
   const isAdmin = role === 'admin';
+  const isPrincipal = role === 'principal';
   const [tab, setTab] = useState('tc');
   const tabs = [
     ['tc', 'Transfer Certificates'],
@@ -1041,8 +1337,10 @@ export function TcBonafide() {
         <h1 className="text-2xl font-semibold text-ink">TC & Bonafide</h1>
         <p className="text-sm text-ink-muted">
           {isAdmin
-            ? 'Make, print and cancel Transfer Certificates and Bonafide certificates.'
-            : 'You can look at issued certificates. Only the Admin can make or print them.'}
+            ? 'Ask for a certificate, wait for the Principal to approve it online, then print and sign it.'
+            : isPrincipal
+              ? 'Review the requests the Admin sends, then approve or reject them.'
+              : 'You can look at requests and issued certificates. Only the Admin can ask for or print them.'}
         </p>
       </div>
       <div role="tablist" className="flex flex-wrap gap-2 border-b border-line">
@@ -1058,8 +1356,10 @@ export function TcBonafide() {
           </button>
         ))}
       </div>
-      {tab === 'tc' && <TcTab isAdmin={isAdmin} />}
-      {tab === 'bonafide' && <BonafideTab isAdmin={isAdmin} />}
+      {tab === 'tc' && <CertTab kind="tc" isAdmin={isAdmin} isPrincipal={isPrincipal} />}
+      {tab === 'bonafide' && (
+        <CertTab kind="bonafide" isAdmin={isAdmin} isPrincipal={isPrincipal} />
+      )}
       {tab === 'settings' && isAdmin && <SettingsTab />}
     </div>
   );

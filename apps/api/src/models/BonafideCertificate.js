@@ -24,7 +24,7 @@ const bonafideSchema = new mongoose.Schema(
           section: String,
           dob: String, // YYYY-MM-DD
         },
-        { _id: false },
+        { _id: false, tenantScope: false },
       ),
       required: true,
       immutable: true,

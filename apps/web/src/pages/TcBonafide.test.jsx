@@ -12,6 +12,7 @@ vi.mock('../lib/printHtml', () => ({ printHtml: vi.fn(async () => {}) }));
 let mockRole = 'admin';
 vi.mock('../auth/AuthContext', () => ({ useAuth: () => ({ role: mockRole }) }));
 import { api } from '../api/client';
+import { printHtml } from '../lib/printHtml';
 
 const snapshot = {
   admissionNo: '412', name: 'Aarav Sharma', motherName: 'Sunita', fatherName: 'Rajesh',
@@ -27,6 +28,8 @@ const entered = {
 }; // prettier-ignore
 const tc = (o = {}) => ({ id: 't1', fy: '2026-27', slNo: 143, bookNo: '7', studentId: 's1', snapshot, entered, duesOverride: null, status: 'issued', duplicateCount: 0, ...o }); // prettier-ignore
 const tcList = { rows: [tc()], total: 1, page: 1, pageSize: 25 };
+const req = (o = {}) => ({ id: 'r1', kind: 'tc', studentId: 's1', studentName: 'Aarav Sharma', admissionNo: '412', fy: '2026-27', status: 'pending', preview: { bookNo: '7', snapshot, entered }, duesOverride: null, requestedByName: 'Admin', decidedByName: null, rejectReason: null, certificateNumber: null, createdAt: '2026-10-13T06:00:00Z', ...o }); // prettier-ignore
+const reqList = (...rows) => ({ rows, total: rows.length, page: 1, pageSize: 25 });
 const student = { id: 's1', name: 'Aarav Sharma', admissionNo: '412', classKey: '7', section: 'A', status: 'active' }; // prettier-ignore
 const draft = (o = {}) => ({
   fy: '2026-27', today: '2026-10-13', existingTc: null, student: { id: 's1', status: 'active' },
@@ -62,124 +65,168 @@ const fill = async (user, label, value) => {
   await user.type(el, value);
 };
 
-describe('TC & Bonafide screen', () => {
+const openIssued = (user) => user.click(screen.getByRole('tab', { name: 'Issued' }));
+// Search for the student on the Requests page and choose them (no second search box).
+const pickStudent = async (user) => {
+  await user.type(await screen.findByLabelText(/Find student/), 'Aarav');
+  await user.click(await screen.findByRole('button', { name: /Aarav Sharma/ }));
+};
+
+describe('TC & Bonafide screen: Admin', () => {
   beforeEach(() => {
     api.mockReset();
     mockRole = 'admin';
   });
 
-  it('Admin sees the list with Generate, Print duplicate, Cancel and a Settings tab', async () => {
-    route({ '/api/tc?': tcList });
+  it('Requests page: a working student search, the waiting count, and the requests table', async () => {
+    const user = userEvent.setup();
+    route({
+      '/api/certificate-requests?': reqList(req()),
+      '/api/students?': { rows: [student], total: 1 },
+    });
+    show();
+    expect(await screen.findByRole('tab', { name: 'Requests (1 waiting)' })).toBeInTheDocument();
+    const row = await screen.findByRole('row', { name: /Aarav/ });
+    expect(within(row).getByText('Waiting for Principal')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
+    // the search at the top finds students and lets the Admin choose one
+    await user.type(screen.getByLabelText(/Find student/), 'Aarav');
+    expect(await screen.findByRole('button', { name: /Aarav Sharma/ })).toBeInTheDocument();
+    expect(api).toHaveBeenCalledWith(expect.stringContaining('/api/students?pageSize=8&q=Aarav'));
+  });
+
+  it('an approved request has a Print button that opens the Issued list for that student', async () => {
+    const user = userEvent.setup();
+    route({
+      '/api/certificate-requests?': reqList(req({ status: 'approved', certificateNumber: '0143' })),
+      '/api/students?': { rows: [], total: 0 },
+      '/api/tc?': tcList,
+    });
     show();
     const row = await screen.findByRole('row', { name: /Aarav/ });
-    expect(within(row).getByText('0143')).toBeInTheDocument();
-    expect(within(row).getByRole('button', { name: 'Print duplicate' })).toBeInTheDocument();
-    expect(within(row).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: 'Generate Transfer Certificate' }),
-    ).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: 'Settings' })).toBeInTheDocument();
+    expect(within(row).getByText(/Approved · 0143/)).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Print' }));
+    expect(await screen.findByLabelText('Search issued TCs')).toHaveValue('412');
+    expect(await screen.findByRole('button', { name: 'Print original' })).toBeInTheDocument();
   });
 
-  it('Principal and Cashier can only look: no Generate, Print, Cancel or Settings; the preview has no print', async () => {
-    for (const role of ['principal', 'cashier']) {
-      mockRole = role;
-      route({ '/api/tc?': tcList });
-      const { unmount } = show();
-      const row = await screen.findByRole('row', { name: /Aarav/ });
-      for (const n of ['Print duplicate', 'Cancel', 'Generate Transfer Certificate'])
-        expect(screen.queryByRole('button', { name: n })).toBeNull();
-      expect(screen.queryByRole('tab', { name: 'Settings' })).toBeNull();
-      await userEvent.click(within(row).getByRole('button', { name: 'View' }));
-      expect(await screen.findByTitle('Certificate preview')).toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Print / Save as PDF' })).toBeNull();
-      unmount();
-    }
-  });
-
-  it('shows empty and error states (with retry)', async () => {
-    route({ '/api/tc?': { rows: [], total: 0, page: 1, pageSize: 25 } });
-    const a = show();
-    expect(await screen.findByText('No Transfer Certificates yet')).toBeInTheDocument();
-    a.unmount();
-    api.mockReset();
-    api.mockRejectedValue(new Error('Server down'));
-    show();
-    expect(await screen.findByText(/Server down/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
-  });
-
-  it('with no dues: fills the form, validates, then issues once with an Idempotency-Key', async () => {
-    const user = userEvent.setup();
-    const posts = [];
+  it("a rejected request shows the Principal's reason", async () => {
     route({
-      '/api/tc?': tcList,
-      '/api/students?': { rows: [student], total: 1 },
-      '/api/tc/draft/s1': draft(),
-      '/api/tc': (url, opts) => {
-        posts.push(opts);
-        return tc({ ...opts.body, slNo: 143 });
+      '/api/certificate-requests?': reqList(
+        req({
+          status: 'rejected',
+          rejectReason: 'Wrong class entered',
+          decidedByName: 'Principal',
+        }),
+      ),
+      '/api/students?': { rows: [], total: 0 },
+    });
+    show();
+    expect(await screen.findByText(/Wrong class entered/)).toBeInTheDocument();
+  });
+
+  it('Issued: first print is "Print original" (then a duplicate), with Cancel', async () => {
+    const user = userEvent.setup();
+    const calls = [];
+    route({
+      '/api/certificate-requests?': reqList(),
+      '/api/students?': { rows: [], total: 0 },
+      '/api/tc?': {
+        rows: [tc({ originalPrinted: false }), tc({ id: 't2', slNo: 144, originalPrinted: true })],
+        total: 2,
+      },
+      '/api/tc/t1/print': (url) => {
+        calls.push(url);
+        return tc({ originalPrinted: true, copyNo: null });
+      },
+      '/api/tc/t2/print': (url) => {
+        calls.push(url);
+        return tc({ id: 't2', slNo: 144, originalPrinted: true, duplicateCount: 1, copyNo: 1 });
       },
     });
     show();
-    await user.click(await screen.findByRole('button', { name: 'Generate Transfer Certificate' }));
-    await user.type(screen.getByLabelText(/Find student/), 'Aarav');
-    await user.click(await screen.findByRole('button', { name: /Aarav Sharma/ }));
+    await openIssued(user);
+    const rows = await screen.findAllByRole('row', { name: /Aarav/ });
+    expect(within(rows[0]).getByText('Not printed yet')).toBeInTheDocument();
+    expect(within(rows[0]).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    await user.click(within(rows[0]).getByRole('button', { name: 'Print original' }));
+    await vi.waitFor(() => expect(printHtml).toHaveBeenCalledTimes(1));
+    expect(printHtml.mock.calls[0][0].html).not.toContain('DUPLICATE');
+    await user.click(within(rows[1]).getByRole('button', { name: 'Print duplicate' }));
+    await vi.waitFor(() => expect(printHtml).toHaveBeenCalledTimes(2));
+    expect(printHtml.mock.calls[1][0].html).toContain('DUPLICATE COPY 1');
+    expect(calls).toEqual(['/api/tc/t1/print', '/api/tc/t2/print']);
+  });
+
+  it('with no dues: fills the form, validates, then sends ONE request with an Idempotency-Key', async () => {
+    const user = userEvent.setup();
+    const posts = [];
+    route({
+      '/api/certificate-requests?': reqList(),
+      '/api/students?': { rows: [student], total: 1 },
+      '/api/tc/draft/s1': draft(),
+      '/api/certificate-requests/tc': (url, opts) => {
+        posts.push({ url, ...opts });
+        return req();
+      },
+    });
+    show();
+    await pickStudent(user);
     expect(await screen.findByText(/No fee dues pending/)).toBeInTheDocument();
     // empty compulsory fields stop the Admin before any request is sent
-    await user.click(screen.getByRole('button', { name: 'Issue Transfer Certificate' }));
+    await user.click(screen.getByRole('button', { name: 'Send for Principal approval' }));
     expect(await screen.findByText('Last exam and result is required')).toBeInTheDocument();
     expect(posts).toHaveLength(0);
     await fill(user, /9\. Annual exam/, 'Annual 2025-26, Passed');
     await fill(user, /11\. Subjects/, 'English, Hindi');
     await fill(user, /15\. Working days/, '220');
     await fill(user, /16\. Days present/, '198');
-    await user.click(screen.getByRole('button', { name: 'Issue Transfer Certificate' }));
-    expect(await screen.findByTitle('Certificate preview')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Send for Principal approval' }));
+    expect(await screen.findByText(/Request sent to the Principal/)).toBeInTheDocument();
     expect(posts).toHaveLength(1);
+    expect(posts[0].url).toBe('/api/certificate-requests/tc');
     expect(posts[0].idempotencyKey).toBe('key-test-12345');
     expect(posts[0].body).toMatchObject({
       studentId: 's1', bookNo: '7', workingDays: 220, daysPresent: 198, conduct: 'Good', reason: 'Parent Request',
     }); // prettier-ignore
     expect(posts[0].body.duesOverrideReason).toBeUndefined();
-    // the freshly issued ORIGINAL can be printed
-    expect(screen.getByRole('button', { name: 'Print / Save as PDF' })).toBeInTheDocument();
+    // back on the Requests page; nothing was printed or numbered
+    expect(await screen.findByLabelText(/Find student/)).toBeInTheDocument();
+    expect(printHtml).not.toHaveBeenCalled();
   });
 
   it('with dues pending: shows the amount and needs a reason before it will send', async () => {
     const user = userEvent.setup();
     const posts = [];
     route({
-      '/api/tc?': tcList,
+      '/api/certificate-requests?': reqList(),
       '/api/students?': { rows: [student], total: 1 },
       '/api/tc/draft/s1': draft({ pendingPaise: 150000 }),
-      '/api/tc': (url, opts) => {
+      '/api/certificate-requests/tc': (url, opts) => {
         posts.push(opts);
-        return tc({ duesOverride: { reason: opts.body.duesOverrideReason, duePaise: 150000 } });
+        return req();
       },
     });
     show();
-    await user.click(await screen.findByRole('button', { name: 'Generate Transfer Certificate' }));
-    await user.type(screen.getByLabelText(/Find student/), 'Aarav');
-    await user.click(await screen.findByRole('button', { name: /Aarav Sharma/ }));
+    await pickStudent(user);
     expect(await screen.findByText(/Fees are still due: ₹1,500/)).toBeInTheDocument();
     await fill(user, /9\. Annual exam/, 'Passed');
     await fill(user, /11\. Subjects/, 'English');
     await fill(user, /15\. Working days/, '220');
     await fill(user, /16\. Days present/, '198');
-    await user.click(screen.getByRole('button', { name: 'Issue Transfer Certificate' }));
+    await user.click(screen.getByRole('button', { name: 'Send for Principal approval' }));
     expect(await screen.findByText(/Write the reason/)).toBeInTheDocument();
     expect(posts).toHaveLength(0);
-    await fill(user, /Reason to issue with dues pending/, 'Principal allowed');
-    await user.click(screen.getByRole('button', { name: 'Issue Transfer Certificate' }));
-    await screen.findByTitle('Certificate preview');
+    await fill(user, /Reason to ask for the TC with dues pending/, 'Principal allowed');
+    await user.click(screen.getByRole('button', { name: 'Send for Principal approval' }));
+    await screen.findByText(/Request sent to the Principal/);
     expect(posts[0].body.duesOverrideReason).toBe('Principal allowed');
   });
 
   it('asks for details the record lacks', async () => {
     const user = userEvent.setup();
     route({
-      '/api/tc?': tcList,
+      '/api/certificate-requests?': reqList(),
       '/api/students?': { rows: [student], total: 1 },
       '/api/tc/draft/s1': draft({
         snapshot: { ...snapshot, firstAdmissionDate: null },
@@ -187,55 +234,102 @@ describe('TC & Bonafide screen', () => {
       }),
     });
     show();
-    await user.click(await screen.findByRole('button', { name: 'Generate Transfer Certificate' }));
-    await user.type(screen.getByLabelText(/Find student/), 'Aarav');
-    await user.click(await screen.findByRole('button', { name: /Aarav Sharma/ }));
+    await pickStudent(user);
     await screen.findByText(/No fee dues pending/);
     await fill(user, /9\. Annual exam/, 'Passed');
     await fill(user, /11\. Subjects/, 'English');
     await fill(user, /15\. Working days/, '220');
     await fill(user, /16\. Days present/, '198');
-    await user.click(screen.getByRole('button', { name: 'Issue Transfer Certificate' }));
+    await user.click(screen.getByRole('button', { name: 'Send for Principal approval' }));
     expect(await screen.findByText('Date of first admission is required')).toBeInTheDocument();
   });
 
-  it('Bonafide: Admin generates only for active students, purpose required', async () => {
+  it("shows the server's refusal when the request is turned down (no success message)", async () => {
+    const user = userEvent.setup();
+    route({
+      '/api/certificate-requests?': reqList(),
+      '/api/students?': { rows: [student], total: 1 },
+      '/api/tc/draft/s1': draft(),
+      '/api/certificate-requests/tc': () => {
+        throw Object.assign(
+          new Error('A request for this student is already waiting for the Principal.'),
+          { status: 409 },
+        );
+      },
+    });
+    show();
+    await pickStudent(user);
+    await screen.findByText(/No fee dues pending/);
+    await fill(user, /9\. Annual exam/, 'Passed');
+    await fill(user, /11\. Subjects/, 'English');
+    await fill(user, /15\. Working days/, '220');
+    await fill(user, /16\. Days present/, '198');
+    await user.click(screen.getByRole('button', { name: 'Send for Principal approval' }));
+    expect(await screen.findByText(/already waiting for the Principal/)).toBeInTheDocument();
+    expect(screen.queryByText(/Request sent to the Principal/)).toBeNull();
+  });
+
+  it('a student who already has a TC gets no form', async () => {
+    const user = userEvent.setup();
+    route({
+      '/api/certificate-requests?': reqList(),
+      '/api/students?': { rows: [student], total: 1 },
+      '/api/tc/draft/s1': draft({ existingTc: { id: 't1', slNo: 143 } }),
+    });
+    show();
+    await pickStudent(user);
+    expect(await screen.findByText(/already issued/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send for Principal approval' })).toBeNull();
+  });
+
+  it('Bonafide: Admin asks only for active students, purpose required', async () => {
     const user = userEvent.setup();
     const posts = [];
-    const bon = {
-      id: 'b1', number: 'BON/FY2026-27/001', fy: '2026-27', seq: 1, studentId: 's1',
-      snapshot: { admissionNo: '412', name: 'Aarav Sharma', fatherName: 'Rajesh', gender: 'MALE', classKey: '7', section: 'A', dob: '2014-03-14' },
-      academicYear: '2026-27', purpose: 'Passport', dateOfIssue: '2026-10-13', status: 'issued', duplicateCount: 0,
-    }; // prettier-ignore
     route({
-      '/api/tc?': tcList,
-      '/api/bonafide?': { rows: [], total: 0, page: 1, pageSize: 25 },
+      '/api/certificate-requests?': reqList(),
       '/api/students?status=active': { rows: [student], total: 1 },
-      '/api/bonafide': (url, opts) => {
+      '/api/certificate-requests/bonafide': (url, opts) => {
         posts.push(opts);
-        return bon;
+        return req({ kind: 'bonafide' });
       },
     });
     show();
     await user.click(screen.getByRole('tab', { name: 'Bonafide' }));
-    expect(await screen.findByText('No Bonafide certificates yet')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Generate Bonafide' }));
-    await user.type(screen.getByLabelText(/Find student/), 'Aarav');
-    await user.click(await screen.findByRole('button', { name: /Aarav Sharma/ }));
-    await user.click(screen.getByRole('button', { name: 'Generate certificate' }));
+    await pickStudent(user);
+    await user.click(screen.getByRole('button', { name: 'Send for Principal approval' }));
     expect(await screen.findByText('Write the purpose')).toBeInTheDocument();
     expect(posts).toHaveLength(0);
     await user.type(screen.getByLabelText(/Purpose/), 'Passport');
-    await user.click(screen.getByRole('button', { name: 'Generate certificate' }));
-    expect(await screen.findByTitle('Certificate preview')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Send for Principal approval' }));
+    expect(await screen.findByText(/Request sent to the Principal/)).toBeInTheDocument();
     expect(posts[0].body).toMatchObject({ studentId: 's1', purpose: 'Passport' });
     expect(posts[0].idempotencyKey).toBe('key-test-12345');
+  });
+
+  it('Bonafide Issued: original then duplicate', async () => {
+    const user = userEvent.setup();
+    const bon = {
+      id: 'b1', number: 'BON/FY2026-27/001', studentId: 's1', originalPrinted: false,
+      snapshot: { admissionNo: '412', name: 'Aarav Sharma', fatherName: 'Rajesh', gender: 'MALE', classKey: '7', section: 'A', dob: '2014-03-14' },
+      academicYear: '2026-27', purpose: 'Passport', dateOfIssue: '2026-10-13', status: 'issued', duplicateCount: 0,
+    }; // prettier-ignore
+    route({
+      '/api/certificate-requests?': reqList(),
+      '/api/bonafide?': { rows: [bon], total: 1 },
+      '/api/bonafide/b1/print': { ...bon, originalPrinted: true, copyNo: null },
+    });
+    show();
+    await user.click(screen.getByRole('tab', { name: 'Bonafide' }));
+    await openIssued(user);
+    await user.click(await screen.findByRole('button', { name: 'Print original' }));
+    await vi.waitFor(() => expect(printHtml).toHaveBeenCalledTimes(1));
+    expect(printHtml.mock.calls[0][0].html).toContain('BON/FY2026-27/001');
   });
 
   it('Settings: the start Sl. No. is locked once a TC exists', async () => {
     const user = userEvent.setup();
     route({
-      '/api/tc?': tcList,
+      '/api/certificate-requests?': reqList(),
       '/api/certificates/settings': {
         tcBookNo: '7',
         tcStartSl: 143,
@@ -249,23 +343,101 @@ describe('TC & Bonafide screen', () => {
     expect(await screen.findByLabelText(/First Sl. No./)).toBeDisabled();
     expect(screen.getByLabelText('Book No.')).toBeEnabled();
   });
+
+  it('shows empty and error states (with retry)', async () => {
+    route({
+      '/api/certificate-requests?': reqList(),
+      '/api/students?': { rows: [], total: 0 },
+    });
+    const a = show();
+    expect(await screen.findByText('No Transfer Certificate requests yet')).toBeInTheDocument();
+    a.unmount();
+    api.mockReset();
+    api.mockRejectedValue(new Error('Server down'));
+    show();
+    expect(await screen.findByText(/Server down/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
 });
 
-describe('TC already issued', () => {
-  it('refuses a student who already has a TC and shows no form', async () => {
-    mockRole = 'admin';
+describe('TC & Bonafide screen: Principal decides, Cashier only looks', () => {
+  beforeEach(() => {
+    api.mockReset();
+    printHtml.mockClear();
+  });
+
+  it('Principal reviews the certificate, sees the dues reason, and approves once', async () => {
+    mockRole = 'principal';
     const user = userEvent.setup();
+    const posts = [];
     route({
-      '/api/tc?': tcList,
-      '/api/students?': { rows: [student], total: 1 },
-      '/api/tc/draft/s1': draft({ existingTc: { id: 't1', slNo: 143 } }),
+      '/api/certificate-requests?': reqList(
+        req({ duesOverride: { reason: 'Parent will pay on Monday', duePaise: 150000 } }),
+      ),
+      '/api/certificate-requests/r1/approve': (url, opts) => {
+        posts.push({ url, ...opts });
+        return req({ status: 'approved', certificateNumber: '0143' });
+      },
     });
     show();
-    await user.click(await screen.findByRole('button', { name: 'Generate Transfer Certificate' }));
-    await user.type(screen.getByLabelText(/Find student/), 'Aarav');
-    await user.click(await screen.findByRole('button', { name: /Aarav Sharma/ }));
-    expect(await screen.findByText(/already issued/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Issue Transfer Certificate' })).toBeNull();
+    // no ask-card, no Settings, no print for the Principal
+    expect(screen.queryByLabelText(/Find student/)).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Settings' })).toBeNull();
+    const row = await screen.findByRole('row', { name: /Aarav/ });
+    await user.click(within(row).getByRole('button', { name: 'Review' }));
+    const frame = await screen.findByTitle('Certificate preview');
+    expect(frame.getAttribute('srcdoc')).toContain('On approval');
+    expect(frame.getAttribute('srcdoc')).toContain('PENDING APPROVAL');
+    expect(screen.getByText(/Fees are pending: ₹1,500/)).toBeInTheDocument();
+    expect(screen.getByText(/Parent will pay on Monday/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Print / Save as PDF' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Approve' }));
+    expect(await screen.findByText(/Approved\. Sl\. No\. 0143/)).toBeInTheDocument();
+    expect(posts).toHaveLength(1);
+  });
+
+  it('Principal rejects only with a reason, and it is sent to the server', async () => {
+    mockRole = 'principal';
+    const user = userEvent.setup();
+    const posts = [];
+    route({
+      '/api/certificate-requests?': reqList(req()),
+      '/api/certificate-requests/r1/reject': (url, opts) => {
+        posts.push(opts);
+        return req({ status: 'rejected' });
+      },
+    });
+    show();
+    await user.click(await screen.findByRole('button', { name: 'Review' }));
+    await user.click(await screen.findByRole('button', { name: 'Reject' }));
+    const confirm = await screen.findByRole('button', { name: 'Reject request' });
+    expect(confirm).toBeDisabled(); // a reason is compulsory
+    await user.type(screen.getByLabelText('Reason (required)'), 'Wrong class entered');
+    await user.click(confirm);
+    await vi.waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0].body).toEqual({ reason: 'Wrong class entered' });
+  });
+
+  it('Cashier can only look: no ask-card, no Approve, Reject, Print or Settings', async () => {
+    mockRole = 'cashier';
+    const user = userEvent.setup();
+    route({
+      '/api/certificate-requests?': reqList(req()),
+      '/api/tc?': tcList,
+    });
+    show();
+    const row = await screen.findByRole('row', { name: /Aarav/ });
+    expect(screen.queryByLabelText(/Find student/)).toBeNull();
+    expect(screen.queryByRole('tab', { name: 'Settings' })).toBeNull();
+    await user.click(within(row).getByRole('button', { name: 'View' }));
+    expect(await screen.findByTitle('Certificate preview')).toBeInTheDocument();
+    for (const n of ['Approve', 'Reject', 'Print / Save as PDF'])
+      expect(screen.queryByRole('button', { name: n })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Close' }));
+    await openIssued(user);
+    const issued = await screen.findByRole('row', { name: /Aarav/ });
+    for (const n of ['Print original', 'Print duplicate', 'Cancel'])
+      expect(within(issued).queryByRole('button', { name: n })).toBeNull();
   });
 });
 
@@ -279,6 +451,17 @@ describe('certificate print HTML', () => {
     expect(html).toContain('Original copy');
     expect(html.match(/<img/g)).toHaveLength(1); // only the school logo, never a signature or seal
     expect(html).not.toContain('DUPLICATE');
+  });
+  it('a request that has no number yet says so and is marked not valid', () => {
+    const t = tcHtml({ ...tc(), slNo: null });
+    expect(t).toContain('Sl. No.: <b>On approval</b>');
+    expect(t).toContain('PENDING APPROVAL - NOT VALID');
+    const b = bonafideHtml({
+      number: null, academicYear: '2026-27', purpose: 'Passport', dateOfIssue: '2026-10-13',
+      snapshot: { admissionNo: '412', name: 'Aarav Sharma', fatherName: 'Rajesh', gender: 'MALE', classKey: '7', section: 'A', dob: '2014-03-14' },
+    }); // prettier-ignore
+    expect(b).toContain('No. <b>On approval</b>');
+    expect(b).toContain('PENDING APPROVAL - NOT VALID');
   });
   it('a duplicate is marked; a TC issued with dues does not claim they were cleared', () => {
     const html = tcHtml(tc({ duesOverride: { reason: 'x', duePaise: 1 } }), { copyNo: 2 });

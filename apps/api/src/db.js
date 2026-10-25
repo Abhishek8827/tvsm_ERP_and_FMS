@@ -7,6 +7,10 @@ let pluginRegistered = false;
  */
 export function registerGlobalPlugins() {
   if (pluginRegistered) return;
+  // tenantId belongs on the top-level document only. Without this, the plugin also added a
+  // REQUIRED tenantId to every sub-document (e.g. a TC's snapshot), and saving failed with
+  // "snapshot.tenantId: Path `tenantId` is required" (a 500) on a real database.
+  mongoose.set('applyPluginsToChildSchemas', false);
   mongoose.plugin(tenantScopePlugin);
   pluginRegistered = true;
 }

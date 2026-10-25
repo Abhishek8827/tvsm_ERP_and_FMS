@@ -10,7 +10,7 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
-import { SCHOOL, SOFTWARE } from '@erp/shared';
+import { SOFTWARE } from '@erp/shared';
 import { useAuth } from '../auth/AuthContext';
 
 const loginTheme = createTheme({

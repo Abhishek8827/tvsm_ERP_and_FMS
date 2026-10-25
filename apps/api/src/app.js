@@ -22,7 +22,9 @@ import { ledgerRouter } from "./routes/ledger.js";
 import { moneyRouter } from "./routes/money.js";
 import { oldDuesImportRouter } from "./routes/oldDuesImport.js";
 import { rebatesRouter } from "./routes/rebates.js";
+import { auditLogRouter } from "./routes/auditLog.js";
 import { cashbookRouter } from "./routes/cashbook.js";
+import { reportsRouter } from "./routes/reports.js";
 import { certificatesRouter } from "./routes/certificates.js";
 import { transportRouter } from "./routes/transport.js";
 import { receiptsRouter } from "./routes/receipts.js";
@@ -91,6 +93,8 @@ export function createApp(env, logger, auth) {
     app.use("/api", oldDuesImportRouter(deps, authenticate));
     app.use("/api", receiptsRouter(deps, authenticate));
     app.use("/api", moneyRouter(deps, authenticate));
+    app.use("/api", reportsRouter(deps, authenticate));
+    app.use("/api", auditLogRouter(deps, authenticate));
   } else {
     app.use(
       [
@@ -103,6 +107,7 @@ export function createApp(env, logger, auth) {
         "/api/cashbook",
         "/api/tc",
         "/api/bonafide",
+        "/api/certificate-requests",
         "/api/certificates",
         "/api/receipts",
         "/api/old-dues",
@@ -115,6 +120,8 @@ export function createApp(env, logger, auth) {
         "/api/petty",
         "/api/transfers",
         "/api/cashier-pin",
+        "/api/reports",
+        "/api/audit-log",
       ],
       (req, res) => {
         res.status(503).json({

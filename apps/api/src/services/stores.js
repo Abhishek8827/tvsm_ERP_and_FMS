@@ -62,6 +62,67 @@ export function makeAuditStore() {
     async append(entry, { session } = {}) {
       await AuditLog.create([entry], session ? { session } : undefined);
     },
+    /** Filtered, newest first. Read-only. Adds the user's name (entries only keep the id). */
+    async list({ tenantId, filters = {}, page = 1, pageSize = 50 }) {
+      const match = { tenantId };
+      if (filters.userId) match.userId = filters.userId;
+      if (filters.action) match.action = filters.action;
+      if (filters.entity) match.entity = filters.entity;
+      if (filters.from || filters.to) {
+        match.at = {};
+        if (filters.from) match.at.$gte = istStartOfDay(filters.from);
+        if (filters.to)
+          match.at.$lt = istStartOfDay(addDaysToDateString(filters.to, 1));
+      }
+      if (filters.q) {
+        const rx = { $regex: escapeRegex(filters.q), $options: "i" };
+        match.$or = [{ reason: rx }, { entityId: rx }];
+      }
+      const [rows, total] = await Promise.all([
+        AuditLog.find(match)
+          .sort({ at: -1, _id: -1 })
+          .skip((page - 1) * pageSize)
+          .limit(pageSize)
+          .lean(),
+        AuditLog.countDocuments(match),
+      ]);
+      const ids = [...new Set(rows.map((r) => r.userId).filter(Boolean))];
+      const users = ids.length
+        ? await User.find({ tenantId, _id: { $in: ids } })
+            .select("name")
+            .lean()
+        : [];
+      const nameOf = new Map(users.map((u) => [String(u._id), u.name]));
+      return {
+        total,
+        rows: rows.map((r) => ({
+          ...r,
+          userName: nameOf.get(String(r.userId)) ?? null,
+        })),
+      };
+    },
+    /** What the filter drop-downs offer: people and record types that really appear in the log. */
+    async options(tenantId) {
+      const [userIds, entities] = await Promise.all([
+        AuditLog.distinct("userId", { tenantId }),
+        AuditLog.distinct("entity", { tenantId }),
+      ]);
+      const users = await User.find({
+        tenantId,
+        _id: { $in: userIds.filter(Boolean) },
+      })
+        .select("name role")
+        .sort({ name: 1 })
+        .lean();
+      return {
+        users: users.map((u) => ({
+          id: String(u._id),
+          name: u.name,
+          role: u.role,
+        })),
+        entities: entities.filter(Boolean).sort(),
+      };
+    },
   };
 }
 

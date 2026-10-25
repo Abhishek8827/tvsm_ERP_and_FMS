@@ -197,7 +197,7 @@ function TcForm({ draft, student, onIssued, onBack }) {
       return api('/api/tc', {
         method: 'POST',
         body,
-        headers: { 'Idempotency-Key': keyRef.current },
+        idempotencyKey: keyRef.current,
       });
     },
     onSuccess: (tc) => {
@@ -740,7 +740,7 @@ function BonafideForm({ onIssued, onBack }) {
       api('/api/bonafide', {
         method: 'POST',
         body: { studentId: student.id, purpose: purpose.trim(), academicYear, dateOfIssue },
-        headers: { 'Idempotency-Key': keyRef.current },
+        idempotencyKey: keyRef.current,
       }),
     onSuccess: (b) => {
       notify(`Bonafide ${b.number} issued.`, 'success');

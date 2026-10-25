@@ -137,7 +137,7 @@ describe('TC & Bonafide screen', () => {
     await user.click(screen.getByRole('button', { name: 'Issue Transfer Certificate' }));
     expect(await screen.findByTitle('Certificate preview')).toBeInTheDocument();
     expect(posts).toHaveLength(1);
-    expect(posts[0].headers['Idempotency-Key']).toBe('key-test-12345');
+    expect(posts[0].idempotencyKey).toBe('key-test-12345');
     expect(posts[0].body).toMatchObject({
       studentId: 's1', bookNo: '7', workingDays: 220, daysPresent: 198, conduct: 'Good', reason: 'Parent Request',
     }); // prettier-ignore
@@ -229,7 +229,7 @@ describe('TC & Bonafide screen', () => {
     await user.click(screen.getByRole('button', { name: 'Generate certificate' }));
     expect(await screen.findByTitle('Certificate preview')).toBeInTheDocument();
     expect(posts[0].body).toMatchObject({ studentId: 's1', purpose: 'Passport' });
-    expect(posts[0].headers['Idempotency-Key']).toBe('key-test-12345');
+    expect(posts[0].idempotencyKey).toBe('key-test-12345');
   });
 
   it('Settings: the start Sl. No. is locked once a TC exists', async () => {

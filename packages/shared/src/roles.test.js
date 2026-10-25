@@ -17,6 +17,9 @@ describe('navForRole', () => {
       expect(keys).not.toContain(forbidden);
     }
   });
+  it('Admin can collect fees too, like the Cashier', () => {
+    expect(navForRole('admin').map((n) => n.key)).toContain('collect-fee');
+  });
   it('everyone can open TC & Bonafide (only the Admin can make them)', () => {
     for (const r of ['admin', 'principal', 'cashier'])
       expect(navForRole(r).map((n) => n.key)).toContain('tc-bonafide');

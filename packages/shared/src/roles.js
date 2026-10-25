@@ -16,7 +16,7 @@ export const NAV_ITEMS = [
     key: 'collect-fee',
     label: 'Collect Fee',
     path: '/collect-fee',
-    roles: ['cashier'],
+    roles: ['cashier', 'admin'],
     availableFromStep: 4,
   },
   {

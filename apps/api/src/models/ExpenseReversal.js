@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -10,12 +10,16 @@ registerGlobalPlugins();
  */
 const reversalSchema = new mongoose.Schema(
   {
-    kind: { type: String, enum: ['payment', 'voucher'], required: true },
+    kind: { type: String, enum: ["payment", "voucher"], required: true },
     targetId: { type: mongoose.Schema.Types.ObjectId, required: true },
     voucherId: { type: mongoose.Schema.Types.ObjectId, required: true },
     voucherNumber: { type: String, required: true },
     amountPaise: { type: Number, required: true },
-    status: { type: String, enum: ['requested', 'approved', 'rejected'], required: true },
+    status: {
+      type: String,
+      enum: ["requested", "approved", "rejected"],
+      required: true,
+    },
     reason: { type: String, required: true },
     requestedBy: { type: String, required: true },
     requestedByName: { type: String },
@@ -28,9 +32,13 @@ const reversalSchema = new mongoose.Schema(
 );
 reversalSchema.index(
   { tenantId: 1, kind: 1, targetId: 1 },
-  { unique: true, partialFilterExpression: { status: { $in: ['requested', 'approved'] } } },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ["requested", "approved"] } },
+  },
 );
 reversalSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 
 export const ExpenseReversal =
-  mongoose.models.ExpenseReversal ?? mongoose.model('ExpenseReversal', reversalSchema);
+  mongoose.models.ExpenseReversal ??
+  mongoose.model("ExpenseReversal", reversalSchema);

@@ -1,9 +1,22 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { classLabel, getFinancialYear, paiseToRupeesString, rupeesToPaise } from '@erp/shared';
-import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { Button, Card, EmptyState, ErrorState, Input, Spinner, useToast } from '../components/ui';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import {
+  classLabel,
+  getFinancialYear,
+  paiseToRupeesString,
+  rupeesToPaise,
+} from "@erp/shared";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import {
+  Button,
+  Card,
+  EmptyState,
+  ErrorState,
+  Input,
+  Spinner,
+  useToast,
+} from "../components/ui";
 
 /**
  * Admin: edit the fee chart of the current financial year.
@@ -13,7 +26,7 @@ import { Button, Card, EmptyState, ErrorState, Input, Spinner, useToast } from '
 export function FeeStructure() {
   const fy = getFinancialYear(new Date());
   const chart = useQuery({
-    queryKey: ['fee-structure', fy],
+    queryKey: ["fee-structure", fy],
     // 404 only means "not set up yet": that is a normal state, not an error.
     queryFn: async () => {
       try {
@@ -28,7 +41,12 @@ export function FeeStructure() {
 
   if (chart.isPending) return <Spinner label="Loading fee structure" />;
   if (chart.isError) {
-    return <ErrorState message={chart.error.message} onRetry={() => chart.refetch()} />;
+    return (
+      <ErrorState
+        message={chart.error.message}
+        onRetry={() => chart.refetch()}
+      />
+    );
   }
   if (chart.data === null) {
     return (
@@ -62,22 +80,30 @@ function toForm(d) {
 
 function FeeForm({ fy, initial }) {
   // Cashier sees the chart but cannot change it (the server also refuses: Admin only).
-  const readOnly = useAuth().role !== 'admin';
+  const readOnly = useAuth().role !== "admin";
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const [errors, setErrors] = useState({});
   const [form, setForm] = useState(() => toForm(initial));
   const save = useMutation({
-    mutationFn: (body) => api(`/api/fee-structure/${fy}`, { method: 'PUT', body }),
+    mutationFn: (body) =>
+      api(`/api/fee-structure/${fy}`, { method: "PUT", body }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['fee-structure'] });
-      notify('Fee structure saved.', 'success');
+      await queryClient.invalidateQueries({ queryKey: ["fee-structure"] });
+      notify("Fee structure saved.", "success");
     },
-    onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
+    onError: (e) =>
+      notify(
+        `${e.message}${e.requestId ? ` (ref ${e.requestId})` : ""}`,
+        "error",
+      ),
   });
 
   function setRow(list, i, patch) {
-    setForm((f) => ({ ...f, [list]: f[list].map((r, n) => (n === i ? { ...r, ...patch } : r)) }));
+    setForm((f) => ({
+      ...f,
+      [list]: f[list].map((r, n) => (n === i ? { ...r, ...patch } : r)),
+    }));
   }
 
   function onSubmit(e) {
@@ -87,7 +113,7 @@ function FeeForm({ fy, initial }) {
       try {
         return rupeesToPaise(value);
       } catch {
-        bad[key] = 'Enter a valid amount';
+        bad[key] = "Enter a valid amount";
         return 0;
       }
     };
@@ -97,16 +123,20 @@ function FeeForm({ fy, initial }) {
         monthlyTuitionPaise: money(`t${i}`, c.tuition),
         admissionPaise: money(`a${i}`, c.admission),
       })),
-      formFeePaise: money('form', form.formFee),
-      lateFeePaise: money('late', form.lateFee),
+      formFeePaise: money("form", form.formFee),
+      lateFeePaise: money("late", form.lateFee),
       dueDay: Number(form.dueDay),
       graceDays: Number(form.graceDays),
       villages: form.villages
         .filter((v) => v.name.trim())
-        .map((v, i) => ({ name: v.name.trim(), monthlyPaise: money(`v${i}`, v.amount) })),
+        .map((v, i) => ({
+          name: v.name.trim(),
+          monthlyPaise: money(`v${i}`, v.amount),
+        })),
     };
-    if (!(body.dueDay >= 1 && body.dueDay <= 28)) bad.dueDay = 'Use 1 to 28';
-    if (!(body.graceDays >= 0 && body.graceDays <= 60)) bad.graceDays = 'Use 0 to 60';
+    if (!(body.dueDay >= 1 && body.dueDay <= 28)) bad.dueDay = "Use 1 to 28";
+    if (!(body.graceDays >= 0 && body.graceDays <= 60))
+      bad.graceDays = "Use 0 to 60";
     setErrors(bad);
     if (Object.keys(bad).length === 0) save.mutate(body);
   }
@@ -117,40 +147,51 @@ function FeeForm({ fy, initial }) {
         <h1 className="text-2xl font-semibold text-ink">Fee structure {fy}</h1>
         {!readOnly && (
           <Button type="submit" disabled={save.isPending}>
-            {save.isPending ? 'Saving…' : 'Save changes'}
+            {save.isPending ? "Saving…" : "Save changes"}
           </Button>
         )}
       </div>
       <p className="text-sm text-ink-muted">
-        {readOnly && 'View only. Only the Admin can change the fee structure. '}Amounts are in
-        rupees. Fees already posted to students do not change when you edit this chart; only new fee
-        plans use the new amounts. Every change is recorded in the audit log.
+        {readOnly && "View only. Only the Admin can change the fee structure. "}
+        Amounts are in rupees. Fees already posted to students do not change
+        when you edit this chart; only new fee plans use the new amounts. Every
+        change is recorded in the audit log.
       </p>
 
       <fieldset disabled={readOnly} className="flex flex-col gap-4">
         <Card title="Class fees">
           <div className="grid grid-cols-[1fr_1fr_1fr] items-end gap-3">
-            <span className="text-xs font-medium uppercase text-ink-muted">Class</span>
+            <span className="text-xs font-medium uppercase text-ink-muted">
+              Class
+            </span>
             <span className="text-xs font-medium uppercase text-ink-muted">
               Monthly tuition (₹)
             </span>
-            <span className="text-xs font-medium uppercase text-ink-muted">Admission fee (₹)</span>
+            <span className="text-xs font-medium uppercase text-ink-muted">
+              Admission fee (₹)
+            </span>
             {form.classFees.map((c, i) => (
               <FragmentRow key={c.classKey}>
-                <span className="self-center text-sm text-ink">{classLabel(c.classKey)}</span>
+                <span className="self-center text-sm text-ink">
+                  {classLabel(c.classKey)}
+                </span>
                 <Input
                   aria-label={`${classLabel(c.classKey)} monthly tuition`}
                   inputMode="decimal"
                   value={c.tuition}
                   error={errors[`t${i}`]}
-                  onChange={(e) => setRow('classFees', i, { tuition: e.target.value })}
+                  onChange={(e) =>
+                    setRow("classFees", i, { tuition: e.target.value })
+                  }
                 />
                 <Input
                   aria-label={`${classLabel(c.classKey)} admission fee`}
                   inputMode="decimal"
                   value={c.admission}
                   error={errors[`a${i}`]}
-                  onChange={(e) => setRow('classFees', i, { admission: e.target.value })}
+                  onChange={(e) =>
+                    setRow("classFees", i, { admission: e.target.value })
+                  }
                 />
               </FragmentRow>
             ))}
@@ -193,28 +234,40 @@ function FeeForm({ fy, initial }) {
         <Card title="Bus fee by village (monthly)">
           <div className="flex flex-col gap-2">
             {form.villages.length === 0 && (
-              <p className="text-sm text-ink-muted">No villages yet. Add one below.</p>
+              <p className="text-sm text-ink-muted">
+                No villages yet. Add one below.
+              </p>
             )}
             {form.villages.map((v, i) => (
-              <div key={i} className="grid grid-cols-[1fr_9rem_auto] items-start gap-2">
+              <div
+                key={i}
+                className="grid grid-cols-[1fr_9rem_auto] items-start gap-2"
+              >
                 <Input
                   aria-label={`Village ${i + 1} name`}
                   value={v.name}
-                  onChange={(e) => setRow('villages', i, { name: e.target.value })}
+                  onChange={(e) =>
+                    setRow("villages", i, { name: e.target.value })
+                  }
                 />
                 <Input
-                  aria-label={`${v.name || 'Village'} monthly bus fee`}
+                  aria-label={`${v.name || "Village"} monthly bus fee`}
                   inputMode="decimal"
                   value={v.amount}
                   error={errors[`v${i}`]}
-                  onChange={(e) => setRow('villages', i, { amount: e.target.value })}
+                  onChange={(e) =>
+                    setRow("villages", i, { amount: e.target.value })
+                  }
                 />
                 {!readOnly && (
                   <Button
                     type="button"
                     variant="secondary"
                     onClick={() =>
-                      setForm({ ...form, villages: form.villages.filter((_, n) => n !== i) })
+                      setForm({
+                        ...form,
+                        villages: form.villages.filter((_, n) => n !== i),
+                      })
                     }
                   >
                     Remove
@@ -228,7 +281,10 @@ function FeeForm({ fy, initial }) {
                   type="button"
                   variant="secondary"
                   onClick={() =>
-                    setForm({ ...form, villages: [...form.villages, { name: '', amount: '0' }] })
+                    setForm({
+                      ...form,
+                      villages: [...form.villages, { name: "", amount: "0" }],
+                    })
                   }
                 >
                   Add village

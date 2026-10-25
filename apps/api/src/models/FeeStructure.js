@@ -1,6 +1,6 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
-import { CLASS_KEYS } from '@erp/shared';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
+import { CLASS_KEYS } from "@erp/shared";
 
 // The tenantId plugin must be registered BEFORE a model is compiled.
 registerGlobalPlugins();
@@ -44,4 +44,5 @@ const feeStructureSchema = new mongoose.Schema(
 feeStructureSchema.index({ tenantId: 1, fy: 1 }, { unique: true });
 
 export const FeeStructure =
-  mongoose.models.FeeStructure ?? mongoose.model('FeeStructure', feeStructureSchema);
+  mongoose.models.FeeStructure ??
+  mongoose.model("FeeStructure", feeStructureSchema);

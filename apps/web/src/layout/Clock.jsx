@@ -1,18 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
-const dateFmt = new Intl.DateTimeFormat('en-IN', {
-  weekday: 'short',
-  day: '2-digit',
-  month: 'short',
-  year: 'numeric',
-  timeZone: 'Asia/Kolkata',
+const dateFmt = new Intl.DateTimeFormat("en-IN", {
+  weekday: "short",
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  timeZone: "Asia/Kolkata",
 });
-const timeFmt = new Intl.DateTimeFormat('en-IN', {
-  hour: '2-digit',
-  minute: '2-digit',
-  second: '2-digit',
+const timeFmt = new Intl.DateTimeFormat("en-IN", {
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
   hour12: true,
-  timeZone: 'Asia/Kolkata',
+  timeZone: "Asia/Kolkata",
 });
 
 /** Live date and time in IST (the school's time), ticking every second. */
@@ -23,7 +23,10 @@ export function Clock() {
     return () => clearInterval(id);
   }, []);
   return (
-    <time dateTime={now.toISOString()} className="text-right text-xs leading-tight sm:text-sm">
+    <time
+      dateTime={now.toISOString()}
+      className="text-right text-xs leading-tight sm:text-sm"
+    >
       <span className="block font-medium text-ink">{timeFmt.format(now)}</span>
       <span className="block text-ink-muted">{dateFmt.format(now)}</span>
     </time>

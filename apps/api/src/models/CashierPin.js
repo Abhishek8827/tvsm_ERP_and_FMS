@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -20,4 +20,5 @@ const pinSchema = new mongoose.Schema(
 );
 pinSchema.index({ tenantId: 1 }, { unique: true });
 
-export const CashierPin = mongoose.models.CashierPin ?? mongoose.model('CashierPin', pinSchema);
+export const CashierPin =
+  mongoose.models.CashierPin ?? mongoose.model("CashierPin", pinSchema);

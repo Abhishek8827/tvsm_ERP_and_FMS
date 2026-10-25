@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
-import { Button } from './Button';
-import { Input } from './Field';
+import { useEffect, useId, useRef, useState } from "react";
+import { Button } from "./Button";
+import { Input } from "./Field";
 /** Accessible modal: Escape closes, focus moves in, backdrop click closes. */
 export function Dialog({ open, title, onClose, children, footer }) {
   const titleId = useId();
@@ -13,15 +13,19 @@ export function Dialog({ open, title, onClose, children, footer }) {
   });
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => e.key === 'Escape' && onCloseRef.current();
-    document.addEventListener('keydown', onKey);
+    const onKey = (e) => e.key === "Escape" && onCloseRef.current();
+    document.addEventListener("keydown", onKey);
     panelRef.current?.focus();
-    return () => document.removeEventListener('keydown', onKey);
+    return () => document.removeEventListener("keydown", onKey);
   }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} aria-hidden />
+      <div
+        className="absolute inset-0 bg-black/50"
+        onClick={onClose}
+        aria-hidden
+      />
       <div
         ref={panelRef}
         role="dialog"
@@ -59,10 +63,10 @@ function ConfirmDialogInner({
   typeToConfirm,
   requireReason,
   onReasonChange,
-  tone = 'primary',
+  tone = "primary",
 }) {
-  const [typed, setTyped] = useState('');
-  const [reason, setReason] = useState('');
+  const [typed, setTyped] = useState("");
+  const [reason, setReason] = useState("");
   const typedOk = !typeToConfirm || typed === typeToConfirm;
   const reasonOk = !requireReason || reason.trim().length >= 3;
   return (
@@ -76,7 +80,7 @@ function ConfirmDialogInner({
             Cancel
           </Button>
           <Button
-            variant={tone === 'danger' ? 'danger' : 'primary'}
+            variant={tone === "danger" ? "danger" : "primary"}
             onClick={onConfirm}
             disabled={!typedOk || !reasonOk}
             loading={loading}

@@ -6,7 +6,7 @@
  * Identity that always holds for an account:  closing = opening + receipts + other - expenses.
  */
 const sum = (rows, f) => rows.reduce((n, r) => n + f(r), 0);
-const EXPENSE_TYPES = ['expense_payment', 'payment_reversal'];
+const EXPENSE_TYPES = ["expense_payment", "payment_reversal"];
 
 export function buildCashbook({
   date,
@@ -26,14 +26,17 @@ export function buildCashbook({
   const receiptRow = (r) => ({
     id: String(r._id),
     number: r.number,
-    admissionNo: r.student?.admissionNo ?? '',
-    classKey: r.student?.classKey ?? '',
-    section: r.student?.section ?? '',
-    name: r.student?.name ?? '',
-    cashPaise: r.mode === 'cash' ? r.totalPaise : 0,
-    onlinePaise: r.mode === 'cash' ? 0 : r.totalPaise,
+    admissionNo: r.student?.admissionNo ?? "",
+    classKey: r.student?.classKey ?? "",
+    section: r.student?.section ?? "",
+    name: r.student?.name ?? "",
+    cashPaise: r.mode === "cash" ? r.totalPaise : 0,
+    onlinePaise: r.mode === "cash" ? 0 : r.totalPaise,
     mode: r.mode,
-    bankName: r.mode === 'cash' ? null : (r.bankName ?? bankName.get(String(r.bankId)) ?? null),
+    bankName:
+      r.mode === "cash"
+        ? null
+        : (r.bankName ?? bankName.get(String(r.bankId)) ?? null),
     duePaise: r.dueAfterPaise ?? 0,
   });
   const section = (kind) => {
@@ -45,24 +48,26 @@ export function buildCashbook({
       totalPaise: sum(rows, (r) => r.cashPaise + r.onlinePaise),
     };
   };
-  const school = section('school');
-  const bus = section('transport');
+  const school = section("school");
+  const bus = section("transport");
 
   const accountLabel = (a) =>
-    a === 'cash' ? 'Cash' : (bankName.get(a.replace('bank:', '')) ?? 'Bank');
-  const expenseEntries = ledgerDay.filter((e) => EXPENSE_TYPES.includes(e.type));
+    a === "cash" ? "Cash" : (bankName.get(a.replace("bank:", "")) ?? "Bank");
+  const expenseEntries = ledgerDay.filter((e) =>
+    EXPENSE_TYPES.includes(e.type),
+  );
   const expenseRows = expenseEntries.map((e) => {
     const p = pay.get(String(e.refId));
-    const reversal = e.type === 'payment_reversal';
+    const reversal = e.type === "payment_reversal";
     return {
       id: String(e._id),
-      voucherNo: p?.voucherNumber ?? e.note ?? '',
-      head: p?.headName ?? '',
-      payee: p?.payeeName ?? '',
+      voucherNo: p?.voucherNumber ?? e.note ?? "",
+      head: p?.headName ?? "",
+      payee: p?.payeeName ?? "",
       // Positive = money spent; a reversal is shown as a negative expense (money came back).
       amountPaise: -e.amountPaise,
       reversal,
-      by: p?.authorisedBy ?? '',
+      by: p?.authorisedBy ?? "",
       account: e.account,
       mode: accountLabel(e.account),
     };
@@ -77,7 +82,9 @@ export function buildCashbook({
       (r) => r.amountPaise,
     );
     const other = sum(
-      ledgerDay.filter((e) => e.account === account && !EXPENSE_TYPES.includes(e.type)),
+      ledgerDay.filter(
+        (e) => e.account === account && !EXPENSE_TYPES.includes(e.type),
+      ),
       (e) => e.amountPaise,
     );
     return {
@@ -89,28 +96,35 @@ export function buildCashbook({
     };
   };
   const cashReceipts = sum(
-    receipts.filter((r) => r.mode === 'cash'),
+    receipts.filter((r) => r.mode === "cash"),
     (r) => r.totalPaise,
   );
-  const cash = block('cash', cashReceipts);
+  const cash = block("cash", cashReceipts);
 
   // Every active bank, plus any bank that has money movements even if it was switched off.
   const bankIds = new Set(banks.map((b) => String(b._id)));
-  for (const k of Object.keys(opening)) if (k.startsWith('bank:')) bankIds.add(k.slice(5));
-  for (const e of ledgerDay) if (e.account.startsWith('bank:')) bankIds.add(e.account.slice(5));
-  for (const r of receipts) if (r.mode !== 'cash' && r.bankId) bankIds.add(String(r.bankId));
+  for (const k of Object.keys(opening))
+    if (k.startsWith("bank:")) bankIds.add(k.slice(5));
+  for (const e of ledgerDay)
+    if (e.account.startsWith("bank:")) bankIds.add(e.account.slice(5));
+  for (const r of receipts)
+    if (r.mode !== "cash" && r.bankId) bankIds.add(String(r.bankId));
   const banksOut = [...bankIds].map((id) => {
     const rec = sum(
-      receipts.filter((r) => r.mode !== 'cash' && String(r.bankId) === id),
+      receipts.filter((r) => r.mode !== "cash" && String(r.bankId) === id),
       (r) => r.totalPaise,
     );
-    return { id, name: bankName.get(id) ?? 'Bank', ...block(`bank:${id}`, rec) };
+    return {
+      id,
+      name: bankName.get(id) ?? "Bank",
+      ...block(`bank:${id}`, rec),
+    };
   });
   const online = {
     banks: banksOut,
     // UPI / QR receipts with no bank chosen (old receipts) are not in any bank's balance.
     unassignedPaise: sum(
-      receipts.filter((r) => r.mode !== 'cash' && !r.bankId),
+      receipts.filter((r) => r.mode !== "cash" && !r.bankId),
       (r) => r.totalPaise,
     ),
     openingPaise: sum(banksOut, (b) => b.openingPaise),
@@ -122,7 +136,9 @@ export function buildCashbook({
 
   // Transport vendor account (needs the Admin's settings).
   const heads = (settings?.transportHeads ?? []).map((h) => h.toLowerCase());
-  const tExpenseRows = expenseRows.filter((r) => heads.includes(r.head.toLowerCase()));
+  const tExpenseRows = expenseRows.filter((r) =>
+    heads.includes(r.head.toLowerCase()),
+  );
   const configured = !!settings?.transportStartDate;
   const started = configured && date >= settings.transportStartDate;
   const tIncomeCash = bus.cashPaise;
@@ -149,8 +165,9 @@ export function buildCashbook({
 
   return {
     date,
-    closed: dayClose?.status === 'closed',
-    closedBy: dayClose?.status === 'closed' ? (dayClose.closedByName ?? null) : null,
+    closed: dayClose?.status === "closed",
+    closedBy:
+      dayClose?.status === "closed" ? (dayClose.closedByName ?? null) : null,
     cancelledToday,
     school,
     bus,

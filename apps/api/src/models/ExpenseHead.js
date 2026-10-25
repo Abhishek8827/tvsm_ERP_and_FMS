@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -15,4 +15,5 @@ const headSchema = new mongoose.Schema(
 );
 headSchema.index({ tenantId: 1, nameLower: 1 }, { unique: true });
 
-export const ExpenseHead = mongoose.models.ExpenseHead ?? mongoose.model('ExpenseHead', headSchema);
+export const ExpenseHead =
+  mongoose.models.ExpenseHead ?? mongoose.model("ExpenseHead", headSchema);

@@ -1,8 +1,13 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
-import { formatINR } from '@erp/shared';
-import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useState } from "react";
+import { formatINR } from "@erp/shared";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import {
   Badge,
   Button,
@@ -15,40 +20,42 @@ import {
   StatCard,
   Table,
   useToast,
-} from '../components/ui';
-import { errorText, parseRupees } from '../lib/rupees';
+} from "../components/ui";
+import { errorText, parseRupees } from "../lib/rupees";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const signed = (p) => (p > 0 ? `+${money(p)}` : money(p));
 const fmtDate = (d) =>
-  new Date(`${d}T00:00:00+05:30`).toLocaleDateString('en-IN', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'Asia/Kolkata',
+  new Date(`${d}T00:00:00+05:30`).toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "Asia/Kolkata",
   });
 
 /** Today's closing: the Cashier counts the cash; the figures to compare with come from the server. */
 function TodayCard({ role }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const [counted, setCounted] = useState('');
-  const [reason, setReason] = useState('');
+  const [counted, setCounted] = useState("");
+  const [reason, setReason] = useState("");
   const [confirm, setConfirm] = useState(false);
   const [reopen, setReopen] = useState(false);
-  const [reopenReason, setReopenReason] = useState('');
+  const [reopenReason, setReopenReason] = useState("");
   const q = useQuery({
-    queryKey: ['day-close', 'summary'],
-    queryFn: () => api('/api/day-close/summary'),
-    refetchInterval: (query) => (query.state.status === 'error' ? false : 30_000),
+    queryKey: ["day-close", "summary"],
+    queryFn: () => api("/api/day-close/summary"),
+    refetchInterval: (query) =>
+      query.state.status === "error" ? false : 30_000,
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['day-close'] });
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ["day-close"] });
   const parsed = parseRupees(counted);
   const close = useMutation({
     mutationFn: () =>
-      api('/api/day-close', {
-        method: 'POST',
+      api("/api/day-close", {
+        method: "POST",
         body: {
           date: q.data.date,
           countedCashPaise: parsed.paise,
@@ -57,39 +64,47 @@ function TodayCard({ role }) {
       }),
     onSuccess: async () => {
       setConfirm(false);
-      setCounted('');
-      setReason('');
+      setCounted("");
+      setReason("");
       await refresh();
-      notify('Day closed.', 'success');
+      notify("Day closed.", "success");
     },
     onError: (e) => {
       setConfirm(false);
-      notify(errorText(e), 'error');
+      notify(errorText(e), "error");
     },
   });
   const reopenDay = useMutation({
     mutationFn: () =>
       api(`/api/day-close/${q.data.date}/reopen`, {
-        method: 'POST',
+        method: "POST",
         body: { reason: reopenReason.trim() },
       }),
     onSuccess: async () => {
       setReopen(false);
       await refresh();
-      notify('Day reopened. Fees can be collected again.', 'success');
+      notify("Day reopened. Fees can be collected again.", "success");
     },
     onError: (e) => {
       setReopen(false);
-      notify(errorText(e), 'error');
+      notify(errorText(e), "error");
     },
   });
 
   if (q.isPending) return <Spinner label="Loading today's figures" />;
   if (q.isError)
-    return <ErrorState message={errorText(q.error)} onRetry={() => void q.refetch()} />;
+    return (
+      <ErrorState
+        message={errorText(q.error)}
+        onRetry={() => void q.refetch()}
+      />
+    );
   const d = q.data;
-  const closed = d.record?.status === 'closed';
-  const diff = parsed.error || counted.trim() === '' ? null : parsed.paise - d.expectedCashPaise;
+  const closed = d.record?.status === "closed";
+  const diff =
+    parsed.error || counted.trim() === ""
+      ? null
+      : parsed.paise - d.expectedCashPaise;
   const needsReason = diff !== null && diff !== 0;
   const ready = diff !== null && (!needsReason || reason.trim().length >= 3);
 
@@ -97,16 +112,30 @@ function TodayCard({ role }) {
     <Card
       title={`Day Close: ${fmtDate(d.date)}`}
       subtitle="One close for the whole school. Closing stops fee collection for the day."
-      actions={closed ? <Badge tone="success">Closed</Badge> : <Badge tone="warning">Open</Badge>}
+      actions={
+        closed ? (
+          <Badge tone="success">Closed</Badge>
+        ) : (
+          <Badge tone="warning">Open</Badge>
+        )
+      }
     >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Expected cash"
           value={money(d.expectedCashPaise)}
-          caption={`Cash receipts ${money(d.cashReceiptPaise)}${d.cashCancelledPaise ? ` − cancelled ${money(d.cashCancelledPaise)}` : ''}`}
+          caption={`Cash receipts ${money(d.cashReceiptPaise)}${d.cashCancelledPaise ? ` − cancelled ${money(d.cashCancelledPaise)}` : ""}`}
         />
-        <StatCard label="UPI" value={money(d.upiPaise)} caption="Goes to the bank" />
-        <StatCard label="QR" value={money(d.qrPaise)} caption="Goes to the bank" />
+        <StatCard
+          label="UPI"
+          value={money(d.upiPaise)}
+          caption="Goes to the bank"
+        />
+        <StatCard
+          label="QR"
+          value={money(d.qrPaise)}
+          caption="Goes to the bank"
+        />
         <StatCard
           label="Receipts today"
           value={d.receiptCount}
@@ -117,17 +146,21 @@ function TodayCard({ role }) {
       {closed ? (
         <div className="mt-4 rounded-lg border border-line bg-app p-4 text-sm">
           <p>
-            Closed by <b>{d.record.closedByName}</b>. Counted {money(d.record.countedCashPaise)},
-            expected {money(d.record.expectedCashPaise)}
+            Closed by <b>{d.record.closedByName}</b>. Counted{" "}
+            {money(d.record.countedCashPaise)}, expected{" "}
+            {money(d.record.expectedCashPaise)}
             {d.record.differencePaise !== 0 && (
               <>
-                , difference <b className="text-danger">{signed(d.record.differencePaise)}</b> (
-                {d.record.differenceReason})
+                , difference{" "}
+                <b className="text-danger">
+                  {signed(d.record.differencePaise)}
+                </b>{" "}
+                ({d.record.differenceReason})
               </>
             )}
             .
           </p>
-          {role === 'admin' && (
+          {role === "admin" && (
             <div className="mt-3">
               <Button variant="secondary" onClick={() => setReopen(true)}>
                 Reopen this day
@@ -135,7 +168,7 @@ function TodayCard({ role }) {
             </div>
           )}
         </div>
-      ) : role === 'cashier' ? (
+      ) : role === "cashier" ? (
         <div className="mt-4 flex max-w-md flex-col gap-3">
           <Input
             label="Cash counted in the drawer (₹)"
@@ -145,8 +178,12 @@ function TodayCard({ role }) {
             onChange={(e) => setCounted(e.target.value)}
           />
           {diff !== null && (
-            <p className={`text-sm ${diff === 0 ? 'text-success' : 'text-danger'}`}>
-              {diff === 0 ? 'Cash matches.' : `Difference: ${signed(diff)} (counted − expected)`}
+            <p
+              className={`text-sm ${diff === 0 ? "text-success" : "text-danger"}`}
+            >
+              {diff === 0
+                ? "Cash matches."
+                : `Difference: ${signed(diff)} (counted − expected)`}
             </p>
           )}
           {needsReason && (
@@ -196,43 +233,58 @@ export function DayClose() {
   const { role } = useAuth();
   const [page, setPage] = useState(1);
   const list = useQuery({
-    queryKey: ['day-close', 'list', page],
+    queryKey: ["day-close", "list", page],
     queryFn: () => api(`/api/day-close?page=${page}&pageSize=25`),
     placeholderData: keepPreviousData,
   });
   const columns = [
-    { key: 'date', header: 'Date', render: (r) => fmtDate(r.date) },
+    { key: "date", header: "Date", render: (r) => fmtDate(r.date) },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (r) =>
-        r.status === 'closed' ? (
+        r.status === "closed" ? (
           <Badge tone="success">Closed</Badge>
         ) : (
           <Badge tone="warning">Reopened</Badge>
         ),
     },
     {
-      key: 'exp',
-      header: 'Expected cash',
-      align: 'right',
+      key: "exp",
+      header: "Expected cash",
+      align: "right",
       render: (r) => money(r.expectedCashPaise),
     },
-    { key: 'cnt', header: 'Counted', align: 'right', render: (r) => money(r.countedCashPaise) },
     {
-      key: 'diff',
-      header: 'Difference',
-      align: 'right',
+      key: "cnt",
+      header: "Counted",
+      align: "right",
+      render: (r) => money(r.countedCashPaise),
+    },
+    {
+      key: "diff",
+      header: "Difference",
+      align: "right",
       render: (r) =>
         r.differencePaise === 0 ? (
-          '-'
+          "-"
         ) : (
           <span className="text-danger">{signed(r.differencePaise)}</span>
         ),
     },
-    { key: 'upi', header: 'UPI', align: 'right', render: (r) => money(r.upiPaise) },
-    { key: 'qr', header: 'QR', align: 'right', render: (r) => money(r.qrPaise) },
-    { key: 'by', header: 'Closed by', render: (r) => r.closedByName ?? '-' },
+    {
+      key: "upi",
+      header: "UPI",
+      align: "right",
+      render: (r) => money(r.upiPaise),
+    },
+    {
+      key: "qr",
+      header: "QR",
+      align: "right",
+      render: (r) => money(r.qrPaise),
+    },
+    { key: "by", header: "Closed by", render: (r) => r.closedByName ?? "-" },
   ];
   return (
     <div className="flex flex-col gap-4">
@@ -250,7 +302,12 @@ export function DayClose() {
         />
         {list.data && list.data.total > 25 && (
           <div className="mt-3">
-            <Pagination page={page} pageSize={25} total={list.data.total} onPageChange={setPage} />
+            <Pagination
+              page={page}
+              pageSize={25}
+              total={list.data.total}
+              onPageChange={setPage}
+            />
           </div>
         )}
       </Card>

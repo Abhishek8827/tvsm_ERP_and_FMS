@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -16,15 +16,24 @@ const paymentSchema = new mongoose.Schema(
     date: { type: String, required: true },
     headName: { type: String, required: true },
     payeeName: { type: String, required: true },
-    details: { type: String, default: '' }, // PARTICULARS / PAYMENT DETAILS
-    mode: { type: String, enum: ['cash', 'bank'], required: true },
+    details: { type: String, default: "" }, // PARTICULARS / PAYMENT DETAILS
+    mode: { type: String, enum: ["cash", "bank"], required: true },
     bankId: { type: String },
     bankName: { type: String },
     amountPaise: { type: Number, required: true, min: 1 },
-    authorisedBy: { type: String, enum: ['President', 'Vice President'], required: true },
+    authorisedBy: {
+      type: String,
+      enum: ["President", "Vice President"],
+      required: true,
+    },
     approvedByName: { type: String }, // the Principal who approved the voucher
-    remark: { type: String, default: '' },
-    status: { type: String, enum: ['active', 'reversed'], default: 'active', required: true },
+    remark: { type: String, default: "" },
+    status: {
+      type: String,
+      enum: ["active", "reversed"],
+      default: "active",
+      required: true,
+    },
     idempotencyKey: { type: String, required: true }, // a double click never saves twice
     createdBy: { type: String, required: true },
     createdByName: { type: String },
@@ -39,4 +48,5 @@ paymentSchema.index({ tenantId: 1, date: -1 });
 paymentSchema.index({ tenantId: 1, idempotencyKey: 1 }, { unique: true });
 
 export const ExpensePayment =
-  mongoose.models.ExpensePayment ?? mongoose.model('ExpensePayment', paymentSchema);
+  mongoose.models.ExpensePayment ??
+  mongoose.model("ExpensePayment", paymentSchema);

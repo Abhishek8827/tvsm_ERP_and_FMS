@@ -1,17 +1,21 @@
-import { Router } from 'express';
-import { z } from 'zod';
-import { DayCloseRuleError, checkClose, todayIst } from '@erp/shared';
-import { requireRole } from '../middleware/requireRole.js';
-import { recordAudit } from '../services/audit.js';
-import { AppError } from '../utils/errors.js';
+import { Router } from "express";
+import { z } from "zod";
+import { DayCloseRuleError, checkClose, todayIst } from "@erp/shared";
+import { requireRole } from "../middleware/requireRole.js";
+import { recordAudit } from "../services/audit.js";
+import { AppError } from "../utils/errors.js";
 
-const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-10-22');
+const dateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-10-22");
 const closeBody = z.object({
   date: dateField.optional(),
   countedCashPaise: z.number().int().min(0).max(100_000_000_00),
   reason: z.string().trim().max(300).optional(),
 });
-const reopenBody = z.object({ reason: z.string().trim().min(3, 'Write the reason').max(300) });
+const reopenBody = z.object({
+  reason: z.string().trim().min(3, "Write the reason").max(300),
+});
 const listQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
@@ -40,7 +44,7 @@ const shape = (r) =>
  */
 export function dayCloseRouter(deps, authenticate) {
   const router = Router();
-  const everyone = [authenticate, requireRole('admin', 'principal', 'cashier')];
+  const everyone = [authenticate, requireRole("admin", "principal", "cashier")];
   const wrap = (fn) => async (req, res, next) => {
     try {
       await fn(req, res);
@@ -51,7 +55,7 @@ export function dayCloseRouter(deps, authenticate) {
 
   // Live figures for a day (default today) plus its close record, if any.
   router.get(
-    '/day-close/summary',
+    "/day-close/summary",
     ...everyone,
     wrap(async (req, res) => {
       const date = dateField.default(todayIst()).parse(req.query.date);
@@ -65,7 +69,7 @@ export function dayCloseRouter(deps, authenticate) {
   );
 
   router.get(
-    '/day-close',
+    "/day-close",
     ...everyone,
     wrap(async (req, res) => {
       const { page, pageSize } = listQuery.parse(req.query);
@@ -79,16 +83,21 @@ export function dayCloseRouter(deps, authenticate) {
   );
 
   router.post(
-    '/day-close',
+    "/day-close",
     authenticate,
-    requireRole('cashier'),
+    requireRole("cashier"),
     wrap(async (req, res) => {
       const body = closeBody.parse(req.body);
       const date = body.date ?? todayIst();
       if (date > todayIst())
-        throw new AppError('FUTURE_DATE', 422, 'A day that has not come cannot be closed.', {
-          date: 'Future date',
-        });
+        throw new AppError(
+          "FUTURE_DATE",
+          422,
+          "A day that has not come cannot be closed.",
+          {
+            date: "Future date",
+          },
+        );
       const tenantId = req.user.tenantId;
       // Figures are worked out HERE from the receipts; the browser only sends what was counted.
       const totals = await deps.dayCloseStore.dayTotals(tenantId, date);
@@ -123,13 +132,18 @@ export function dayCloseRouter(deps, authenticate) {
           receiptCount: totals.receiptCount,
         },
       });
-      if (!saved) throw new AppError('ALREADY_CLOSED', 409, 'This day is already closed.');
+      if (!saved)
+        throw new AppError(
+          "ALREADY_CLOSED",
+          409,
+          "This day is already closed.",
+        );
       await recordAudit(
         deps,
         req,
         {
-          action: 'create',
-          entity: 'day_close',
+          action: "create",
+          entity: "day_close",
           entityId: date,
           reason: differencePaise !== 0 ? body.reason : undefined,
           newValue: {
@@ -145,9 +159,9 @@ export function dayCloseRouter(deps, authenticate) {
   );
 
   router.post(
-    '/day-close/:date/reopen',
+    "/day-close/:date/reopen",
     authenticate,
-    requireRole('admin'),
+    requireRole("admin"),
     wrap(async (req, res) => {
       const date = dateField.parse(req.params.date);
       const { reason } = reopenBody.parse(req.body);
@@ -157,11 +171,12 @@ export function dayCloseRouter(deps, authenticate) {
         reason,
         user: req.user,
       });
-      if (!saved) throw new AppError('NOT_FOUND', 404, 'That day is not closed.');
+      if (!saved)
+        throw new AppError("NOT_FOUND", 404, "That day is not closed.");
       await recordAudit(
         deps,
         req,
-        { action: 'update', entity: 'day_close', entityId: date, reason },
+        { action: "update", entity: "day_close", entityId: date, reason },
         { critical: true },
       );
       res.json(shape(saved));

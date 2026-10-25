@@ -1,7 +1,7 @@
-import { addDaysToDateString, expectedCash, istStartOfDay } from '@erp/shared';
-import { DayClose } from '../models/DayClose.js';
-import { Receipt } from '../models/Receipt.js';
-import { ReceiptCancellation } from '../models/ReceiptCancellation.js';
+import { addDaysToDateString, expectedCash, istStartOfDay } from "@erp/shared";
+import { DayClose } from "../models/DayClose.js";
+import { Receipt } from "../models/Receipt.js";
+import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
 
 const dup = (e) => e?.code === 11000;
 
@@ -15,33 +15,45 @@ async function dayTotals(tenantId, date) {
   const [issued, cancelledRows] = await Promise.all([
     Receipt.aggregate([
       { $match: { tenantId, issuedAt: { $gte: from, $lt: to } } },
-      { $group: { _id: '$mode', paise: { $sum: '$totalPaise' }, count: { $sum: 1 } } },
+      {
+        $group: {
+          _id: "$mode",
+          paise: { $sum: "$totalPaise" },
+          count: { $sum: 1 },
+        },
+      },
     ]),
     ReceiptCancellation.find({
       tenantId,
-      status: 'cancelled',
+      status: "cancelled",
       decidedAt: { $gte: from, $lt: to },
     })
-      .select('receiptId')
+      .select("receiptId")
       .lean(),
   ]);
   const cancelledReceipts = cancelledRows.length
-    ? await Receipt.find({ tenantId, _id: { $in: cancelledRows.map((r) => r.receiptId) } })
-        .select('mode totalPaise')
+    ? await Receipt.find({
+        tenantId,
+        _id: { $in: cancelledRows.map((r) => r.receiptId) },
+      })
+        .select("mode totalPaise")
         .lean()
     : [];
-  const by = (mode) => issued.find((x) => x._id === mode) ?? { paise: 0, count: 0 };
+  const by = (mode) =>
+    issued.find((x) => x._id === mode) ?? { paise: 0, count: 0 };
   const cancelled = (mode) =>
-    cancelledReceipts.filter((r) => r.mode === mode).reduce((n, r) => n + r.totalPaise, 0);
-  const cashReceiptPaise = by('cash').paise;
-  const cashCancelledPaise = cancelled('cash');
+    cancelledReceipts
+      .filter((r) => r.mode === mode)
+      .reduce((n, r) => n + r.totalPaise, 0);
+  const cashReceiptPaise = by("cash").paise;
+  const cashCancelledPaise = cancelled("cash");
   return {
     date,
     cashReceiptPaise,
     cashCancelledPaise,
     expectedCashPaise: expectedCash({ cashReceiptPaise, cashCancelledPaise }),
-    upiPaise: by('upi').paise - cancelled('upi'),
-    qrPaise: by('qr').paise - cancelled('qr'),
+    upiPaise: by("upi").paise - cancelled("upi"),
+    qrPaise: by("qr").paise - cancelled("qr"),
     receiptCount: issued.reduce((n, x) => n + x.count, 0),
     cancelledCount: cancelledReceipts.length,
   };
@@ -53,7 +65,7 @@ export function makeDayCloseStore() {
     get: (tenantId, date) => DayClose.findOne({ tenantId, date }).lean(),
     /** True when Collect Fee must be blocked for this date. */
     async isClosed(tenantId, date) {
-      return !!(await DayClose.exists({ tenantId, date, status: 'closed' }));
+      return !!(await DayClose.exists({ tenantId, date, status: "closed" }));
     },
     async list({ tenantId, page, pageSize }) {
       const [rows, total] = await Promise.all([
@@ -61,7 +73,7 @@ export function makeDayCloseStore() {
           .sort({ date: -1 })
           .skip((page - 1) * pageSize)
           .limit(pageSize)
-          .select('-history')
+          .select("-history")
           .lean(),
         DayClose.countDocuments({ tenantId }),
       ]);
@@ -73,9 +85,9 @@ export function makeDayCloseStore() {
      */
     async close({ tenantId, date, figures, user }) {
       const now = new Date();
-      const entry = { action: 'close', at: now, byName: user.name, ...figures };
+      const entry = { action: "close", at: now, byName: user.name, ...figures };
       const set = {
-        status: 'closed',
+        status: "closed",
         ...figures,
         closedBy: String(user.id),
         closedByName: user.name,
@@ -84,12 +96,17 @@ export function makeDayCloseStore() {
       try {
         const existing = await DayClose.findOne({ tenantId, date }).lean();
         if (!existing) {
-          const doc = await DayClose.create({ tenantId, date, ...set, history: [entry] });
+          const doc = await DayClose.create({
+            tenantId,
+            date,
+            ...set,
+            history: [entry],
+          });
           return doc.toObject();
         }
         // The status filter makes a double click or a second cashier a no-op (returns null).
         return await DayClose.findOneAndUpdate(
-          { tenantId, date, status: 'open' },
+          { tenantId, date, status: "open" },
           { $set: set, $push: { history: entry } },
           { new: true },
         ).lean();
@@ -100,16 +117,21 @@ export function makeDayCloseStore() {
     },
     reopen: ({ tenantId, date, reason, user }) =>
       DayClose.findOneAndUpdate(
-        { tenantId, date, status: 'closed' },
+        { tenantId, date, status: "closed" },
         {
           $set: {
-            status: 'open',
+            status: "open",
             reopenedByName: user.name,
             reopenedAt: new Date(),
             reopenReason: reason,
           },
           $push: {
-            history: { action: 'reopen', at: new Date(), byName: user.name, reason },
+            history: {
+              action: "reopen",
+              at: new Date(),
+              byName: user.name,
+              reason,
+            },
           },
         },
         { new: true },

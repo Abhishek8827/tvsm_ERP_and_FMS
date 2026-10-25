@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -21,7 +21,7 @@ const figures = {
 const dayCloseSchema = new mongoose.Schema(
   {
     date: { type: String, required: true }, // YYYY-MM-DD in IST
-    status: { type: String, enum: ['closed', 'open'], required: true },
+    status: { type: String, enum: ["closed", "open"], required: true },
     ...figures,
     closedBy: { type: String },
     closedByName: { type: String },
@@ -32,7 +32,7 @@ const dayCloseSchema = new mongoose.Schema(
     history: [
       {
         _id: false,
-        action: { type: String, enum: ['close', 'reopen'], required: true },
+        action: { type: String, enum: ["close", "reopen"], required: true },
         at: { type: Date, required: true },
         byName: { type: String },
         reason: { type: String },
@@ -50,4 +50,5 @@ const dayCloseSchema = new mongoose.Schema(
 );
 dayCloseSchema.index({ tenantId: 1, date: 1 }, { unique: true });
 
-export const DayClose = mongoose.models.DayClose ?? mongoose.model('DayClose', dayCloseSchema);
+export const DayClose =
+  mongoose.models.DayClose ?? mongoose.model("DayClose", dayCloseSchema);

@@ -1,9 +1,15 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useState,
+} from "react";
 const ToastContext = createContext(null);
 const toneClass = {
-  success: 'border-success/40 bg-success/10 text-success',
-  error: 'border-danger/40 bg-danger/10 text-danger',
-  info: 'border-info/40 bg-info/10 text-info',
+  success: "border-success/40 bg-success/10 text-success",
+  error: "border-danger/40 bg-danger/10 text-danger",
+  info: "border-info/40 bg-info/10 text-info",
 };
 /**
  * Toasts report the real outcome of a real action (success after the API confirms, error with
@@ -11,10 +17,13 @@ const toneClass = {
  */
 export function ToastProvider({ children }) {
   const [items, setItems] = useState([]);
-  const notify = useCallback((message, tone = 'info') => {
+  const notify = useCallback((message, tone = "info") => {
     const id = Date.now() + Math.random();
     setItems((cur) => [...cur, { id, tone, message }]);
-    window.setTimeout(() => setItems((cur) => cur.filter((t) => t.id !== id)), 5000);
+    window.setTimeout(
+      () => setItems((cur) => cur.filter((t) => t.id !== id)),
+      5000,
+    );
   }, []);
   const api = useMemo(() => ({ notify }), [notify]);
   return (
@@ -39,6 +48,6 @@ export function ToastProvider({ children }) {
 }
 export function useToast() {
   const ctx = useContext(ToastContext);
-  if (!ctx) throw new Error('useToast must be used inside <ToastProvider>');
+  if (!ctx) throw new Error("useToast must be used inside <ToastProvider>");
   return ctx;
 }

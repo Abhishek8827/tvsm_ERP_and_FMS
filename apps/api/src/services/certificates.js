@@ -9,7 +9,7 @@ import {
   lateSettledFromReceipts,
   monthYearLabel,
   nextClassKey,
-} from '@erp/shared';
+} from "@erp/shared";
 
 const isoDate = (d) => (d ? new Date(d).toISOString().slice(0, 10) : null);
 
@@ -40,24 +40,26 @@ export async function studentDues({ deps, tenantId, student, fy, asOf }) {
 export async function concessionText({ deps, tenantId, student, fy }) {
   const all = await deps.rebateStore.listForStudent(tenantId, student._id);
   const parts = all
-    .filter((r) => r.status === 'active' && r.fy === fy && r.kind !== 'late_fee')
+    .filter(
+      (r) => r.status === "active" && r.fy === fy && r.kind !== "late_fee",
+    )
     .map((r) => {
-      const cat = REBATE_CATEGORIES[r.category]?.label ?? 'Concession';
+      const cat = REBATE_CATEGORIES[r.category]?.label ?? "Concession";
       return r.reason ? `${cat} - ${r.reason}` : cat;
     });
-  return [...new Set(parts)].join('; ') || 'None';
+  return [...new Set(parts)].join("; ") || "None";
 }
 
 /** What the Admin must still fill in before a TC can be made (the record lacks it). */
 export function missingTcFields(s) {
   const need = [
-    ['fatherName', "Father's name"],
-    ['motherName', "Mother's name"],
-    ['dateOfBirth', 'Date of birth'],
-    ['category', 'Category'],
-    ['nationality', 'Nationality'],
-    ['firstAdmissionDate', 'Date of first admission'],
-    ['firstAdmissionClass', 'Class at first admission'],
+    ["fatherName", "Father's name"],
+    ["motherName", "Mother's name"],
+    ["dateOfBirth", "Date of birth"],
+    ["category", "Category"],
+    ["nationality", "Nationality"],
+    ["firstAdmissionDate", "Date of first admission"],
+    ["firstAdmissionClass", "Class at first admission"],
   ];
   return need.filter(([k]) => !s[k]).map(([key, label]) => ({ key, label }));
 }
@@ -65,7 +67,8 @@ export function missingTcFields(s) {
 /** The student with the Admin's typed values laid over it (what the TC will be made from). */
 export function mergeStudent(student, patch = {}) {
   const out = { ...student };
-  for (const [k, v] of Object.entries(patch)) if (v !== undefined && v !== '') out[k] = v;
+  for (const [k, v] of Object.entries(patch))
+    if (v !== undefined && v !== "") out[k] = v;
   return out;
 }
 
@@ -86,8 +89,8 @@ export function buildSnapshot({ student, dues, concession }) {
     firstAdmissionClass: classPlainLabel(student.firstAdmissionClass),
     lastClass: student.classKey,
     lastClassInWords: classInWords(student.classKey),
-    section: student.section ?? '',
-    duesPaidUpto: paidUpto ? monthYearLabel(paidUpto) : 'Nil',
+    section: student.section ?? "",
+    duesPaidUpto: paidUpto ? monthYearLabel(paidUpto) : "Nil",
     feeConcession: concession,
   };
 }
@@ -98,7 +101,7 @@ export const pendingPaise = (dues) => dues.totals.dueNow + dues.totals.lateFee;
 /** Promotion default: the next class, or "Course completed" after class 12. */
 export function defaultPromotion(classKey) {
   const next = nextClassKey(classKey);
-  return !next || classKey === '12' ? 'Course completed' : 'Yes, to next class';
+  return !next || classKey === "12" ? "Course completed" : "Yes, to next class";
 }
 
 export function shapeTc(t, { copyNo } = {}) {

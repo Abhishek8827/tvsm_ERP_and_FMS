@@ -5,30 +5,31 @@
  * Safe to run again: it only fills the year if it does not exist yet, so it never overwrites
  * changes the Admin made on screen.
  */
-import { loadEnv } from '../config/env.js';
-import { connectDb, disconnectDb } from '../db.js';
-import { FeeStructure } from '../models/FeeStructure.js';
+import { loadEnv } from "../config/env.js";
+import { connectDb, disconnectDb } from "../db.js";
+import { FeeStructure } from "../models/FeeStructure.js";
 
 const env = loadEnv();
-const fy = process.argv.slice(2).find((a) => /^\d{4}-\d{2}$/.test(a)) ?? '2026-27';
+const fy =
+  process.argv.slice(2).find((a) => /^\d{4}-\d{2}$/.test(a)) ?? "2026-27";
 const rs = (n) => n * 100; // rupees -> paise
 
 // [class, monthly tuition, admission fee] (yearly tuition = monthly x 10 instalments)
 const CLASS_ROWS = [
-  ['PG', 700, 1000],
-  ['NURSERY', 700, 1000],
-  ['LKG', 770, 1000],
-  ['UKG', 770, 1000],
-  ['1', 1000, 2000],
-  ['2', 1000, 2000],
-  ['3', 1000, 2000],
-  ['4', 1200, 2000],
-  ['5', 1200, 2000],
-  ['6', 1500, 2500],
-  ['7', 1500, 2500],
-  ['8', 1500, 2500],
-  ['9', 1800, 3000],
-  ['10', 1800, 3000],
+  ["PG", 700, 1000],
+  ["NURSERY", 700, 1000],
+  ["LKG", 770, 1000],
+  ["UKG", 770, 1000],
+  ["1", 1000, 2000],
+  ["2", 1000, 2000],
+  ["3", 1000, 2000],
+  ["4", 1200, 2000],
+  ["5", 1200, 2000],
+  ["6", 1500, 2500],
+  ["7", 1500, 2500],
+  ["8", 1500, 2500],
+  ["9", 1800, 3000],
+  ["10", 1800, 3000],
 ];
 // Monthly bus fee per village. More villages will be added by the Admin later.
 const VILLAGES = {
@@ -50,10 +51,10 @@ const VILLAGES = {
   BHATKHEDA: 500,
   CHUNABHATTA: 500,
   BEED: 500,
-  'SHIVAJI NAGAR': 500,
+  "SHIVAJI NAGAR": 500,
   BHUDHWARA: 500,
-  '7NO. GATE': 500,
-  'NEPA MILL GATE': 500,
+  "7NO. GATE": 500,
+  "NEPA MILL GATE": 500,
   LALPADAWA: 1300,
 };
 
@@ -72,7 +73,10 @@ if (exists) {
       admissionPaise: rs(a),
     })),
     formFeePaise: rs(100),
-    villages: Object.entries(VILLAGES).map(([name, r]) => ({ name, monthlyPaise: rs(r) })),
+    villages: Object.entries(VILLAGES).map(([name, r]) => ({
+      name,
+      monthlyPaise: rs(r),
+    })),
   });
   console.log(
     `Fee structure for ${fy} created (14 classes, ${Object.keys(VILLAGES).length} villages).`,

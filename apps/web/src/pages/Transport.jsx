@@ -1,9 +1,14 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { classLabel, formatINR } from '@erp/shared';
-import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { classLabel, formatINR } from "@erp/shared";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import {
   Badge,
   Button,
@@ -14,33 +19,39 @@ import {
   Select,
   Table,
   useToast,
-} from '../components/ui';
-import { errorText } from '../lib/rupees';
+} from "../components/ui";
+import { errorText } from "../lib/rupees";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const MONTH_NAMES = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
 ];
 const monthLabel = (ym) =>
-  ym ? `${MONTH_NAMES[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : '-';
+  ym ? `${MONTH_NAMES[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : "-";
 const STATE = {
   on: <Badge tone="success">On bus</Badge>,
   stopped: <Badge tone="neutral">Stopped</Badge>,
   pending: <Badge tone="warning">Not entered yet</Badge>,
 };
 const refresh = async (qc) => {
-  for (const key of ['transport', 'fees-database', 'dues', 'ledger', 'dashboard'])
+  for (const key of [
+    "transport",
+    "fees-database",
+    "dues",
+    "ledger",
+    "dashboard",
+  ])
     await qc.invalidateQueries({ queryKey: [key] });
 };
 
@@ -51,10 +62,10 @@ const refresh = async (qc) => {
  */
 export function Transport() {
   const { role } = useAuth();
-  const isAdmin = role === 'admin';
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
-  const [state, setState] = useState('');
+  const isAdmin = role === "admin";
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
+  const [state, setState] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [adding, setAdding] = useState(null); // null | '' | scholar number to prefill
@@ -69,50 +80,57 @@ export function Transport() {
   }, [search]);
 
   const query = useQuery({
-    queryKey: ['transport', { q, state, page, pageSize }],
+    queryKey: ["transport", { q, state, page, pageSize }],
     queryFn: () => {
       const p = new URLSearchParams({ page, pageSize });
-      if (q) p.set('q', q);
-      if (state) p.set('state', state);
+      if (q) p.set("q", q);
+      if (state) p.set("state", state);
       return api(`/api/transport?${p}`);
     },
     placeholderData: keepPreviousData,
   });
   const d = query.data;
-  const rows = d?.rows?.map((r, i) => ({ ...r, _n: (page - 1) * pageSize + i + 1 }));
+  const rows = d?.rows?.map((r, i) => ({
+    ...r,
+    _n: (page - 1) * pageSize + i + 1,
+  }));
   const columns = [
-    { key: 'sno', header: 'S.No', render: (r) => r._n },
-    { key: 'adm', header: 'Sch. ID', render: (r) => r.admissionNo },
+    { key: "sno", header: "S.No", render: (r) => r._n },
+    { key: "adm", header: "Sch. ID", render: (r) => r.admissionNo },
     {
-      key: 'name',
-      header: 'Student',
+      key: "name",
+      header: "Student",
       render: (r) => (
-        <Link className="font-medium text-brand hover:underline" to={`/students/${r.id}`}>
+        <Link
+          className="font-medium text-brand hover:underline"
+          to={`/students/${r.id}`}
+        >
           {r.name}
         </Link>
       ),
     },
     {
-      key: 'class',
-      header: 'Class',
-      render: (r) => `${classLabel(r.classKey)}${r.section ? ` - ${r.section}` : ''}`,
+      key: "class",
+      header: "Class",
+      render: (r) =>
+        `${classLabel(r.classKey)}${r.section ? ` - ${r.section}` : ""}`,
     },
-    { key: 'address', header: 'Address', render: (r) => r.address || '-' },
-    { key: 'village', header: 'Village', render: (r) => r.village || '-' },
+    { key: "address", header: "Address", render: (r) => r.address || "-" },
+    { key: "village", header: "Village", render: (r) => r.village || "-" },
     {
-      key: 'fee',
-      header: 'Fee / month',
-      align: 'right',
-      render: (r) => (r.monthlyPaise == null ? '-' : money(r.monthlyPaise)),
+      key: "fee",
+      header: "Fee / month",
+      align: "right",
+      render: (r) => (r.monthlyPaise == null ? "-" : money(r.monthlyPaise)),
     },
-    { key: 'from', header: 'From', render: (r) => monthLabel(r.transportFrom) },
+    { key: "from", header: "From", render: (r) => monthLabel(r.transportFrom) },
     {
-      key: 'until',
-      header: 'Status',
+      key: "until",
+      header: "Status",
       render: (r) => (
         <div>
           {STATE[r.state]}
-          {r.state === 'stopped' && r.transportUntil && (
+          {r.state === "stopped" && r.transportUntil && (
             <p className="mt-1 text-xs text-ink-muted">
               Last month charged: {monthLabel(r.transportUntil)}
             </p>
@@ -123,14 +141,14 @@ export function Transport() {
   ];
   if (isAdmin)
     columns.push({
-      key: 'act',
-      header: '',
+      key: "act",
+      header: "",
       render: (r) =>
-        r.state === 'on' ? (
+        r.state === "on" ? (
           <Button variant="secondary" onClick={() => setStopping(r)}>
             Stop
           </Button>
-        ) : r.state === 'pending' ? (
+        ) : r.state === "pending" ? (
           <Button onClick={() => setAdding(r.admissionNo)}>Enter</Button>
         ) : null,
     });
@@ -141,11 +159,13 @@ export function Transport() {
         <div>
           <h1 className="text-2xl font-semibold text-ink">Transport</h1>
           <p className="text-sm text-ink-muted">
-            Students on the school bus. The bus fee is charged only for these students, from the
-            month shown.
+            Students on the school bus. The bus fee is charged only for these
+            students, from the month shown.
           </p>
         </div>
-        {isAdmin && <Button onClick={() => setAdding('')}>Add student to bus</Button>}
+        {isAdmin && (
+          <Button onClick={() => setAdding("")}>Add student to bus</Button>
+        )}
       </div>
       <FilterBar>
         <Input
@@ -162,10 +182,10 @@ export function Transport() {
             setPage(1);
           }}
           options={[
-            { value: '', label: 'All' },
-            { value: 'on', label: 'On bus now' },
-            { value: 'stopped', label: 'Stopped' },
-            { value: 'pending', label: 'Not entered yet (old list)' },
+            { value: "", label: "All" },
+            { value: "on", label: "On bus now" },
+            { value: "stopped", label: "Stopped" },
+            { value: "pending", label: "Not entered yet (old list)" },
           ]}
         />
       </FilterBar>
@@ -180,7 +200,7 @@ export function Transport() {
         emptyDescription={
           isAdmin
             ? 'Use "Add student to bus" and enter a scholar number.'
-            : 'The Admin has not entered any student for these filters.'
+            : "The Admin has not entered any student for these filters."
         }
       />
       {d && d.total > 0 && (
@@ -195,8 +215,12 @@ export function Transport() {
           }}
         />
       )}
-      {adding !== null && <AddDialog initial={adding} onClose={() => setAdding(null)} />}
-      {stopping && <StopDialog student={stopping} onClose={() => setStopping(null)} />}
+      {adding !== null && (
+        <AddDialog initial={adding} onClose={() => setAdding(null)} />
+      )}
+      {stopping && (
+        <StopDialog student={stopping} onClose={() => setStopping(null)} />
+      )}
     </div>
   );
 }
@@ -213,28 +237,29 @@ function AddDialog({ initial, onClose }) {
     return () => window.clearTimeout(t);
   }, [text]);
   const lookup = useQuery({
-    queryKey: ['transport-lookup', no],
+    queryKey: ["transport-lookup", no],
     enabled: no.length > 0,
     retry: false,
     queryFn: () => api(`/api/transport/lookup/${encodeURIComponent(no)}`),
   });
   const s = text.trim() === no ? (lookup.data ?? null) : null;
   // Until the Admin picks, the village comes from the address and the month is the default.
-  const village = pickedVillage ?? (s ? s.village || s.suggestedVillage || '' : '');
-  const from = pickedFrom ?? s?.defaultFromMonth ?? '';
-  const blocked = s && (s.state === 'on' || s.status !== 'active');
+  const village =
+    pickedVillage ?? (s ? s.village || s.suggestedVillage || "" : "");
+  const from = pickedFrom ?? s?.defaultFromMonth ?? "";
+  const blocked = s && (s.state === "on" || s.status !== "active");
   const save = useMutation({
     mutationFn: () =>
-      api('/api/transport/enroll', {
-        method: 'POST',
+      api("/api/transport/enroll", {
+        method: "POST",
         body: { studentId: s.id, village, fromMonth: from },
       }),
     onSuccess: async () => {
       await refresh(qc);
-      notify('Student added to the bus.', 'success');
+      notify("Student added to the bus.", "success");
       onClose();
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
   const fee = s?.villages.find((v) => v.name === village)?.monthlyPaise;
   return (
@@ -244,7 +269,11 @@ function AddDialog({ initial, onClose }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={save.isPending}
+          >
             Cancel
           </Button>
           <Button
@@ -268,7 +297,9 @@ function AddDialog({ initial, onClose }) {
             <p className="mt-1 text-xs text-ink-muted">Searching…</p>
           ) : lookup.isError ? (
             <p className="mt-1 text-xs text-danger">
-              {lookup.error?.status === 404 ? 'Scholar number not found.' : errorText(lookup.error)}
+              {lookup.error?.status === 404
+                ? "Scholar number not found."
+                : errorText(lookup.error)}
             </p>
           ) : null}
         </div>
@@ -283,19 +314,24 @@ function AddDialog({ initial, onClose }) {
                 <dt className="text-xs text-ink-muted">Class</dt>
                 <dd>
                   {classLabel(s.classKey)}
-                  {s.section ? ` - ${s.section}` : ''}
+                  {s.section ? ` - ${s.section}` : ""}
                 </dd>
               </div>
               <div className="sm:col-span-2">
                 <dt className="text-xs text-ink-muted">Address (village)</dt>
-                <dd>{s.address || '-'}</dd>
+                <dd>{s.address || "-"}</dd>
               </div>
             </dl>
-            {s.state === 'on' && <Badge tone="warning">Already on the bus</Badge>}
-            {s.status !== 'active' && <Badge tone="warning">This student is {s.status}</Badge>}
+            {s.state === "on" && (
+              <Badge tone="warning">Already on the bus</Badge>
+            )}
+            {s.status !== "active" && (
+              <Badge tone="warning">This student is {s.status}</Badge>
+            )}
             {s.villages.length === 0 && (
               <p className="text-sm text-danger">
-                The fee chart has no village fees. Add them in Fee Structure first.
+                The fee chart has no village fees. Add them in Fee Structure
+                first.
               </p>
             )}
             {!s.suggestedVillage && !s.village && s.villages.length > 0 && (
@@ -308,7 +344,7 @@ function AddDialog({ initial, onClose }) {
               value={village}
               onChange={(e) => setVillage(e.target.value)}
               options={[
-                { value: '', label: 'Choose village' },
+                { value: "", label: "Choose village" },
                 ...s.villages.map((v) => ({
                   value: v.name,
                   label: `${v.name} (${money(v.monthlyPaise)} / month)`,
@@ -319,12 +355,16 @@ function AddDialog({ initial, onClose }) {
               label="Bus fee starts from"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
-              options={s.months.map((m) => ({ value: m, label: monthLabel(m) }))}
+              options={s.months.map((m) => ({
+                value: m,
+                label: monthLabel(m),
+              }))}
             />
             {fee != null && from && (
               <p className="text-xs text-ink-muted">
-                {money(fee)} a month is charged from {monthLabel(from)}. Months up to this month are
-                posted now; later months post automatically.
+                {money(fee)} a month is charged from {monthLabel(from)}. Months
+                up to this month are posted now; later months post
+                automatically.
               </p>
             )}
           </>
@@ -337,18 +377,21 @@ function AddDialog({ initial, onClose }) {
 function StopDialog({ student, onClose }) {
   const { notify } = useToast();
   const qc = useQueryClient();
-  const [from, setFrom] = useState('');
-  const [reason, setReason] = useState('');
+  const [from, setFrom] = useState("");
+  const [reason, setReason] = useState("");
   // Offer the months of the year from the month he started.
   const months = useQuery({
-    queryKey: ['transport-lookup', student.admissionNo],
-    queryFn: () => api(`/api/transport/lookup/${encodeURIComponent(student.admissionNo)}`),
+    queryKey: ["transport-lookup", student.admissionNo],
+    queryFn: () =>
+      api(`/api/transport/lookup/${encodeURIComponent(student.admissionNo)}`),
   });
-  const options = (months.data?.months ?? []).filter((m) => m >= student.transportFrom);
+  const options = (months.data?.months ?? []).filter(
+    (m) => m >= student.transportFrom,
+  );
   const save = useMutation({
     mutationFn: () =>
-      api('/api/transport/stop', {
-        method: 'POST',
+      api("/api/transport/stop", {
+        method: "POST",
         body: { studentId: student.id, fromMonth: from, reason: reason.trim() },
       }),
     onSuccess: async (res) => {
@@ -356,12 +399,12 @@ function StopDialog({ student, onClose }) {
       notify(
         res.removedMonths > 0
           ? `Bus stopped. ${res.removedMonths} unpaid month(s) removed.`
-          : 'Bus stopped.',
-        'success',
+          : "Bus stopped.",
+        "success",
       );
       onClose();
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
   return (
     <Dialog
@@ -370,7 +413,11 @@ function StopDialog({ student, onClose }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={save.isPending}
+          >
             Cancel
           </Button>
           <Button
@@ -390,7 +437,10 @@ function StopDialog({ student, onClose }) {
           value={from}
           onChange={(e) => setFrom(e.target.value)}
           options={[
-            { value: '', label: months.isPending ? 'Loading…' : 'Choose month' },
+            {
+              value: "",
+              label: months.isPending ? "Loading…" : "Choose month",
+            },
             ...options.map((m) => ({ value: m, label: monthLabel(m) })),
           ]}
         />
@@ -400,8 +450,8 @@ function StopDialog({ student, onClose }) {
           onChange={(e) => setReason(e.target.value)}
         />
         <p className="text-xs text-ink-muted">
-          Unpaid bus fee of this month and later is removed. If one of those months is already paid
-          or rebated, cancel that receipt / rebate first.
+          Unpaid bus fee of this month and later is removed. If one of those
+          months is already paid or rebated, cancel that receipt / rebate first.
         </p>
       </div>
     </Dialog>

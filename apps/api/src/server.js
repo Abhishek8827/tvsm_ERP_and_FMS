@@ -1,8 +1,8 @@
-import { createApp } from './app.js';
-import { loadEnv } from './config/env.js';
-import { initFirebaseAuth } from './auth/firebase.js';
-import { createTokenVerifier } from './auth/tokenVerifier.js';
-import { connectDb, disconnectDb, ensureModels } from './db.js';
+import { createApp } from "./app.js";
+import { loadEnv } from "./config/env.js";
+import { initFirebaseAuth } from "./auth/firebase.js";
+import { createTokenVerifier } from "./auth/tokenVerifier.js";
+import { connectDb, disconnectDb, ensureModels } from "./db.js";
 import {
   makeAuditStore,
   makeChargeStore,
@@ -10,23 +10,25 @@ import {
   makeReceiptStore,
   makeStudentStore,
   makeUserStore,
-} from './services/stores.js';
-import { makeRebateStore } from './services/rebateStore.js';
-import { startMonthlyPlanJob } from './services/monthlyPlan.js';
-import { makeDayCloseStore } from './services/dayCloseStore.js';
-import { makeCashbookStore } from './services/cashbookStore.js';
-import { makeCertificateStore } from './services/certificateStore.js';
-import { makeMoneyStore } from './services/moneyStore.js';
-import { createLogger } from './utils/logger.js';
+} from "./services/stores.js";
+import { makeRebateStore } from "./services/rebateStore.js";
+import { startMonthlyPlanJob } from "./services/monthlyPlan.js";
+import { makeDayCloseStore } from "./services/dayCloseStore.js";
+import { makeCashbookStore } from "./services/cashbookStore.js";
+import { makeCertificateStore } from "./services/certificateStore.js";
+import { makeMoneyStore } from "./services/moneyStore.js";
+import { createLogger } from "./utils/logger.js";
 async function main() {
   const env = loadEnv(); // throws with a readable list if config is bad
   const logger = createLogger(env.LOG_LEVEL);
   await connectDb(env.MONGODB_URI, env.MONGODB_DB_NAME);
   await ensureModels();
-  logger.info('MongoDB connected');
+  logger.info("MongoDB connected");
   const firebaseAuth = initFirebaseAuth(env);
   if (!firebaseAuth) {
-    logger.warn('Firebase is not configured: sign-in endpoints answer 503 until it is.');
+    logger.warn(
+      "Firebase is not configured: sign-in endpoints answer 503 until it is.",
+    );
   }
   const auth = firebaseAuth
     ? {
@@ -47,10 +49,16 @@ async function main() {
     : undefined;
 
   const app = createApp(env, logger, auth);
-  const server = app.listen(env.PORT, () => logger.info(`API listening on port ${env.PORT}`));
+  const server = app.listen(env.PORT, () =>
+    logger.info(`API listening on port ${env.PORT}`),
+  );
   // Fees are posted month by month: this posts the current month for everyone, automatically.
   const stopMonthlyJob = auth
-    ? startMonthlyPlanJob({ deps: auth, tenantId: env.DEFAULT_TENANT_ID, logger })
+    ? startMonthlyPlanJob({
+        deps: auth,
+        tenantId: env.DEFAULT_TENANT_ID,
+        logger,
+      })
     : () => {};
   const shutdown = (signal) => {
     stopMonthlyJob();
@@ -59,8 +67,8 @@ async function main() {
       void disconnectDb().finally(() => process.exit(0));
     });
   };
-  process.on('SIGINT', () => shutdown('SIGINT'));
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 }
 main().catch((err) => {
   console.error(err instanceof Error ? err.message : err);

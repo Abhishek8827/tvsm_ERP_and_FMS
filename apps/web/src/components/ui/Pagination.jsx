@@ -1,4 +1,4 @@
-import { Button } from './Button';
+import { Button } from "./Button";
 /** Server-side pagination control (rule 17). The parent owns state and passes it to the API. */
 export function Pagination({
   page,
@@ -39,10 +39,18 @@ export function Pagination({
         <span>
           Page {page} of {pages}
         </span>
-        <Button variant="secondary" disabled={page <= 1} onClick={() => onPageChange(page - 1)}>
+        <Button
+          variant="secondary"
+          disabled={page <= 1}
+          onClick={() => onPageChange(page - 1)}
+        >
           Previous
         </Button>
-        <Button variant="secondary" disabled={page >= pages} onClick={() => onPageChange(page + 1)}>
+        <Button
+          variant="secondary"
+          disabled={page >= pages}
+          onClick={() => onPageChange(page + 1)}
+        >
           Next
         </Button>
       </div>

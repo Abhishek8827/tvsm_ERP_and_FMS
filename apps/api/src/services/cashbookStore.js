@@ -1,26 +1,39 @@
-import { addDaysToDateString, istStartOfDay } from '@erp/shared';
-import { CashbookSettings } from '../models/CashbookSettings.js';
-import { DayClose } from '../models/DayClose.js';
-import { ExpensePayment } from '../models/ExpensePayment.js';
-import { LedgerEntry } from '../models/LedgerEntry.js';
-import { Receipt } from '../models/Receipt.js';
-import { ReceiptCancellation } from '../models/ReceiptCancellation.js';
+import { addDaysToDateString, istStartOfDay } from "@erp/shared";
+import { CashbookSettings } from "../models/CashbookSettings.js";
+import { DayClose } from "../models/DayClose.js";
+import { ExpensePayment } from "../models/ExpensePayment.js";
+import { LedgerEntry } from "../models/LedgerEntry.js";
+import { Receipt } from "../models/Receipt.js";
+import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
 
-const EXPENSE_TYPES = ['expense_payment', 'payment_reversal'];
+const EXPENSE_TYPES = ["expense_payment", "payment_reversal"];
 
 /** Cancelled receipts never counted as money (same rule as the bank / cash balances). */
 const cancelledIds = async (tenantId) =>
   (
-    await ReceiptCancellation.find({ tenantId, status: 'cancelled' }).select('receiptId').lean()
+    await ReceiptCancellation.find({ tenantId, status: "cancelled" })
+      .select("receiptId")
+      .lean()
   ).map((r) => r.receiptId);
 const accountOf = (r) =>
-  r.mode === 'cash' ? 'cash' : r.bankId ? `bank:${r.bankId}` : 'online:unassigned';
+  r.mode === "cash"
+    ? "cash"
+    : r.bankId
+      ? `bank:${r.bankId}`
+      : "online:unassigned";
 
 /** Data access for the Cashbook (read-only, apart from the settings). */
 export function makeCashbookStore() {
   return {
     getSettings: (tenantId) => CashbookSettings.findOne({ tenantId }).lean(),
-    async saveSettings({ tenantId, openingPaise, startDate, heads, reason, user }) {
+    async saveSettings({
+      tenantId,
+      openingPaise,
+      startDate,
+      heads,
+      reason,
+      user,
+    }) {
       return CashbookSettings.findOneAndUpdate(
         { tenantId },
         {
@@ -53,36 +66,52 @@ export function makeCashbookStore() {
       const to = istStartOfDay(addDaysToDateString(date, 1));
       const gone = await cancelledIds(tenantId);
       const live = { tenantId, _id: { $nin: gone } };
-      const [receipts, ledgerDay, ledgerBefore, receiptsBefore, dayClose, cancelledToday] =
-        await Promise.all([
-          Receipt.find({ ...live, issuedAt: { $gte: from, $lt: to } })
-            .sort({ issuedAt: 1 })
-            .lean(),
-          LedgerEntry.find({ tenantId, entryDate: date }).sort({ createdAt: 1 }).lean(),
-          LedgerEntry.aggregate([
-            { $match: { tenantId, entryDate: { $lt: date } } },
-            { $group: { _id: '$account', paise: { $sum: '$amountPaise' } } },
-          ]),
-          Receipt.aggregate([
-            { $match: { ...live, issuedAt: { $lt: from } } },
-            {
-              $group: { _id: { mode: '$mode', bankId: '$bankId' }, paise: { $sum: '$totalPaise' } },
+      const [
+        receipts,
+        ledgerDay,
+        ledgerBefore,
+        receiptsBefore,
+        dayClose,
+        cancelledToday,
+      ] = await Promise.all([
+        Receipt.find({ ...live, issuedAt: { $gte: from, $lt: to } })
+          .sort({ issuedAt: 1 })
+          .lean(),
+        LedgerEntry.find({ tenantId, entryDate: date })
+          .sort({ createdAt: 1 })
+          .lean(),
+        LedgerEntry.aggregate([
+          { $match: { tenantId, entryDate: { $lt: date } } },
+          { $group: { _id: "$account", paise: { $sum: "$amountPaise" } } },
+        ]),
+        Receipt.aggregate([
+          { $match: { ...live, issuedAt: { $lt: from } } },
+          {
+            $group: {
+              _id: { mode: "$mode", bankId: "$bankId" },
+              paise: { $sum: "$totalPaise" },
             },
-          ]),
-          DayClose.findOne({ tenantId, date }).select('status closedByName closedAt').lean(),
-          ReceiptCancellation.countDocuments({
-            tenantId,
-            status: 'cancelled',
-            decidedAt: { $gte: from, $lt: to },
-          }),
-        ]);
+          },
+        ]),
+        DayClose.findOne({ tenantId, date })
+          .select("status closedByName closedAt")
+          .lean(),
+        ReceiptCancellation.countDocuments({
+          tenantId,
+          status: "cancelled",
+          decidedAt: { $gte: from, $lt: to },
+        }),
+      ]);
       const opening = {};
-      for (const e of ledgerBefore) opening[e._id] = (opening[e._id] ?? 0) + e.paise;
+      for (const e of ledgerBefore)
+        opening[e._id] = (opening[e._id] ?? 0) + e.paise;
       for (const r of receiptsBefore) {
         const key = accountOf({ mode: r._id.mode, bankId: r._id.bankId });
         opening[key] = (opening[key] ?? 0) + r.paise;
       }
-      const refIds = ledgerDay.filter((e) => EXPENSE_TYPES.includes(e.type)).map((e) => e.refId);
+      const refIds = ledgerDay
+        .filter((e) => EXPENSE_TYPES.includes(e.type))
+        .map((e) => e.refId);
       const payments = refIds.length
         ? await ExpensePayment.find({ tenantId, _id: { $in: refIds } }).lean()
         : [];
@@ -97,15 +126,15 @@ export function makeCashbookStore() {
             {
               $match: {
                 ...live,
-                kind: 'transport',
+                kind: "transport",
                 issuedAt: { $gte: istStartOfDay(start), $lt: from },
               },
             },
-            { $group: { _id: null, paise: { $sum: '$totalPaise' } } },
+            { $group: { _id: null, paise: { $sum: "$totalPaise" } } },
           ]),
           heads.length
             ? ExpensePayment.find({ tenantId, headName: { $in: heads } })
-                .select('_id')
+                .select("_id")
                 .lean()
             : [],
         ]);
@@ -119,12 +148,14 @@ export function makeCashbookStore() {
                   entryDate: { $gte: start, $lt: date },
                 },
               },
-              { $group: { _id: null, paise: { $sum: '$amountPaise' } } },
+              { $group: { _id: null, paise: { $sum: "$amountPaise" } } },
             ])
           : [];
         // Ledger amounts are signed (expense negative), so adding them subtracts the expense.
         transportBefore =
-          (settings.transportOpeningPaise ?? 0) + (income[0]?.paise ?? 0) + (spent[0]?.paise ?? 0);
+          (settings.transportOpeningPaise ?? 0) +
+          (income[0]?.paise ?? 0) +
+          (spent[0]?.paise ?? 0);
       }
       return {
         receipts,

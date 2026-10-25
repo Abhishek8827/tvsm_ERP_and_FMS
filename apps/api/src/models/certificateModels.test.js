@@ -1,10 +1,10 @@
-import mongoose from 'mongoose';
-import { describe, expect, it } from 'vitest';
-import { buildSnapshot } from '../services/certificates.js';
-import { BonafideCertificate } from './BonafideCertificate.js';
-import { CertificateRequest } from './CertificateRequest.js';
-import { CertificateSettings } from './CertificateSettings.js';
-import { TransferCertificate } from './TransferCertificate.js';
+import mongoose from "mongoose";
+import { describe, expect, it } from "vitest";
+import { buildSnapshot } from "../services/certificates.js";
+import { BonafideCertificate } from "./BonafideCertificate.js";
+import { CertificateRequest } from "./CertificateRequest.js";
+import { CertificateSettings } from "./CertificateSettings.js";
+import { TransferCertificate } from "./TransferCertificate.js";
 
 /**
  * No database needed: these check that the documents the approval flow builds pass the models'
@@ -25,12 +25,12 @@ const entered = {
   dateOfApplication: '2026-10-12', dateOfIssue: '2026-10-13', reason: 'Parent Request', remarks: 'None',
 }; // prettier-ignore
 
-describe('certificate models accept the documents the code builds', () => {
-  it('Transfer Certificate (with a dues override)', () => {
+describe("certificate models accept the documents the code builds", () => {
+  it("Transfer Certificate (with a dues override)", () => {
     const snapshot = buildSnapshot({
       student,
       dues: { totals: {}, instalments: [] },
-      concession: 'None',
+      concession: "None",
     });
     const tc = new TransferCertificate({
       tenantId: 'tvsm', fy: '2026-27', slNo: 143, studentId, idempotencyKey: 'req-abc12345',
@@ -40,7 +40,7 @@ describe('certificate models accept the documents the code builds', () => {
     }); // prettier-ignore
     expect(tc.validateSync()?.message).toBeUndefined();
   });
-  it('Bonafide', () => {
+  it("Bonafide", () => {
     const b = new BonafideCertificate({
       tenantId: 'tvsm', fy: '2026-27', seq: 1, number: 'BON/FY2026-27/001', studentId,
       idempotencyKey: 'req-abc12346', issuedBy: 'u', issuedByName: 'Admin',
@@ -50,7 +50,7 @@ describe('certificate models accept the documents the code builds', () => {
     }); // prettier-ignore
     expect(b.validateSync()?.message).toBeUndefined();
   });
-  it('request and settings (with history)', () => {
+  it("request and settings (with history)", () => {
     const r = new CertificateRequest({
       tenantId: 'tvsm', kind: 'tc', studentId, fy: '2026-27', payload: { a: 1 }, preview: { b: 1 },
       studentName: 'A', admissionNo: '1', idempotencyKey: 'k12345678', requestedBy: 'u', requestedByName: 'Admin',

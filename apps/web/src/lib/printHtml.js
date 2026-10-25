@@ -1,7 +1,7 @@
 const escapeHtml = (s) =>
   String(s).replace(
     /[&<>"]/g,
-    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c],
+    (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c],
   );
 
 /**
@@ -11,18 +11,18 @@ const escapeHtml = (s) =>
  * is open. A clean page holds only the receipt, so the print window opens at once and the layout
  * is exactly what the CSS says. Resolves once the print window has been opened.
  */
-export function printHtml({ html, css, title = 'Print' }) {
+export function printHtml({ html, css, title = "Print" }) {
   return new Promise((resolve, reject) => {
-    const frame = document.createElement('iframe');
-    frame.setAttribute('aria-hidden', 'true');
-    frame.setAttribute('tabindex', '-1');
+    const frame = document.createElement("iframe");
+    frame.setAttribute("aria-hidden", "true");
+    frame.setAttribute("tabindex", "-1");
     Object.assign(frame.style, {
-      position: 'fixed',
-      right: '0',
-      bottom: '0',
-      width: '0',
-      height: '0',
-      border: '0',
+      position: "fixed",
+      right: "0",
+      bottom: "0",
+      width: "0",
+      height: "0",
+      border: "0",
     });
     const remove = () => frame.remove();
     // <base> lets "/logo.jpg" resolve to this site inside the empty page.
@@ -43,9 +43,13 @@ export function printHtml({ html, css, title = 'Print' }) {
                 }),
           ),
         );
-        frame.contentWindow.addEventListener('afterprint', () => setTimeout(remove, 500), {
-          once: true,
-        });
+        frame.contentWindow.addEventListener(
+          "afterprint",
+          () => setTimeout(remove, 500),
+          {
+            once: true,
+          },
+        );
         frame.contentWindow.focus();
         frame.contentWindow.print();
         // Safety net: some browsers never fire afterprint.

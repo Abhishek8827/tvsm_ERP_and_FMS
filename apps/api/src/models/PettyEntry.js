@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -17,7 +17,12 @@ const pettySchema = new mongoose.Schema(
     payeeName: { type: String, required: true, trim: true },
     particulars: { type: String, required: true, trim: true },
     amountPaise: { type: Number, required: true, min: 1 },
-    status: { type: String, enum: ['active', 'reversed'], default: 'active', required: true },
+    status: {
+      type: String,
+      enum: ["active", "reversed"],
+      default: "active",
+      required: true,
+    },
     reversalReason: { type: String },
     reversedBy: { type: String },
     reversedByName: { type: String },
@@ -34,4 +39,5 @@ pettySchema.index({ tenantId: 1, createdAt: -1 });
 
 pettySchema.index({ tenantId: 1, idempotencyKey: 1 }, { unique: true });
 
-export const PettyEntry = mongoose.models.PettyEntry ?? mongoose.model('PettyEntry', pettySchema);
+export const PettyEntry =
+  mongoose.models.PettyEntry ?? mongoose.model("PettyEntry", pettySchema);

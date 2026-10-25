@@ -1,8 +1,13 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { classLabel, formatINR, paiseToRupeesString, rupeesToPaise } from '@erp/shared';
-import { api, newIdempotencyKey } from '../api/client';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  classLabel,
+  formatINR,
+  paiseToRupeesString,
+  rupeesToPaise,
+} from "@erp/shared";
+import { api, newIdempotencyKey } from "../api/client";
 import {
   Badge,
   Button,
@@ -13,27 +18,40 @@ import {
   Select,
   Spinner,
   useToast,
-} from '../components/ui';
+} from "../components/ui";
 
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 function periodLabel(period) {
-  if (period === 'once') return 'One time';
-  if (period === 'opening') return 'Old fees';
-  const [y, m] = period.split('-');
+  if (period === "once") return "One time";
+  if (period === "opening") return "Old fees";
+  const [y, m] = period.split("-");
   return `${MONTHS[Number(m) - 1]} ${y}`;
 }
 const MODES = [
-  { value: 'cash', label: 'Cash' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'qr', label: 'QR' },
+  { value: "cash", label: "Cash" },
+  { value: "upi", label: "UPI" },
+  { value: "qr", label: "QR" },
 ];
 
 /** Cashier: find a student, pick School fees or Transport fees, enter amounts, take payment. */
 export function CollectFee() {
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
   const [student, setStudent] = useState(null);
-  const [kind, setKind] = useState('school');
+  const [kind, setKind] = useState("school");
 
   useEffect(() => {
     const t = setTimeout(() => setQ(search.trim()), 300);
@@ -41,8 +59,9 @@ export function CollectFee() {
   }, [search]);
 
   const found = useQuery({
-    queryKey: ['collect-search', q],
-    queryFn: () => api(`/api/students?status=active&pageSize=8&q=${encodeURIComponent(q)}`),
+    queryKey: ["collect-search", q],
+    queryFn: () =>
+      api(`/api/students?status=active&pageSize=8&q=${encodeURIComponent(q)}`),
     enabled: q.length >= 2 && !student,
   });
 
@@ -50,7 +69,8 @@ export function CollectFee() {
     <div className="flex max-w-4xl flex-col gap-4">
       <h1 className="text-2xl font-semibold text-ink">Collect Fee</h1>
       <p className="text-sm text-ink-muted">
-        Find the student, choose School fees or Transport fees, enter what the parent is paying.
+        Find the student, choose School fees or Transport fees, enter what the
+        parent is paying.
       </p>
 
       <Card title="Student">
@@ -58,19 +78,22 @@ export function CollectFee() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <p className="font-medium text-ink">
-                {student.name} <span className="text-ink-muted">· Sch. {student.admissionNo}</span>
+                {student.name}{" "}
+                <span className="text-ink-muted">
+                  · Sch. {student.admissionNo}
+                </span>
               </p>
               <p className="text-sm text-ink-muted">
                 Class {classLabel(student.classKey)}
-                {student.section ? ` - ${student.section}` : ''}
-                {student.fatherName ? ` · Father: ${student.fatherName}` : ''}
+                {student.section ? ` - ${student.section}` : ""}
+                {student.fatherName ? ` · Father: ${student.fatherName}` : ""}
               </p>
             </div>
             <Button
               variant="secondary"
               onClick={() => {
                 setStudent(null);
-                setSearch('');
+                setSearch("");
               }}
             >
               Change student
@@ -86,11 +109,16 @@ export function CollectFee() {
               autoFocus
             />
             {q.length < 2 && (
-              <p className="text-sm text-ink-muted">Type at least 2 letters or digits.</p>
+              <p className="text-sm text-ink-muted">
+                Type at least 2 letters or digits.
+              </p>
             )}
             {found.isFetching && <Spinner label="Searching" />}
             {found.isError && (
-              <ErrorState message={found.error.message} onRetry={() => found.refetch()} />
+              <ErrorState
+                message={found.error.message}
+                onRetry={() => found.refetch()}
+              />
             )}
             {found.data && found.data.rows.length === 0 && (
               <EmptyState
@@ -108,12 +136,15 @@ export function CollectFee() {
                       className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left hover:bg-app"
                     >
                       <span className="font-medium text-ink">
-                        {s.name} <span className="text-ink-muted">· Sch. {s.admissionNo}</span>
+                        {s.name}{" "}
+                        <span className="text-ink-muted">
+                          · Sch. {s.admissionNo}
+                        </span>
                       </span>
                       <span className="text-sm text-ink-muted">
                         {classLabel(s.classKey)}
-                        {s.section ? `-${s.section}` : ''}
-                        {s.fatherName ? ` · ${s.fatherName}` : ''}
+                        {s.section ? `-${s.section}` : ""}
+                        {s.fatherName ? ` · ${s.fatherName}` : ""}
                       </span>
                     </button>
                   </li>
@@ -128,8 +159,8 @@ export function CollectFee() {
         <>
           <div role="tablist" aria-label="Fee type" className="flex gap-2">
             {[
-              ['school', 'School Fees'],
-              ['transport', 'Transport Fees'],
+              ["school", "School Fees"],
+              ["transport", "Transport Fees"],
             ].map(([k, label]) => (
               <button
                 key={k}
@@ -138,14 +169,20 @@ export function CollectFee() {
                 aria-selected={kind === k}
                 onClick={() => setKind(k)}
                 className={`min-h-10 rounded-lg px-4 text-sm font-medium ${
-                  kind === k ? 'bg-brand text-white' : 'border border-line bg-surface text-ink'
+                  kind === k
+                    ? "bg-brand text-white"
+                    : "border border-line bg-surface text-ink"
                 }`}
               >
                 {label}
               </button>
             ))}
           </div>
-          <CollectForm key={`${student.id}-${kind}`} student={student} kind={kind} />
+          <CollectForm
+            key={`${student.id}-${kind}`}
+            student={student}
+            kind={kind}
+          />
         </>
       )}
     </div>
@@ -157,42 +194,42 @@ function CollectForm({ student, kind }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const dues = useQuery({
-    queryKey: ['dues', student.id, kind],
+    queryKey: ["dues", student.id, kind],
     queryFn: () => api(`/api/students/${student.id}/dues?kind=${kind}`),
   });
   // One key per open form: a double click or a retry can never make two receipts (rule 5).
   const keyRef = useRef(newIdempotencyKey());
   const [f, setF] = useState({
-    old: '',
-    current: '',
-    admission: '',
-    form: '',
-    tc: '',
-    other: '',
-    otherNote: '',
+    old: "",
+    current: "",
+    admission: "",
+    form: "",
+    tc: "",
+    other: "",
+    otherNote: "",
     late: null, // null = take the calculated late fee
-    lateRemark: '',
-    mode: 'cash',
-    reference: '',
-    bankId: '', // '' = use the bank the Admin set as default for this mode
+    lateRemark: "",
+    mode: "cash",
+    reference: "",
+    bankId: "", // '' = use the bank the Admin set as default for this mode
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
 
   const d = dues.data;
   const rem = d?.remaining ?? {};
-  const oldHead = kind === 'school' ? 'old_fees' : 'transport_old';
-  const curHead = kind === 'school' ? 'tuition' : 'transport';
+  const oldHead = kind === "school" ? "old_fees" : "transport_old";
+  const curHead = kind === "school" ? "tuition" : "transport";
   const lateCalc = d?.lateFeeCalculatedPaise ?? 0;
 
   // Amount boxes are typed in rupees. A bad box makes the total unknown and blocks Collect.
   const parse = (v) => {
-    if (v.trim() === '') return { paise: 0 };
+    if (v.trim() === "") return { paise: 0 };
     try {
       const paise = rupeesToPaise(v);
-      return paise < 0 ? { error: 'Cannot be negative' } : { paise };
+      return paise < 0 ? { error: "Cannot be negative" } : { paise };
     } catch {
-      return { error: 'Enter a valid amount' };
+      return { error: "Enter a valid amount" };
     }
   };
   const p = {
@@ -215,29 +252,38 @@ function CollectForm({ student, kind }) {
       p.tc.paise +
       p.other.paise +
       p.late.paise;
-  const needsRef = f.mode !== 'cash';
+  const needsRef = f.mode !== "cash";
   // UPI / QR money lands in a bank account: the Cashier picks it (the Admin's default is preselected).
   const banks = useQuery({
-    queryKey: ['banks', 'options'],
-    queryFn: () => api('/api/banks/options'),
+    queryKey: ["banks", "options"],
+    queryFn: () => api("/api/banks/options"),
     enabled: needsRef,
   });
   const bankList = banks.data?.banks ?? [];
-  const bankId = f.bankId || bankList.find((b) => b.defaultForModes.includes(f.mode))?.id || '';
+  const bankId =
+    f.bankId ||
+    bankList.find((b) => b.defaultForModes.includes(f.mode))?.id ||
+    "";
   const missing =
-    (needsRef && !bankId && 'Choose the bank account that received the money.') ||
-    (needsRef && f.reference.trim().length < 4 && 'Enter the UPI / QR reference number.') ||
+    (needsRef &&
+      !bankId &&
+      "Choose the bank account that received the money.") ||
+    (needsRef &&
+      f.reference.trim().length < 4 &&
+      "Enter the UPI / QR reference number.") ||
     (lateWaived > 0 &&
       f.lateRemark.trim().length < 3 &&
-      'Write the reason for reducing the late fee.') ||
-    (p.other.paise > 0 && f.otherNote.trim().length < 2 && 'Write what the "Other" fee is for.') ||
+      "Write the reason for reducing the late fee.") ||
+    (p.other.paise > 0 &&
+      f.otherNote.trim().length < 2 &&
+      'Write what the "Other" fee is for.') ||
     null;
   const canSubmit = !bad && total > 0 && !missing;
 
   const collect = useMutation({
     mutationFn: () =>
-      api('/api/receipts', {
-        method: 'POST',
+      api("/api/receipts", {
+        method: "POST",
         idempotencyKey: keyRef.current,
         body: {
           studentId: student.id,
@@ -259,39 +305,51 @@ function CollectForm({ student, kind }) {
         },
       }),
     onSuccess: async (receipt) => {
-      await queryClient.invalidateQueries({ queryKey: ['dues'] });
-      await queryClient.invalidateQueries({ queryKey: ['ledger'] });
+      await queryClient.invalidateQueries({ queryKey: ["dues"] });
+      await queryClient.invalidateQueries({ queryKey: ["ledger"] });
       // WHY: Fees Database, dashboards and the receipts list must show this payment at once.
-      await queryClient.invalidateQueries({ queryKey: ['fees-database'] });
-      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      await queryClient.invalidateQueries({ queryKey: ['receipts'] });
-      notify(`Receipt ${receipt.number} created.`, 'success');
+      await queryClient.invalidateQueries({ queryKey: ["fees-database"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      await queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      notify(`Receipt ${receipt.number} created.`, "success");
       navigate(`/receipts/${receipt.id}`, { state: { fresh: true } });
     },
     onError: (e) => {
       setFieldErrors(e.fields ?? {});
       // A refused payment saved nothing, so the next try may use a new key.
-      if (e.status >= 400 && e.status < 500) keyRef.current = newIdempotencyKey();
-      notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error');
+      if (e.status >= 400 && e.status < 500)
+        keyRef.current = newIdempotencyKey();
+      notify(
+        `${e.message}${e.requestId ? ` (ref ${e.requestId})` : ""}`,
+        "error",
+      );
     },
   });
 
   if (dues.isPending) return <Spinner label="Loading dues" />;
   if (dues.isError)
-    return <ErrorState message={dues.error.message} onRetry={() => dues.refetch()} />;
+    return (
+      <ErrorState message={dues.error.message} onRetry={() => dues.refetch()} />
+    );
 
   if (d && d.planPosted === false)
     return (
       <Card title="Fees not posted yet">
         <p className="text-sm text-ink-muted">
-          This student has no fees posted for {d.fy}, so nothing can be collected. Fees are posted
-          automatically every month, so the Admin should check this student's class and village and
-          the fee chart (Dashboard shows what could not be priced).
+          This student has no fees posted for {d.fy}, so nothing can be
+          collected. Fees are posted automatically every month, so the Admin
+          should check this student's class and village and the fee chart
+          (Dashboard shows what could not be priced).
         </p>
       </Card>
     );
 
-  const nothingPending = !(rem[oldHead] || rem[curHead] || rem.admission || rem.form);
+  const nothingPending = !(
+    rem[oldHead] ||
+    rem[curHead] ||
+    rem.admission ||
+    rem.form
+  );
   const amountBox = (key, label, pending, extra = {}) => (
     <Input
       label={label}
@@ -299,7 +357,9 @@ function CollectForm({ student, kind }) {
       placeholder="0"
       value={f[key]}
       hint={
-        pending !== undefined ? `Pending ${formatINR(pending, { hideZeroPaise: true })}` : undefined
+        pending !== undefined
+          ? `Pending ${formatINR(pending, { hideZeroPaise: true })}`
+          : undefined
       }
       error={p[key]?.error ?? fieldErrors[extra.field]}
       onChange={(e) => set({ [key]: e.target.value })}
@@ -309,10 +369,12 @@ function CollectForm({ student, kind }) {
   return (
     <div className="flex flex-col gap-4">
       <Card
-        title={kind === 'school' ? 'School fees pending' : 'Transport fees pending'}
+        title={
+          kind === "school" ? "School fees pending" : "Transport fees pending"
+        }
         subtitle={`Year ${d.fy}. Fees are taken oldest first.`}
         actions={
-          kind === 'transport' && !student.usesTransport && !rem[oldHead] ? (
+          kind === "transport" && !student.usesTransport && !rem[oldHead] ? (
             <Badge tone="warning">Student does not use the bus</Badge>
           ) : null
         }
@@ -338,7 +400,9 @@ function CollectForm({ student, kind }) {
                   <tr key={`${i.dueDate}-${i.period}`}>
                     <td className="px-4 py-2">{periodLabel(i.period)}</td>
                     <td className="px-4 py-2">{i.dueDate}</td>
-                    <td className="px-4 py-2">{formatINR(i.due, { hideZeroPaise: true })}</td>
+                    <td className="px-4 py-2">
+                      {formatINR(i.due, { hideZeroPaise: true })}
+                    </td>
                     <td className="px-4 py-2">
                       {i.due === 0 ? (
                         <Badge tone="success">Paid</Badge>
@@ -357,7 +421,9 @@ function CollectForm({ student, kind }) {
           </div>
         )}
         {nothingPending && d.instalments.length > 0 && (
-          <p className="mt-3 text-sm text-ink-muted">Everything posted for this year is paid.</p>
+          <p className="mt-3 text-sm text-ink-muted">
+            Everything posted for this year is paid.
+          </p>
         )}
       </Card>
 
@@ -367,24 +433,30 @@ function CollectForm({ student, kind }) {
       >
         <div className="grid gap-3 sm:grid-cols-2">
           {rem[oldHead] > 0 &&
-            amountBox('old', 'Old fees (₹)', rem[oldHead], { field: 'oldPaise' })}
-          {amountBox(
-            'current',
-            kind === 'school' ? 'Tuition fees (₹)' : 'Transport fees (₹)',
-            rem[curHead] ?? 0,
-            { field: 'newPaise' },
-          )}
-          {kind === 'school' &&
-            rem.admission > 0 &&
-            amountBox('admission', 'Admission fees (₹)', rem.admission, {
-              field: 'admissionPaise',
+            amountBox("old", "Old fees (₹)", rem[oldHead], {
+              field: "oldPaise",
             })}
-          {kind === 'school' &&
+          {amountBox(
+            "current",
+            kind === "school" ? "Tuition fees (₹)" : "Transport fees (₹)",
+            rem[curHead] ?? 0,
+            { field: "newPaise" },
+          )}
+          {kind === "school" &&
+            rem.admission > 0 &&
+            amountBox("admission", "Admission fees (₹)", rem.admission, {
+              field: "admissionPaise",
+            })}
+          {kind === "school" &&
             rem.form > 0 &&
-            amountBox('form', 'Form fees (₹)', rem.form, { field: 'formPaise' })}
-          {kind === 'school' && amountBox('tc', 'T.C. (₹)', undefined, { field: 'tcPaise' })}
-          {kind === 'school' && amountBox('other', 'Other (₹)', undefined, { field: 'otherPaise' })}
-          {kind === 'school' && p.other.paise > 0 && (
+            amountBox("form", "Form fees (₹)", rem.form, {
+              field: "formPaise",
+            })}
+          {kind === "school" &&
+            amountBox("tc", "T.C. (₹)", undefined, { field: "tcPaise" })}
+          {kind === "school" &&
+            amountBox("other", "Other (₹)", undefined, { field: "otherPaise" })}
+          {kind === "school" && p.other.paise > 0 && (
             <Input
               label="Other: what is it for?"
               required
@@ -430,7 +502,7 @@ function CollectForm({ student, kind }) {
             label="Payment mode"
             options={MODES}
             value={f.mode}
-            onChange={(e) => set({ mode: e.target.value, bankId: '' })}
+            onChange={(e) => set({ mode: e.target.value, bankId: "" })}
           />
           {needsRef && (
             <Select
@@ -440,16 +512,16 @@ function CollectForm({ student, kind }) {
               onChange={(e) => set({ bankId: e.target.value })}
               options={[
                 {
-                  value: '',
+                  value: "",
                   label: banks.isPending
-                    ? 'Loading banks...'
+                    ? "Loading banks..."
                     : bankList.length
-                      ? 'Choose a bank'
-                      : 'No bank account yet. Ask the Admin to add one.',
+                      ? "Choose a bank"
+                      : "No bank account yet. Ask the Admin to add one.",
                 },
                 ...bankList.map((b) => ({
                   value: b.id,
-                  label: `${b.name}${b.last4 ? ` ••••${b.last4}` : ''}`,
+                  label: `${b.name}${b.last4 ? ` ••••${b.last4}` : ""}`,
                 })),
               ]}
             />
@@ -466,7 +538,8 @@ function CollectForm({ student, kind }) {
         </div>
         <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
           <p className="text-lg font-semibold text-ink">
-            Total to collect: {total === null ? '-' : formatINR(total, { hideZeroPaise: true })}
+            Total to collect:{" "}
+            {total === null ? "-" : formatINR(total, { hideZeroPaise: true })}
           </p>
           <Button
             loading={collect.isPending}
@@ -475,10 +548,12 @@ function CollectForm({ student, kind }) {
           >
             {total
               ? `Collect ${formatINR(total, { hideZeroPaise: true })} and create receipt`
-              : 'Collect and create receipt'}
+              : "Collect and create receipt"}
           </Button>
         </div>
-        {missing && total > 0 && <p className="mt-2 text-sm text-danger">{missing}</p>}
+        {missing && total > 0 && (
+          <p className="mt-2 text-sm text-danger">{missing}</p>
+        )}
       </Card>
     </div>
   );

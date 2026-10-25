@@ -1,11 +1,11 @@
-import { initializeApp } from '@firebase/app';
+import { initializeApp } from "@firebase/app";
 import {
   connectAuthEmulator,
   getAuth,
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut as firebaseSignOut,
-} from '@firebase/auth';
+} from "@firebase/auth";
 
 /**
  * The only file that talks to the Firebase browser SDK. It exposes a tiny interface so the rest of
@@ -29,12 +29,15 @@ export function createFirebaseService(env = import.meta.env) {
   });
   const auth = getAuth(app);
   if (env.VITE_FIREBASE_AUTH_EMULATOR) {
-    connectAuthEmulator(auth, env.VITE_FIREBASE_AUTH_EMULATOR, { disableWarnings: true });
+    connectAuthEmulator(auth, env.VITE_FIREBASE_AUTH_EMULATOR, {
+      disableWarnings: true,
+    });
   }
 
   return {
     onChange: (cb) => onAuthStateChanged(auth, (user) => cb(Boolean(user))),
-    signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
+    signIn: (email, password) =>
+      signInWithEmailAndPassword(auth, email, password),
     signOut: () => firebaseSignOut(auth),
     getToken: async (force = false) =>
       auth.currentUser ? auth.currentUser.getIdToken(force) : null,

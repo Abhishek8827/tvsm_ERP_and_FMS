@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -32,8 +32,8 @@ const voucherSchema = new mongoose.Schema(
     amountPaise: { type: Number, required: true, min: 1 },
     status: {
       type: String,
-      enum: ['pending', 'approved', 'rejected', 'cancelled'],
-      default: 'pending',
+      enum: ["pending", "approved", "rejected", "cancelled"],
+      default: "pending",
       required: true,
     },
     adjustments: { type: [adjustmentSchema], default: [] },
@@ -55,4 +55,5 @@ voucherSchema.index({ tenantId: 1, date: -1 });
 voucherSchema.index({ tenantId: 1, idempotencyKey: 1 }, { unique: true });
 
 export const ExpenseVoucher =
-  mongoose.models.ExpenseVoucher ?? mongoose.model('ExpenseVoucher', voucherSchema);
+  mongoose.models.ExpenseVoucher ??
+  mongoose.model("ExpenseVoucher", voucherSchema);

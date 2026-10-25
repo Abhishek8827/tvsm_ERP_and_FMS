@@ -1,10 +1,15 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { formatINR } from '@erp/shared';
-import { api, newIdempotencyKey } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { errorText, parseRupees, todayInput } from '../lib/rupees';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { formatINR } from "@erp/shared";
+import { api, newIdempotencyKey } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { errorText, parseRupees, todayInput } from "../lib/rupees";
 import {
   Badge,
   Button,
@@ -18,24 +23,26 @@ import {
   StatCard,
   Table,
   useToast,
-} from '../components/ui';
-import { PaymentDialog } from './PayVoucherDialog';
+} from "../components/ui";
+import { PaymentDialog } from "./PayVoucherDialog";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const STATUS_TONE = {
-  pending: 'warning',
-  approved: 'success',
-  rejected: 'danger',
-  cancelled: 'neutral',
+  pending: "warning",
+  approved: "success",
+  rejected: "danger",
+  cancelled: "neutral",
 };
 const STATUS_LABEL = {
-  pending: 'Awaiting approval',
-  approved: 'Approved',
-  rejected: 'Rejected',
-  cancelled: 'Cancelled',
+  pending: "Awaiting approval",
+  approved: "Approved",
+  rejected: "Rejected",
+  cancelled: "Cancelled",
 };
 export const StatusBadge = ({ status }) => (
-  <Badge tone={STATUS_TONE[status] ?? 'neutral'}>{STATUS_LABEL[status] ?? status}</Badge>
+  <Badge tone={STATUS_TONE[status] ?? "neutral"}>
+    {STATUS_LABEL[status] ?? status}
+  </Badge>
 );
 
 /** Admin makes a school expense voucher (Rs 500 or more). Under Rs 500 belongs to Petty Cash. */
@@ -43,17 +50,17 @@ function NewVoucherDialog({ open, onClose }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const heads = useQuery({
-    queryKey: ['expense-heads'],
-    queryFn: () => api('/api/expense-heads'),
+    queryKey: ["expense-heads"],
+    queryFn: () => api("/api/expense-heads"),
     enabled: open,
   });
   const key = useRef(newIdempotencyKey());
   const [f, setF] = useState({
     date: todayInput(),
-    headId: '',
-    payeeName: '',
-    particulars: '',
-    amount: '',
+    headId: "",
+    payeeName: "",
+    particulars: "",
+    amount: "",
   });
   const [errors, setErrors] = useState({});
   const amount = parseRupees(f.amount);
@@ -61,8 +68,8 @@ function NewVoucherDialog({ open, onClose }) {
   const active = (heads.data?.heads ?? []).filter((h) => h.active);
   const create = useMutation({
     mutationFn: () =>
-      api('/api/vouchers', {
-        method: 'POST',
+      api("/api/vouchers", {
+        method: "POST",
         idempotencyKey: key.current,
         body: {
           date: f.date,
@@ -74,20 +81,33 @@ function NewVoucherDialog({ open, onClose }) {
       }),
     onSuccess: async (v) => {
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ['vouchers'] });
-      notify(`Voucher ${v.number} saved. It now waits for the Principal.`, 'success');
-      setF({ date: todayInput(), headId: '', payeeName: '', particulars: '', amount: '' });
+      await queryClient.invalidateQueries({ queryKey: ["vouchers"] });
+      notify(
+        `Voucher ${v.number} saved. It now waits for the Principal.`,
+        "success",
+      );
+      setF({
+        date: todayInput(),
+        headId: "",
+        payeeName: "",
+        particulars: "",
+        amount: "",
+      });
       setErrors({});
       onClose();
     },
     onError: (e) => {
       setErrors(e.fields ?? {});
       if (e.status >= 400 && e.status < 500) key.current = newIdempotencyKey();
-      notify(errorText(e), 'error');
+      notify(errorText(e), "error");
     },
   });
   const ready =
-    f.headId && f.payeeName.trim() && f.particulars.trim() && !amount.error && amount.paise > 0;
+    f.headId &&
+    f.payeeName.trim() &&
+    f.particulars.trim() &&
+    !amount.error &&
+    amount.paise > 0;
   return (
     <Dialog
       open={open}
@@ -95,10 +115,18 @@ function NewVoucherDialog({ open, onClose }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={create.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={create.isPending}
+          >
             Cancel
           </Button>
-          <Button loading={create.isPending} disabled={!ready} onClick={() => create.mutate()}>
+          <Button
+            loading={create.isPending}
+            disabled={!ready}
+            onClick={() => create.mutate()}
+          >
             Save voucher
           </Button>
         </>
@@ -119,8 +147,10 @@ function NewVoucherDialog({ open, onClose }) {
           error={errors.headId}
           options={[
             {
-              value: '',
-              label: active.length ? 'Choose a head' : 'No heads yet. Add one in the Heads tab.',
+              value: "",
+              label: active.length
+                ? "Choose a head"
+                : "No heads yet. Add one in the Heads tab.",
             },
             ...active.map((h) => ({ value: h.id, label: h.name })),
           ]}
@@ -152,33 +182,36 @@ function NewVoucherDialog({ open, onClose }) {
 }
 
 function VouchersTab({ isAdmin, isPrincipal }) {
-  const [status, setStatus] = useState('');
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState(null); // the voucher row being paid
   const [deciding, setDeciding] = useState(null); // { row, kind: 'approve' | 'reject' }
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const { notify } = useToast();
   const queryClient = useQueryClient();
   // The Principal decides right from the list (no need to open the voucher first).
   const decide = useMutation({
     mutationFn: () =>
       api(`/api/vouchers/${deciding.row.id}/${deciding.kind}`, {
-        method: 'POST',
-        body: deciding.kind === 'reject' ? { reason } : {},
+        method: "POST",
+        body: deciding.kind === "reject" ? { reason } : {},
       }),
     onSuccess: async () => {
-      for (const key of ['vouchers', 'money', 'voucher'])
+      for (const key of ["vouchers", "money", "voucher"])
         await queryClient.invalidateQueries({ queryKey: [key] });
-      notify(deciding.kind === 'approve' ? 'Voucher approved.' : 'Voucher rejected.', 'success');
+      notify(
+        deciding.kind === "approve" ? "Voucher approved." : "Voucher rejected.",
+        "success",
+      );
       setDeciding(null);
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
   useEffect(() => {
     const t = window.setTimeout(() => {
@@ -188,13 +221,13 @@ function VouchersTab({ isAdmin, isPrincipal }) {
     return () => window.clearTimeout(t);
   }, [search]);
   const query = useQuery({
-    queryKey: ['vouchers', { status, q, from, to, page, pageSize }],
+    queryKey: ["vouchers", { status, q, from, to, page, pageSize }],
     queryFn: () => {
       const p = new URLSearchParams({ page, pageSize });
-      if (status) p.set('status', status);
-      if (q) p.set('q', q);
-      if (from) p.set('from', from);
-      if (to) p.set('to', to);
+      if (status) p.set("status", status);
+      if (q) p.set("q", q);
+      if (from) p.set("from", from);
+      if (to) p.set("to", to);
       return api(`/api/vouchers?${p}`);
     },
     placeholderData: keepPreviousData,
@@ -206,45 +239,58 @@ function VouchersTab({ isAdmin, isPrincipal }) {
   const d = query.data;
   const cols = [
     {
-      key: 'no',
-      header: 'Voucher no.',
+      key: "no",
+      header: "Voucher no.",
       render: (r) => (
-        <Link className="font-medium text-brand hover:underline" to={`/expenses/${r.id}`}>
+        <Link
+          className="font-medium text-brand hover:underline"
+          to={`/expenses/${r.id}`}
+        >
           {r.number}
         </Link>
       ),
     },
-    { key: 'date', header: 'Date', render: (r) => r.date },
-    { key: 'amount', header: 'Amount', align: 'right', render: (r) => money(r.amountPaise) },
-    { key: 'head', header: 'Head', render: (r) => r.headName },
-    { key: 'payee', header: 'Payee name', render: (r) => r.payeeName },
-    { key: 'part', header: 'Particular', render: (r) => r.particulars },
+    { key: "date", header: "Date", render: (r) => r.date },
     {
-      key: 'due',
-      header: 'Balance due',
-      align: 'right',
-      render: (r) => (r.status === 'approved' ? money(r.balanceDuePaise) : '-'),
+      key: "amount",
+      header: "Amount",
+      align: "right",
+      render: (r) => money(r.amountPaise),
     },
-    { key: 'paid', header: 'Paid', align: 'right', render: (r) => money(r.paidPaise) },
+    { key: "head", header: "Head", render: (r) => r.headName },
+    { key: "payee", header: "Payee name", render: (r) => r.payeeName },
+    { key: "part", header: "Particular", render: (r) => r.particulars },
     {
-      key: 'adj',
-      header: 'Adjustment paid',
-      align: 'right',
+      key: "due",
+      header: "Balance due",
+      align: "right",
+      render: (r) => (r.status === "approved" ? money(r.balanceDuePaise) : "-"),
+    },
+    {
+      key: "paid",
+      header: "Paid",
+      align: "right",
+      render: (r) => money(r.paidPaise),
+    },
+    {
+      key: "adj",
+      header: "Adjustment paid",
+      align: "right",
       render: (r) => money(r.adjustedPaise),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (r) => (
         <div className="flex items-center gap-2">
           <StatusBadge status={r.status} />
-          {isPrincipal && r.status === 'pending' && (
+          {isPrincipal && r.status === "pending" && (
             <>
               <Button
                 className="min-h-8 px-3"
                 onClick={() => {
-                  setReason('');
-                  setDeciding({ row: r, kind: 'approve' });
+                  setReason("");
+                  setDeciding({ row: r, kind: "approve" });
                 }}
               >
                 Approve
@@ -253,8 +299,8 @@ function VouchersTab({ isAdmin, isPrincipal }) {
                 variant="danger"
                 className="min-h-8 px-3"
                 onClick={() => {
-                  setReason('');
-                  setDeciding({ row: r, kind: 'reject' });
+                  setReason("");
+                  setDeciding({ row: r, kind: "reject" });
                 }}
               >
                 Reject
@@ -262,7 +308,7 @@ function VouchersTab({ isAdmin, isPrincipal }) {
             </>
           )}
           {/* Only the Admin pays, only after approval, only while something is still due. */}
-          {isAdmin && r.status === 'approved' && r.balanceDuePaise > 0 && (
+          {isAdmin && r.status === "approved" && r.balanceDuePaise > 0 && (
             <Button className="min-h-8 px-3" onClick={() => setPaying(r)}>
               Pay
             </Button>
@@ -271,8 +317,11 @@ function VouchersTab({ isAdmin, isPrincipal }) {
       ),
     },
   ];
-  const rows = d?.rows?.map((r, i) => ({ ...r, _n: (page - 1) * pageSize + i + 1 }));
-  const withNo = [{ key: 'sno', header: 'S.No', render: (r) => r._n }, ...cols];
+  const rows = d?.rows?.map((r, i) => ({
+    ...r,
+    _n: (page - 1) * pageSize + i + 1,
+  }));
+  const withNo = [{ key: "sno", header: "S.No", render: (r) => r._n }, ...cols];
   return (
     <div className="flex flex-col gap-4">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -293,11 +342,19 @@ function VouchersTab({ isAdmin, isPrincipal }) {
           value={status}
           onChange={reset(setStatus)}
           options={[
-            { value: '', label: 'All' },
-            ...Object.entries(STATUS_LABEL).map(([value, label]) => ({ value, label })),
+            { value: "", label: "All" },
+            ...Object.entries(STATUS_LABEL).map(([value, label]) => ({
+              value,
+              label,
+            })),
           ]}
         />
-        <Input label="From" type="date" value={from} onChange={reset(setFrom)} />
+        <Input
+          label="From"
+          type="date"
+          value={from}
+          onChange={reset(setFrom)}
+        />
         <Input label="To" type="date" value={to} onChange={reset(setTo)} />
         <Input
           label="Search"
@@ -305,7 +362,9 @@ function VouchersTab({ isAdmin, isPrincipal }) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        {isAdmin && <Button onClick={() => setCreating(true)}>New voucher</Button>}
+        {isAdmin && (
+          <Button onClick={() => setCreating(true)}>New voucher</Button>
+        )}
       </FilterBar>
       <Table
         columns={withNo}
@@ -318,7 +377,7 @@ function VouchersTab({ isAdmin, isPrincipal }) {
         emptyDescription={
           isAdmin
             ? 'Use "New voucher" for an expense of ₹500 or more.'
-            : 'The Admin has not made any voucher for these filters.'
+            : "The Admin has not made any voucher for these filters."
         }
       />
       {d && d.total > 0 && (
@@ -333,23 +392,31 @@ function VouchersTab({ isAdmin, isPrincipal }) {
           }}
         />
       )}
-      {isAdmin && <NewVoucherDialog open={creating} onClose={() => setCreating(false)} />}
-      {paying && <PaymentDialog voucher={paying} open onClose={() => setPaying(null)} />}
+      {isAdmin && (
+        <NewVoucherDialog open={creating} onClose={() => setCreating(false)} />
+      )}
+      {paying && (
+        <PaymentDialog voucher={paying} open onClose={() => setPaying(null)} />
+      )}
       <ConfirmDialog
         open={!!deciding}
-        title={deciding?.kind === 'reject' ? 'Reject this voucher?' : 'Approve this voucher?'}
+        title={
+          deciding?.kind === "reject"
+            ? "Reject this voucher?"
+            : "Approve this voucher?"
+        }
         description={
           deciding
             ? `${deciding.row.number} · ${deciding.row.payeeName} · ${money(deciding.row.amountPaise)}. ${
-                deciding.kind === 'reject'
-                  ? 'The Admin will see your reason. A rejected voucher cannot be paid.'
-                  : 'After approval the Admin can pay it.'
+                deciding.kind === "reject"
+                  ? "The Admin will see your reason. A rejected voucher cannot be paid."
+                  : "After approval the Admin can pay it."
               }`
-            : ''
+            : ""
         }
-        confirmLabel={deciding?.kind === 'reject' ? 'Reject' : 'Approve'}
-        tone={deciding?.kind === 'reject' ? 'danger' : 'primary'}
-        requireReason={deciding?.kind === 'reject'}
+        confirmLabel={deciding?.kind === "reject" ? "Reject" : "Approve"}
+        tone={deciding?.kind === "reject" ? "danger" : "primary"}
+        requireReason={deciding?.kind === "reject"}
         onReasonChange={setReason}
         loading={decide.isPending}
         onConfirm={() => decide.mutate()}
@@ -362,8 +429,8 @@ function VouchersTab({ isAdmin, isPrincipal }) {
 function PaymentsTab() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
   useEffect(() => {
     const t = window.setTimeout(() => {
       setQ(search.trim());
@@ -372,39 +439,57 @@ function PaymentsTab() {
     return () => window.clearTimeout(t);
   }, [search]);
   const query = useQuery({
-    queryKey: ['expense-payments', { q, page, pageSize }],
+    queryKey: ["expense-payments", { q, page, pageSize }],
     queryFn: () =>
-      api(`/api/expense-payments?${new URLSearchParams({ page, pageSize, ...(q && { q }) })}`),
+      api(
+        `/api/expense-payments?${new URLSearchParams({ page, pageSize, ...(q && { q }) })}`,
+      ),
     placeholderData: keepPreviousData,
   });
   const d = query.data;
   const columns = [
-    { key: 'sno', header: 'S.No', render: (r) => r.seq },
+    { key: "sno", header: "S.No", render: (r) => r.seq },
     {
-      key: 'v',
-      header: 'Voucher no.',
+      key: "v",
+      header: "Voucher no.",
       render: (r) => (
-        <Link className="text-brand hover:underline" to={`/expenses/${r.voucherId}`}>
+        <Link
+          className="text-brand hover:underline"
+          to={`/expenses/${r.voucherId}`}
+        >
           {r.voucherNumber}
         </Link>
       ),
     },
-    { key: 'date', header: 'Date', render: (r) => r.date },
-    { key: 'head', header: 'Head', render: (r) => r.headName },
-    { key: 'payee', header: 'Payee name', render: (r) => r.payeeName },
-    { key: 'details', header: 'Particulars / payment details', render: (r) => r.details || '-' },
+    { key: "date", header: "Date", render: (r) => r.date },
+    { key: "head", header: "Head", render: (r) => r.headName },
+    { key: "payee", header: "Payee name", render: (r) => r.payeeName },
     {
-      key: 'mode',
-      header: 'Payment mode',
-      render: (r) => (r.mode === 'bank' ? `Bank: ${r.bankName ?? ''}` : 'Cash'),
+      key: "details",
+      header: "Particulars / payment details",
+      render: (r) => r.details || "-",
     },
-    { key: 'amount', header: 'Amount', align: 'right', render: (r) => money(r.amountPaise) },
-    { key: 'by', header: 'Approved by', render: (r) => r.approvedBy || '-' },
     {
-      key: 'remark',
-      header: 'Remark',
+      key: "mode",
+      header: "Payment mode",
+      render: (r) => (r.mode === "bank" ? `Bank: ${r.bankName ?? ""}` : "Cash"),
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      align: "right",
+      render: (r) => money(r.amountPaise),
+    },
+    { key: "by", header: "Approved by", render: (r) => r.approvedBy || "-" },
+    {
+      key: "remark",
+      header: "Remark",
       render: (r) =>
-        r.status === 'reversed' ? <Badge tone="danger">Reversed</Badge> : r.remark || '-',
+        r.status === "reversed" ? (
+          <Badge tone="danger">Reversed</Badge>
+        ) : (
+          r.remark || "-"
+        ),
     },
   ];
   return (
@@ -448,68 +533,87 @@ function RequestsTab({ isPrincipal }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const [acting, setActing] = useState(null); // { id, decision }
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const query = useQuery({
-    queryKey: ['expense-reversals'],
-    queryFn: () => api('/api/expense-reversals'),
+    queryKey: ["expense-reversals"],
+    queryFn: () => api("/api/expense-reversals"),
   });
   const decide = useMutation({
     mutationFn: () =>
       api(`/api/expense-reversals/${acting.id}/${acting.decision}`, {
-        method: 'POST',
-        body: acting.decision === 'reject' ? { reason } : {},
+        method: "POST",
+        body: acting.decision === "reject" ? { reason } : {},
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['expense-reversals'] });
-      await queryClient.invalidateQueries({ queryKey: ['vouchers'] });
-      await queryClient.invalidateQueries({ queryKey: ['expense-payments'] });
-      await queryClient.invalidateQueries({ queryKey: ['money'] });
+      await queryClient.invalidateQueries({ queryKey: ["expense-reversals"] });
+      await queryClient.invalidateQueries({ queryKey: ["vouchers"] });
+      await queryClient.invalidateQueries({ queryKey: ["expense-payments"] });
+      await queryClient.invalidateQueries({ queryKey: ["money"] });
       notify(
-        acting.decision === 'approve' ? 'Reversal approved.' : 'Reversal rejected.',
-        'success',
+        acting.decision === "approve"
+          ? "Reversal approved."
+          : "Reversal rejected.",
+        "success",
       );
       setActing(null);
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
-  const tone = { requested: 'warning', approved: 'success', rejected: 'danger' };
+  const tone = {
+    requested: "warning",
+    approved: "success",
+    rejected: "danger",
+  };
   const columns = [
     {
-      key: 'v',
-      header: 'Voucher no.',
+      key: "v",
+      header: "Voucher no.",
       render: (r) => (
-        <Link className="text-brand hover:underline" to={`/expenses/${r.voucherId}`}>
+        <Link
+          className="text-brand hover:underline"
+          to={`/expenses/${r.voucherId}`}
+        >
           {r.voucherNumber}
         </Link>
       ),
     },
     {
-      key: 'kind',
-      header: 'What',
-      render: (r) => (r.kind === 'payment' ? 'Payment reversal' : 'Voucher cancellation'),
+      key: "kind",
+      header: "What",
+      render: (r) =>
+        r.kind === "payment" ? "Payment reversal" : "Voucher cancellation",
     },
-    { key: 'amount', header: 'Amount', align: 'right', render: (r) => money(r.amountPaise) },
-    { key: 'reason', header: 'Reason', render: (r) => r.reason },
-    { key: 'by', header: 'Asked by', render: (r) => r.requestedByName ?? '-' },
     {
-      key: 'status',
-      header: 'Status',
+      key: "amount",
+      header: "Amount",
+      align: "right",
+      render: (r) => money(r.amountPaise),
+    },
+    { key: "reason", header: "Reason", render: (r) => r.reason },
+    { key: "by", header: "Asked by", render: (r) => r.requestedByName ?? "-" },
+    {
+      key: "status",
+      header: "Status",
       render: (r) => (
         <Badge tone={tone[r.status]}>
-          {r.status === 'requested' ? 'Waiting' : r.status === 'approved' ? 'Approved' : 'Rejected'}
+          {r.status === "requested"
+            ? "Waiting"
+            : r.status === "approved"
+              ? "Approved"
+              : "Rejected"}
         </Badge>
       ),
     },
     {
-      key: 'act',
-      header: '',
+      key: "act",
+      header: "",
       render: (r) =>
-        isPrincipal && r.status === 'requested' ? (
+        isPrincipal && r.status === "requested" ? (
           <div className="flex gap-2">
             <Button
               onClick={() => {
-                setReason('');
-                setActing({ id: r.id, decision: 'approve' });
+                setReason("");
+                setActing({ id: r.id, decision: "approve" });
               }}
             >
               Approve
@@ -517,8 +621,8 @@ function RequestsTab({ isPrincipal }) {
             <Button
               variant="secondary"
               onClick={() => {
-                setReason('');
-                setActing({ id: r.id, decision: 'reject' });
+                setReason("");
+                setActing({ id: r.id, decision: "reject" });
               }}
             >
               Reject
@@ -541,15 +645,19 @@ function RequestsTab({ isPrincipal }) {
       />
       <ConfirmDialog
         open={!!acting}
-        title={acting?.decision === 'approve' ? 'Approve this reversal?' : 'Reject this reversal?'}
-        description={
-          acting?.decision === 'approve'
-            ? 'The payment amount goes back to the account it was paid from. This cannot be undone.'
-            : 'The payment stays as it is.'
+        title={
+          acting?.decision === "approve"
+            ? "Approve this reversal?"
+            : "Reject this reversal?"
         }
-        confirmLabel={acting?.decision === 'approve' ? 'Approve' : 'Reject'}
-        tone={acting?.decision === 'approve' ? 'primary' : 'danger'}
-        requireReason={acting?.decision === 'reject'}
+        description={
+          acting?.decision === "approve"
+            ? "The payment amount goes back to the account it was paid from. This cannot be undone."
+            : "The payment stays as it is."
+        }
+        confirmLabel={acting?.decision === "approve" ? "Approve" : "Reject"}
+        tone={acting?.decision === "approve" ? "primary" : "danger"}
+        requireReason={acting?.decision === "reject"}
         onReasonChange={setReason}
         loading={decide.isPending}
         onConfirm={() => decide.mutate()}
@@ -563,51 +671,66 @@ function RequestsTab({ isPrincipal }) {
 function HeadsTab() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const [name, setName] = useState('');
-  const [error, setError] = useState('');
-  const query = useQuery({ queryKey: ['expense-heads'], queryFn: () => api('/api/expense-heads') });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: ['expense-heads'] });
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const query = useQuery({
+    queryKey: ["expense-heads"],
+    queryFn: () => api("/api/expense-heads"),
+  });
+  const refresh = () =>
+    queryClient.invalidateQueries({ queryKey: ["expense-heads"] });
   const add = useMutation({
-    mutationFn: () => api('/api/expense-heads', { method: 'POST', body: { name } }),
+    mutationFn: () =>
+      api("/api/expense-heads", { method: "POST", body: { name } }),
     onSuccess: async () => {
-      setName('');
-      setError('');
+      setName("");
+      setError("");
       await refresh();
-      notify('Head added.', 'success');
+      notify("Head added.", "success");
     },
     onError: (e) => setError(e.fields?.name ?? e.message),
   });
   const toggle = useMutation({
     mutationFn: (h) =>
-      api(`/api/expense-heads/${h.id}`, { method: 'PATCH', body: { active: !h.active } }),
+      api(`/api/expense-heads/${h.id}`, {
+        method: "PATCH",
+        body: { active: !h.active },
+      }),
     onSuccess: refresh,
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
   const columns = [
-    { key: 'name', header: 'Head', render: (h) => h.name },
+    { key: "name", header: "Head", render: (h) => h.name },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (h) =>
-        h.active ? <Badge tone="success">Active</Badge> : <Badge tone="neutral">Not in use</Badge>,
+        h.active ? (
+          <Badge tone="success">Active</Badge>
+        ) : (
+          <Badge tone="neutral">Not in use</Badge>
+        ),
     },
     {
-      key: 'act',
-      header: '',
+      key: "act",
+      header: "",
       render: (h) => (
         <Button
           variant="secondary"
           loading={toggle.isPending && toggle.variables?.id === h.id}
           onClick={() => toggle.mutate(h)}
         >
-          {h.active ? 'Stop using' : 'Use again'}
+          {h.active ? "Stop using" : "Use again"}
         </Button>
       ),
     },
   ];
   return (
     <div className="flex flex-col gap-4">
-      <Card title="Add a head" subtitle="Heads are made here. Nothing is pre-filled.">
+      <Card
+        title="Add a head"
+        subtitle="Heads are made here. Nothing is pre-filled."
+      >
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
@@ -621,7 +744,11 @@ function HeadsTab() {
             error={error}
             onChange={(e) => setName(e.target.value)}
           />
-          <Button type="submit" loading={add.isPending} disabled={name.trim().length < 2}>
+          <Button
+            type="submit"
+            loading={add.isPending}
+            disabled={name.trim().length < 2}
+          >
             Add head
           </Button>
         </form>
@@ -642,28 +769,30 @@ function HeadsTab() {
 
 export function Expenses() {
   const { role } = useAuth();
-  const isAdmin = role === 'admin';
-  const [tab, setTab] = useState('vouchers');
+  const isAdmin = role === "admin";
+  const [tab, setTab] = useState("vouchers");
   const pending = useQuery({
-    queryKey: ['money', 'pending'],
-    queryFn: () => api('/api/money/pending'),
-    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
+    queryKey: ["money", "pending"],
+    queryFn: () => api("/api/money/pending"),
+    refetchInterval: (query) =>
+      query.state.status === "error" ? false : 60_000,
   });
   const tabs = [
-    ['vouchers', 'Expense vouchers'],
-    ['payments', 'Payments'],
+    ["vouchers", "Expense vouchers"],
+    ["payments", "Payments"],
     [
-      'requests',
-      `Reversal requests${pending.data?.reversals ? ` (${pending.data.reversals})` : ''}`,
+      "requests",
+      `Reversal requests${pending.data?.reversals ? ` (${pending.data.reversals})` : ""}`,
     ],
-    ...(isAdmin ? [['heads', 'Heads']] : []),
+    ...(isAdmin ? [["heads", "Heads"]] : []),
   ];
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Expenses</h1>
         <p className="text-sm text-ink-muted">
-          School expenses of ₹500 or more. Payment only after the Principal approves.
+          School expenses of ₹500 or more. Payment only after the Principal
+          approves.
         </p>
       </div>
       <div role="tablist" className="flex flex-wrap gap-2 border-b border-line">
@@ -673,16 +802,18 @@ export function Expenses() {
             role="tab"
             aria-selected={tab === key}
             onClick={() => setTab(key)}
-            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === key ? 'border-brand text-brand' : 'border-transparent text-ink-muted hover:text-ink'}`}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === key ? "border-brand text-brand" : "border-transparent text-ink-muted hover:text-ink"}`}
           >
             {label}
           </button>
         ))}
       </div>
-      {tab === 'vouchers' && <VouchersTab isAdmin={isAdmin} isPrincipal={role === 'principal'} />}
-      {tab === 'payments' && <PaymentsTab />}
-      {tab === 'requests' && <RequestsTab isPrincipal={role === 'principal'} />}
-      {tab === 'heads' && isAdmin && <HeadsTab />}
+      {tab === "vouchers" && (
+        <VouchersTab isAdmin={isAdmin} isPrincipal={role === "principal"} />
+      )}
+      {tab === "payments" && <PaymentsTab />}
+      {tab === "requests" && <RequestsTab isPrincipal={role === "principal"} />}
+      {tab === "heads" && isAdmin && <HeadsTab />}
     </div>
   );
 }

@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -16,7 +16,11 @@ const cancellationSchema = new mongoose.Schema(
     receiptId: { type: mongoose.Schema.Types.ObjectId, required: true },
     studentId: { type: mongoose.Schema.Types.ObjectId, required: true },
     receiptNumber: { type: String, required: true },
-    status: { type: String, enum: ['requested', 'cancelled', 'rejected'], required: true },
+    status: {
+      type: String,
+      enum: ["requested", "cancelled", "rejected"],
+      required: true,
+    },
     reason: { type: String, required: true },
     requestedBy: { type: String },
     requestedByName: { type: String },
@@ -31,10 +35,14 @@ const cancellationSchema = new mongoose.Schema(
 
 cancellationSchema.index(
   { tenantId: 1, receiptId: 1 },
-  { unique: true, partialFilterExpression: { status: { $in: ['requested', 'cancelled'] } } },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ["requested", "cancelled"] } },
+  },
 );
 cancellationSchema.index({ tenantId: 1, status: 1, createdAt: -1 });
 cancellationSchema.index({ tenantId: 1, studentId: 1, status: 1 });
 
 export const ReceiptCancellation =
-  mongoose.models.ReceiptCancellation ?? mongoose.model('ReceiptCancellation', cancellationSchema);
+  mongoose.models.ReceiptCancellation ??
+  mongoose.model("ReceiptCancellation", cancellationSchema);

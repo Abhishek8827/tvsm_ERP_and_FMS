@@ -8,7 +8,8 @@ export class AppError extends Error {
     this.code = code;
     this.status = status;
     this.fields = fields;
-    this.name = 'AppError';
+    this.name = "AppError";
   }
 }
-export const notFound = (what = 'Resource') => new AppError('NOT_FOUND', 404, `${what} not found.`);
+export const notFound = (what = "Resource") =>
+  new AppError("NOT_FOUND", 404, `${what} not found.`);

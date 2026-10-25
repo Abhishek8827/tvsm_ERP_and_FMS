@@ -1,6 +1,13 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef } from "react";
 
-const ACTIVITY_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'wheel'];
+const ACTIVITY_EVENTS = [
+  "mousemove",
+  "mousedown",
+  "keydown",
+  "touchstart",
+  "scroll",
+  "wheel",
+];
 
 /**
  * Calls `onIdle` once after `timeoutMs` without any mouse, keyboard or touch activity.
@@ -20,7 +27,8 @@ export function useIdleTimeout(enabled, timeoutMs, onIdle) {
     const touch = () => {
       last.current = Date.now();
     };
-    for (const name of ACTIVITY_EVENTS) window.addEventListener(name, touch, { passive: true });
+    for (const name of ACTIVITY_EVENTS)
+      window.addEventListener(name, touch, { passive: true });
     const timer = window.setInterval(() => {
       if (Date.now() - last.current >= timeoutMs) {
         window.clearInterval(timer);
@@ -28,7 +36,8 @@ export function useIdleTimeout(enabled, timeoutMs, onIdle) {
       }
     }, 5000);
     return () => {
-      for (const name of ACTIVITY_EVENTS) window.removeEventListener(name, touch);
+      for (const name of ACTIVITY_EVENTS)
+        window.removeEventListener(name, touch);
       window.clearInterval(timer);
     };
   }, [enabled, timeoutMs]);

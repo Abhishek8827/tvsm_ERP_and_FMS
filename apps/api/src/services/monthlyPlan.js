@@ -1,5 +1,5 @@
-import { getFinancialYear } from '@erp/shared';
-import { postPlans } from './feePlan.js';
+import { getFinancialYear } from "@erp/shared";
+import { postPlans } from "./feePlan.js";
 
 const SIX_HOURS = 6 * 60 * 60 * 1000;
 
@@ -10,19 +10,32 @@ export function lastPlanRun() {
   if (!lastRun) return null;
   const groups = new Map();
   for (const x of lastRun.skipped) {
-    const g = groups.get(x.reason) ?? { reason: x.reason, count: 0, examples: [] };
+    const g = groups.get(x.reason) ?? {
+      reason: x.reason,
+      count: 0,
+      examples: [],
+    };
     g.count += 1;
     if (g.examples.length < 3) g.examples.push(`${x.admissionNo} ${x.name}`);
     groups.set(x.reason, g);
   }
-  return { at: lastRun.at, students: lastRun.students, problems: [...groups.values()] };
+  return {
+    at: lastRun.at,
+    students: lastRun.students,
+    problems: [...groups.values()],
+  };
 }
 
 /**
  * Posts this month's fees for every active student. Safe to run any number of times: charges
  * that already exist are skipped, so a restart or two servers cannot create doubles.
  */
-export async function runMonthlyPlan({ deps, tenantId, logger, now = new Date() }) {
+export async function runMonthlyPlan({
+  deps,
+  tenantId,
+  logger,
+  now = new Date(),
+}) {
   const students = await deps.studentStore.activeForPlan(tenantId);
   const result = await postPlans({
     deps,
@@ -30,7 +43,11 @@ export async function runMonthlyPlan({ deps, tenantId, logger, now = new Date() 
     students,
     fy: getFinancialYear(now),
   });
-  lastRun = { at: now.toISOString(), students: result.students, skipped: result.skipped };
+  lastRun = {
+    at: now.toISOString(),
+    students: result.students,
+    skipped: result.skipped,
+  };
   logger.info(
     {
       fy: result.fy,
@@ -39,7 +56,7 @@ export async function runMonthlyPlan({ deps, tenantId, logger, now = new Date() 
       newCharges: result.newCharges,
       skipped: result.skipped.length,
     },
-    'Monthly fee posting finished',
+    "Monthly fee posting finished",
   );
   return result;
 }
@@ -49,10 +66,15 @@ export async function runMonthlyPlan({ deps, tenantId, logger, now = new Date() 
  * is posted automatically without anyone pressing a button. A failure is logged and tried again
  * at the next run; it never stops the server.
  */
-export function startMonthlyPlanJob({ deps, tenantId, logger, everyMs = SIX_HOURS }) {
+export function startMonthlyPlanJob({
+  deps,
+  tenantId,
+  logger,
+  everyMs = SIX_HOURS,
+}) {
   const run = () =>
     runMonthlyPlan({ deps, tenantId, logger }).catch((err) =>
-      logger.error({ err }, 'Monthly fee posting failed; will try again'),
+      logger.error({ err }, "Monthly fee posting failed; will try again"),
     );
   void run();
   const timer = setInterval(run, everyMs);

@@ -1,7 +1,7 @@
-import { Router } from 'express';
-import writeXlsxFile from 'write-excel-file/node';
-import rateLimit from 'express-rate-limit';
-import { z } from 'zod';
+import { Router } from "express";
+import writeXlsxFile from "write-excel-file/node";
+import rateLimit from "express-rate-limit";
+import { z } from "zod";
 import {
   HEAD_LABEL,
   MODULES,
@@ -11,15 +11,15 @@ import {
   moduleDues,
   planReceipt,
   todayIst,
-} from '@erp/shared';
-import { requireRole } from '../middleware/requireRole.js';
-import { recordAudit } from '../services/audit.js';
-import { postAdvanceMonths } from '../services/feePlan.js';
-import { AppError, notFound } from '../utils/errors.js';
+} from "@erp/shared";
+import { requireRole } from "../middleware/requireRole.js";
+import { recordAudit } from "../services/audit.js";
+import { postAdvanceMonths } from "../services/feePlan.js";
+import { AppError, notFound } from "../utils/errors.js";
 
 // UPI and QR payments must carry the bank's reference so they can be matched with the statement.
-const MODES_NEEDING_REFERENCE = ['upi', 'qr'];
-const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
+const MODES_NEEDING_REFERENCE = ["upi", "qr"];
+const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
 const paise = z.number().int().min(0).max(100_000_000);
 const kindField = z.enum(MODULES);
 const issueBody = z.object({
@@ -36,36 +36,44 @@ const issueBody = z.object({
     lateFeePaise: paise.optional(),
     lateFeeRemark: z.string().trim().max(200).optional(),
   }),
-  mode: z.enum(['cash', 'upi', 'qr']),
+  mode: z.enum(["cash", "upi", "qr"]),
   reference: z.string().trim().max(60).optional(),
   // Which bank account the UPI / QR money went to (compulsory for UPI and QR).
   bankId: objectId.optional(),
 });
 const idemKey = z
-  .string({ error: 'Idempotency-Key header is required' })
-  .regex(/^[\w-]{8,100}$/, 'Idempotency-Key must be 8-100 letters, digits, - or _');
+  .string({ error: "Idempotency-Key header is required" })
+  .regex(
+    /^[\w-]{8,100}$/,
+    "Idempotency-Key must be 8-100 letters, digits, - or _",
+  );
 
 const statusOf = (c) =>
-  c?.status === 'cancelled'
-    ? 'cancelled'
-    : c?.status === 'requested'
-      ? 'cancel_requested'
-      : 'valid';
+  c?.status === "cancelled"
+    ? "cancelled"
+    : c?.status === "requested"
+      ? "cancel_requested"
+      : "valid";
 
-const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-06-30');
+const dateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-06-30");
 const listQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
   from: dateField.optional(),
   to: dateField.optional(),
   kind: kindField.optional(),
-  mode: z.enum(['cash', 'upi', 'qr']).optional(),
+  mode: z.enum(["cash", "upi", "qr"]).optional(),
   q: z.string().trim().max(60).optional(),
-  status: z.enum(['valid', 'cancelled']).optional(),
+  status: z.enum(["valid", "cancelled"]).optional(),
 });
-const cancelBody = z.object({ reason: z.string().trim().min(3, 'Please give a reason').max(200) });
+const cancelBody = z.object({
+  reason: z.string().trim().min(3, "Please give a reason").max(200),
+});
 const EXPORT_LIMIT = 20_000;
-const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const XLSX =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 
 const shapeReceipt = (r, extra = {}) => ({
   id: String(r._id),
@@ -75,7 +83,7 @@ const shapeReceipt = (r, extra = {}) => ({
   student: r.student,
   lines: r.lines.map((l) => ({
     head: l.head,
-    label: l.head === 'other' && l.note ? l.note : HEAD_LABEL[l.head],
+    label: l.head === "other" && l.note ? l.note : HEAD_LABEL[l.head],
     period: l.period ?? null,
     amountPaise: l.amountPaise,
   })),
@@ -104,7 +112,7 @@ const shapeReceipt = (r, extra = {}) => ({
 
 async function loadStudentAndLedger(deps, tenantId, studentId) {
   const student = await deps.studentStore.findById(tenantId, studentId);
-  if (!student) throw notFound('Student');
+  if (!student) throw notFound("Student");
   const fy = getFinancialYear(new Date());
   const [charges, receipts, chart] = await Promise.all([
     deps.chargeStore.listForStudent(tenantId, student._id, fy),
@@ -136,22 +144,26 @@ async function loadStudentAndLedger(deps, tenantId, studentId) {
  */
 export function receiptsRouter(deps, authenticate) {
   const router = Router();
-  const look = [authenticate, requireRole('admin', 'principal', 'cashier')];
+  const look = [authenticate, requireRole("admin", "principal", "cashier")];
 
-  router.get('/students/:id/dues', ...look, async (req, res, next) => {
+  router.get("/students/:id/dues", ...look, async (req, res, next) => {
     try {
       const kind = kindField.parse(req.query.kind);
       const tenantId = req.user.tenantId;
-      const { student, fy, chart, receipts, charges } = await loadStudentAndLedger(
-        deps,
-        tenantId,
-        req.params.id,
-      );
+      const { student, fy, chart, receipts, charges } =
+        await loadStudentAndLedger(deps, tenantId, req.params.id);
       const asOf = todayIst();
-      const dues = moduleDues({ kind, charges, receipts, asOf, config: chart ?? undefined });
+      const dues = moduleDues({
+        kind,
+        charges,
+        receipts,
+        asOf,
+        config: chart ?? undefined,
+      });
       const remaining = {};
       for (const i of dues.instalments)
-        for (const it of i.items) remaining[it.head] = (remaining[it.head] ?? 0) + it.due;
+        for (const it of i.items)
+          remaining[it.head] = (remaining[it.head] ?? 0) + it.due;
       res.json({
         kind,
         fy,
@@ -179,46 +191,61 @@ export function receiptsRouter(deps, authenticate) {
   });
 
   router.post(
-    '/receipts',
-    rateLimit({ windowMs: 60_000, limit: 60, standardHeaders: 'draft-7', legacyHeaders: false }),
+    "/receipts",
+    rateLimit({
+      windowMs: 60_000,
+      limit: 60,
+      standardHeaders: "draft-7",
+      legacyHeaders: false,
+    }),
     authenticate,
-    requireRole('cashier', 'admin'),
+    requireRole("cashier", "admin"),
     async (req, res, next) => {
       try {
-        const key = idemKey.parse(req.get('Idempotency-Key'));
+        const key = idemKey.parse(req.get("Idempotency-Key"));
         const body = issueBody.parse(req.body);
-        if (MODES_NEEDING_REFERENCE.includes(body.mode) && (body.reference ?? '').length < 4)
-          throw new AppError('REFERENCE_REQUIRED', 422, 'Enter the UPI / QR reference number.', {
-            reference: 'Reference number is required',
-          });
+        if (
+          MODES_NEEDING_REFERENCE.includes(body.mode) &&
+          (body.reference ?? "").length < 4
+        )
+          throw new AppError(
+            "REFERENCE_REQUIRED",
+            422,
+            "Enter the UPI / QR reference number.",
+            {
+              reference: "Reference number is required",
+            },
+          );
         const tenantId = req.user.tenantId;
         let bank = null;
         if (MODES_NEEDING_REFERENCE.includes(body.mode)) {
-          bank = body.bankId ? await deps.moneyStore.findActiveBank(tenantId, body.bankId) : null;
+          bank = body.bankId
+            ? await deps.moneyStore.findActiveBank(tenantId, body.bankId)
+            : null;
           if (!bank)
             throw new AppError(
-              'BANK_REQUIRED',
+              "BANK_REQUIRED",
               422,
-              'Choose the bank account that received the money.',
+              "Choose the bank account that received the money.",
               {
-                bankId: 'Choose the bank account',
+                bankId: "Choose the bank account",
               },
             );
         }
         // A closed day takes no more receipts (the Admin can reopen it with a reason).
         if (await deps.dayCloseStore.isClosed(tenantId, todayIst()))
           throw new AppError(
-            'DAY_CLOSED',
+            "DAY_CLOSED",
             409,
             "Today's Day Close is done, so fees cannot be collected. Ask the Admin to reopen the day.",
           );
         let loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
         const { student, fy, chart } = loaded;
-        if (student.status !== 'active')
+        if (student.status !== "active")
           throw new AppError(
-            'STUDENT_INACTIVE',
+            "STUDENT_INACTIVE",
             409,
-            'Fees cannot be collected for an inactive student.',
+            "Fees cannot be collected for an inactive student.",
           );
 
         // Future months are not posted yet. If more than the posted fee is being paid (advance),
@@ -232,7 +259,8 @@ export function receiptsRouter(deps, authenticate) {
             kind: body.kind,
             wantPaise: body.input.newPaise,
           });
-          if (added > 0) loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
+          if (added > 0)
+            loaded = await loadStudentAndLedger(deps, tenantId, body.studentId);
         }
 
         const asOf = todayIst();
@@ -273,7 +301,7 @@ export function receiptsRouter(deps, authenticate) {
               dueAfterOldPaise: plan.dueAfterOldPaise,
               dueAfterNewPaise: plan.dueAfterNewPaise,
               mode: body.mode,
-              reference: body.mode === 'cash' ? undefined : body.reference,
+              reference: body.mode === "cash" ? undefined : body.reference,
               bankId: bank ? String(bank._id) : undefined,
               bankName: bank?.name,
               cashierId: String(req.user.id),
@@ -295,8 +323,8 @@ export function receiptsRouter(deps, authenticate) {
               deps,
               req,
               {
-                action: 'create',
-                entity: 'receipt',
+                action: "create",
+                entity: "receipt",
                 entityId: String(saved._id),
                 newValue: {
                   number: saved.number,
@@ -309,13 +337,16 @@ export function receiptsRouter(deps, authenticate) {
               { critical: true, session },
             );
             // Every reduced late fee is audited on its own, with the cashier's reason.
-            if (saved.lateFee && saved.lateFee.chargedPaise < saved.lateFee.calculatedPaise)
+            if (
+              saved.lateFee &&
+              saved.lateFee.chargedPaise < saved.lateFee.calculatedPaise
+            )
               await recordAudit(
                 deps,
                 req,
                 {
-                  action: 'override',
-                  entity: 'late_fee',
+                  action: "override",
+                  entity: "late_fee",
                   entityId: String(saved._id),
                   oldValue: { calculatedPaise: saved.lateFee.calculatedPaise },
                   newValue: { chargedPaise: saved.lateFee.chargedPaise },
@@ -333,10 +364,13 @@ export function receiptsRouter(deps, authenticate) {
   );
 
   // List + totals for the Receipts / Fees & Receipts screens and the Cashier dashboard.
-  router.get('/receipts', ...look, async (req, res, next) => {
+  router.get("/receipts", ...look, async (req, res, next) => {
     try {
       const f = listQuery.parse(req.query);
-      const out = await deps.receiptStore.list({ tenantId: req.user.tenantId, ...f });
+      const out = await deps.receiptStore.list({
+        tenantId: req.user.tenantId,
+        ...f,
+      });
       const totals = { paise: 0, count: 0, byKind: {}, byMode: {} };
       for (const g of out.groups) {
         totals.paise += g.paise;
@@ -357,92 +391,104 @@ export function receiptsRouter(deps, authenticate) {
   });
 
   // Admin only. Must stay above /receipts/:id.
-  router.get('/receipts/export', authenticate, requireRole('admin'), async (req, res, next) => {
-    try {
-      const f = listQuery.omit({ page: true, pageSize: true }).parse(req.query);
-      const rows = await deps.receiptStore.listAll({
-        tenantId: req.user.tenantId,
-        ...f,
-        limit: EXPORT_LIMIT + 1,
-      });
-      if (rows.length > EXPORT_LIMIT)
-        throw new AppError(
-          'TOO_MANY_ROWS',
-          413,
-          `More than ${EXPORT_LIMIT} receipts match. Narrow the dates and export again.`,
-        );
-      const head = [
-        'Receipt No',
-        'Date (IST)',
-        'Type',
-        'Sch. No',
-        'Student',
-        'Class',
-        'Month',
-        'Old Fees',
-        'Tuition/Transport',
-        'Admission',
-        'Form',
-        'Late Fee',
-        'T.C.',
-        'Other',
-        'Total (₹)',
-        'Mode',
-        'Reference',
-        'Cashier',
-        'Status',
-      ];
-      const rupees = (paise) => paise / 100;
-      const sum = (r, heads) =>
-        rupees(
-          r.lines.filter((l) => heads.includes(l.head)).reduce((a, l) => a + l.amountPaise, 0),
-        );
-      const body = rows.map((r) => [
-        r.number,
-        istDateString(r.issuedAt),
-        r.kind === 'school' ? 'School' : 'Transport',
-        r.student?.admissionNo ?? '',
-        r.student?.name ?? '',
-        r.student?.classKey ?? '',
-        r.monthLabel ?? '',
-        sum(r, ['old_fees', 'transport_old']),
-        sum(r, ['tuition', 'transport']),
-        sum(r, ['admission']),
-        sum(r, ['form']),
-        sum(r, ['late']),
-        sum(r, ['tc']),
-        sum(r, ['other']),
-        rupees(r.totalPaise),
-        r.mode.toUpperCase(),
-        r.reference ?? '',
-        r.cashierName ?? '',
-        r.status === 'cancelled' ? 'Cancelled' : 'Valid',
-      ]);
-      const buffer = await writeXlsxFile([
-        head.map((value) => ({ value, fontWeight: 'bold' })),
-        ...body,
-      ]).toBuffer();
-      await recordAudit(deps, req, {
-        action: 'export',
-        entity: 'receipts',
-        newValue: { rows: rows.length, filters: f },
-      });
-      res
-        .set('Content-Type', XLSX)
-        .set(
-          'Content-Disposition',
-          `attachment; filename="receipts-${istDateString(new Date())}.xlsx"`,
-        )
-        .send(buffer);
-    } catch (err) {
-      next(err);
-    }
-  });
+  router.get(
+    "/receipts/export",
+    authenticate,
+    requireRole("admin"),
+    async (req, res, next) => {
+      try {
+        const f = listQuery
+          .omit({ page: true, pageSize: true })
+          .parse(req.query);
+        const rows = await deps.receiptStore.listAll({
+          tenantId: req.user.tenantId,
+          ...f,
+          limit: EXPORT_LIMIT + 1,
+        });
+        if (rows.length > EXPORT_LIMIT)
+          throw new AppError(
+            "TOO_MANY_ROWS",
+            413,
+            `More than ${EXPORT_LIMIT} receipts match. Narrow the dates and export again.`,
+          );
+        const head = [
+          "Receipt No",
+          "Date (IST)",
+          "Type",
+          "Sch. No",
+          "Student",
+          "Class",
+          "Month",
+          "Old Fees",
+          "Tuition/Transport",
+          "Admission",
+          "Form",
+          "Late Fee",
+          "T.C.",
+          "Other",
+          "Total (₹)",
+          "Mode",
+          "Reference",
+          "Cashier",
+          "Status",
+        ];
+        const rupees = (paise) => paise / 100;
+        const sum = (r, heads) =>
+          rupees(
+            r.lines
+              .filter((l) => heads.includes(l.head))
+              .reduce((a, l) => a + l.amountPaise, 0),
+          );
+        const body = rows.map((r) => [
+          r.number,
+          istDateString(r.issuedAt),
+          r.kind === "school" ? "School" : "Transport",
+          r.student?.admissionNo ?? "",
+          r.student?.name ?? "",
+          r.student?.classKey ?? "",
+          r.monthLabel ?? "",
+          sum(r, ["old_fees", "transport_old"]),
+          sum(r, ["tuition", "transport"]),
+          sum(r, ["admission"]),
+          sum(r, ["form"]),
+          sum(r, ["late"]),
+          sum(r, ["tc"]),
+          sum(r, ["other"]),
+          rupees(r.totalPaise),
+          r.mode.toUpperCase(),
+          r.reference ?? "",
+          r.cashierName ?? "",
+          r.status === "cancelled" ? "Cancelled" : "Valid",
+        ]);
+        const buffer = await writeXlsxFile([
+          head.map((value) => ({ value, fontWeight: "bold" })),
+          ...body,
+        ]).toBuffer();
+        await recordAudit(deps, req, {
+          action: "export",
+          entity: "receipts",
+          newValue: { rows: rows.length, filters: f },
+        });
+        res
+          .set("Content-Type", XLSX)
+          .set(
+            "Content-Disposition",
+            `attachment; filename="receipts-${istDateString(new Date())}.xlsx"`,
+          )
+          .send(buffer);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
-  router.get('/receipts/:id', ...look, async (req, res, next) => {
+  router.get("/receipts/:id", ...look, async (req, res, next) => {
     try {
-      const r = await deps.receiptStore.findById(req.user.tenantId, objectId.parse(req.params.id));
-      if (!r) throw notFound('Receipt');
+      const r = await deps.receiptStore.findById(
+        req.user.tenantId,
+        objectId.parse(req.params.id),
+      );
+      if (!r) throw notFound("Receipt");
       res.json(shapeReceipt(r));
     } catch (err) {
       next(err);
@@ -450,22 +496,22 @@ export function receiptsRouter(deps, authenticate) {
   });
 
   router.post(
-    '/receipts/:id/reprint',
+    "/receipts/:id/reprint",
     authenticate,
-    requireRole('admin', 'cashier'),
+    requireRole("admin", "cashier"),
     async (req, res, next) => {
       try {
         const r = await deps.receiptStore.findById(
           req.user.tenantId,
           objectId.parse(req.params.id),
         );
-        if (!r) throw notFound('Receipt');
+        if (!r) throw notFound("Receipt");
         await recordAudit(
           deps,
           req,
           {
-            action: 'reprint',
-            entity: 'receipt',
+            action: "reprint",
+            entity: "receipt",
             entityId: String(r._id),
             newValue: { number: r.number },
           },
@@ -480,15 +526,18 @@ export function receiptsRouter(deps, authenticate) {
 
   // The Cashier asks for a receipt to be cancelled. Approval is built in Step 8.
   router.post(
-    '/receipts/:id/cancel-request',
+    "/receipts/:id/cancel-request",
     authenticate,
-    requireRole('cashier'),
+    requireRole("cashier"),
     async (req, res, next) => {
       try {
         const { reason } = cancelBody.parse(req.body);
         const tenantId = req.user.tenantId;
-        const r = await deps.receiptStore.findById(tenantId, objectId.parse(req.params.id));
-        if (!r) throw notFound('Receipt');
+        const r = await deps.receiptStore.findById(
+          tenantId,
+          objectId.parse(req.params.id),
+        );
+        if (!r) throw notFound("Receipt");
         const made = await deps.receiptStore.requestCancel({
           tenantId,
           receipt: r,
@@ -499,10 +548,14 @@ export function receiptsRouter(deps, authenticate) {
               deps,
               req,
               {
-                action: 'create',
-                entity: 'receipt_cancellation',
+                action: "create",
+                entity: "receipt_cancellation",
                 entityId: String(saved._id),
-                newValue: { receiptId: String(r._id), number: r.number, status: 'requested' },
+                newValue: {
+                  receiptId: String(r._id),
+                  number: r.number,
+                  status: "requested",
+                },
                 reason,
               },
               { critical: true, session },
@@ -510,11 +563,13 @@ export function receiptsRouter(deps, authenticate) {
         });
         if (!made)
           throw new AppError(
-            'ALREADY_CANCELLING',
+            "ALREADY_CANCELLING",
             409,
-            'This receipt is already cancelled or already has a cancellation request.',
+            "This receipt is already cancelled or already has a cancellation request.",
           );
-        res.status(201).json({ id: String(made._id), status: 'cancel_requested' });
+        res
+          .status(201)
+          .json({ id: String(made._id), status: "cancel_requested" });
       } catch (err) {
         next(err);
       }
@@ -524,15 +579,18 @@ export function receiptsRouter(deps, authenticate) {
   // The Admin cancels directly, without Principal approval. The receipt itself is never edited;
   // its payments simply stop counting, so the fees become payable again.
   router.post(
-    '/receipts/:id/cancel',
+    "/receipts/:id/cancel",
     authenticate,
-    requireRole('admin'),
+    requireRole("admin"),
     async (req, res, next) => {
       try {
         const { reason } = cancelBody.parse(req.body);
         const tenantId = req.user.tenantId;
-        const r = await deps.receiptStore.findById(tenantId, objectId.parse(req.params.id));
-        if (!r) throw notFound('Receipt');
+        const r = await deps.receiptStore.findById(
+          tenantId,
+          objectId.parse(req.params.id),
+        );
+        if (!r) throw notFound("Receipt");
         const done = await deps.receiptStore.cancelDirect({
           tenantId,
           receipt: r,
@@ -543,19 +601,23 @@ export function receiptsRouter(deps, authenticate) {
               deps,
               req,
               {
-                action: 'cancel',
-                entity: 'receipt',
+                action: "cancel",
+                entity: "receipt",
                 entityId: String(r._id),
                 oldValue: { number: r.number, totalPaise: r.totalPaise },
-                newValue: { status: 'cancelled' },
+                newValue: { status: "cancelled" },
                 reason,
               },
               { critical: true, session },
             ),
         });
         if (!done)
-          throw new AppError('ALREADY_CANCELLED', 409, 'This receipt is already cancelled.');
-        res.json({ id: String(r._id), status: 'cancelled' });
+          throw new AppError(
+            "ALREADY_CANCELLED",
+            409,
+            "This receipt is already cancelled.",
+          );
+        res.json({ id: String(r._id), status: "cancelled" });
       } catch (err) {
         next(err);
       }

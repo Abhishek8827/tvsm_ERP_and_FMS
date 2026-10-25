@@ -1,18 +1,19 @@
-import { forwardRef } from 'react';
+import { forwardRef } from "react";
 const styles = {
-  primary: 'bg-brand text-white hover:bg-brand-dark disabled:bg-brand/50',
-  secondary: 'bg-surface text-ink border border-line hover:bg-app disabled:text-ink-muted',
-  danger: 'bg-danger text-white hover:bg-danger/90 disabled:bg-danger/50',
-  ghost: 'bg-transparent text-brand hover:bg-brand/10 disabled:text-ink-muted',
+  primary: "bg-brand text-white hover:bg-brand-dark disabled:bg-brand/50",
+  secondary:
+    "bg-surface text-ink border border-line hover:bg-app disabled:text-ink-muted",
+  danger: "bg-danger text-white hover:bg-danger/90 disabled:bg-danger/50",
+  ghost: "bg-transparent text-brand hover:bg-brand/10 disabled:text-ink-muted",
 };
 export const Button = forwardRef(function Button(
   {
-    variant = 'primary',
+    variant = "primary",
     loading = false,
     disabled,
-    className = '',
+    className = "",
     children,
-    type = 'button',
+    type = "button",
     ...rest
   },
   ref,

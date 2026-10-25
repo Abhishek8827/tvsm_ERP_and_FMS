@@ -11,34 +11,34 @@
  * (the Tenant registry itself) opt out with `new Schema(def, { tenantScope: false })`.
  */
 const QUERY_OPS = [
-  'find',
-  'findOne',
-  'findOneAndUpdate',
-  'findOneAndDelete',
-  'findOneAndReplace',
-  'updateOne',
-  'updateMany',
-  'replaceOne',
-  'deleteOne',
-  'deleteMany',
-  'countDocuments',
-  'distinct',
+  "find",
+  "findOne",
+  "findOneAndUpdate",
+  "findOneAndDelete",
+  "findOneAndReplace",
+  "updateOne",
+  "updateMany",
+  "replaceOne",
+  "deleteOne",
+  "deleteMany",
+  "countDocuments",
+  "distinct",
 ];
-const UPDATE_OPS = ['findOneAndUpdate', 'updateOne', 'updateMany'];
+const UPDATE_OPS = ["findOneAndUpdate", "updateOne", "updateMany"];
 function hasTenantId(filter) {
-  if (!filter || typeof filter !== 'object') return false;
+  if (!filter || typeof filter !== "object") return false;
   const value = filter.tenantId;
   // A bare string is the only accepted form. Objects like { $ne: ... } or { $exists: true }
   // would not actually scope the query to one school.
-  return typeof value === 'string' && value.length > 0;
+  return typeof value === "string" && value.length > 0;
 }
 function touchesTenantId(update) {
-  if (!update || typeof update !== 'object') return false;
+  if (!update || typeof update !== "object") return false;
   const u = update;
-  if ('tenantId' in u) return true;
-  for (const key of ['$set', '$setOnInsert', '$unset', '$rename']) {
+  if ("tenantId" in u) return true;
+  for (const key of ["$set", "$setOnInsert", "$unset", "$rename"]) {
     const inner = u[key];
-    if (inner && typeof inner === 'object' && 'tenantId' in inner) return true;
+    if (inner && typeof inner === "object" && "tenantId" in inner) return true;
   }
   return false;
 }
@@ -49,7 +49,9 @@ export function tenantScopePlugin(schema) {
     schema.pre(op, function () {
       if (this.getOptions()._skipTenantCheck === true) return;
       if (!hasTenantId(this.getFilter())) {
-        throw new Error(`Query missing tenantId scope: ${op} on ${this.model.modelName}`);
+        throw new Error(
+          `Query missing tenantId scope: ${op} on ${this.model.modelName}`,
+        );
       }
     });
   }
@@ -58,40 +60,43 @@ export function tenantScopePlugin(schema) {
     schema.pre(op, function () {
       if (this.getOptions()._skipTenantCheck === true) return;
       if (touchesTenantId(this.getUpdate())) {
-        throw new Error(`tenantId cannot be modified: ${op} on ${this.model.modelName}`);
+        throw new Error(
+          `tenantId cannot be modified: ${op} on ${this.model.modelName}`,
+        );
       }
     });
   }
-  schema.pre('aggregate', function () {
+  schema.pre("aggregate", function () {
     if (this.options._skipTenantCheck === true) return;
     const first = this.pipeline()[0];
     if (!first?.$match || !hasTenantId(first.$match)) {
-      throw new Error('Aggregate must start with a $match on tenantId');
+      throw new Error("Aggregate must start with a $match on tenantId");
     }
   });
-  schema.pre('insertMany', function (docs) {
+  schema.pre("insertMany", function (docs) {
     const list = Array.isArray(docs) ? docs : [docs];
     if (list.some((d) => !hasTenantId(d))) {
-      throw new Error('insertMany document missing tenantId');
+      throw new Error("insertMany document missing tenantId");
     }
   });
-  schema.pre('bulkWrite', function (ops) {
+  schema.pre("bulkWrite", function (ops) {
     const list = Array.isArray(ops) ? ops : [];
     const bad = list.some((entry) => {
       const [kind] = Object.keys(entry);
-      const body = entry[kind ?? ''] ?? {};
-      if (kind === 'insertOne') return !hasTenantId(body.document);
+      const body = entry[kind ?? ""] ?? {};
+      if (kind === "insertOne") return !hasTenantId(body.document);
       if (
-        kind === 'replaceOne' ||
-        kind === 'updateOne' ||
-        kind === 'updateMany' ||
-        kind === 'deleteOne' ||
-        kind === 'deleteMany'
+        kind === "replaceOne" ||
+        kind === "updateOne" ||
+        kind === "updateMany" ||
+        kind === "deleteOne" ||
+        kind === "deleteMany"
       ) {
         return !hasTenantId(body.filter) || touchesTenantId(body.update);
       }
       return true; // unknown operation kind: refuse rather than guess
     });
-    if (bad) throw new Error('bulkWrite contains an operation without tenantId scope');
+    if (bad)
+      throw new Error("bulkWrite contains an operation without tenantId scope");
   });
 }

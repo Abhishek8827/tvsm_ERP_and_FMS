@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -10,7 +10,7 @@ registerGlobalPlugins();
  */
 const settingsSchema = new mongoose.Schema(
   {
-    tcBookNo: { type: String, default: '' },
+    tcBookNo: { type: String, default: "" },
     tcStartSl: { type: Number, default: 1, min: 1 },
     history: [
       new mongoose.Schema(
@@ -29,4 +29,5 @@ const settingsSchema = new mongoose.Schema(
 settingsSchema.index({ tenantId: 1 }, { unique: true });
 
 export const CertificateSettings =
-  mongoose.models.CertificateSettings ?? mongoose.model('CertificateSettings', settingsSchema);
+  mongoose.models.CertificateSettings ??
+  mongoose.model("CertificateSettings", settingsSchema);

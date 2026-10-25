@@ -1,5 +1,5 @@
-import crypto from 'node:crypto';
-import mongoose from 'mongoose';
+import crypto from "node:crypto";
+import mongoose from "mongoose";
 import {
   ExpenseRuleError,
   PIN_MAX_ATTEMPTS,
@@ -14,27 +14,30 @@ import {
   todayIst,
   voucherFigures,
   voucherNumber,
-} from '@erp/shared';
-import { BankAccount } from '../models/BankAccount.js';
-import { CashierPin } from '../models/CashierPin.js';
-import { Counter } from '../models/Counter.js';
-import { ExpenseHead } from '../models/ExpenseHead.js';
-import { ExpensePayment } from '../models/ExpensePayment.js';
-import { ExpenseReversal } from '../models/ExpenseReversal.js';
-import { ExpenseVoucher } from '../models/ExpenseVoucher.js';
-import { LedgerEntry } from '../models/LedgerEntry.js';
-import { PettyEntry } from '../models/PettyEntry.js';
-import { Receipt } from '../models/Receipt.js';
-import { ReceiptCancellation } from '../models/ReceiptCancellation.js';
+} from "@erp/shared";
+import { BankAccount } from "../models/BankAccount.js";
+import { CashierPin } from "../models/CashierPin.js";
+import { Counter } from "../models/Counter.js";
+import { ExpenseHead } from "../models/ExpenseHead.js";
+import { ExpensePayment } from "../models/ExpensePayment.js";
+import { ExpenseReversal } from "../models/ExpenseReversal.js";
+import { ExpenseVoucher } from "../models/ExpenseVoucher.js";
+import { LedgerEntry } from "../models/LedgerEntry.js";
+import { PettyEntry } from "../models/PettyEntry.js";
+import { Receipt } from "../models/Receipt.js";
+import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
 
 const isDuplicateKey = (err) => err?.code === 11000;
 const isRetryable = (err) =>
-  isDuplicateKey(err) || err?.hasErrorLabel?.('TransientTransactionError');
+  isDuplicateKey(err) || err?.hasErrorLabel?.("TransientTransactionError");
 const fail = (code, message, field) => {
   throw new ExpenseRuleError(code, message, field);
 };
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const byUser = (user) => ({ createdBy: String(user.id), createdByName: user.name });
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const byUser = (user) => ({
+  createdBy: String(user.id),
+  createdByName: user.name,
+});
 
 /**
  * Runs `fn(session)` in ONE transaction, after taking the money lock. WHY a lock: balances are
@@ -49,7 +52,7 @@ async function runTxn(tenantId, fn) {
       let result;
       await session.withTransaction(async () => {
         await Counter.updateOne(
-          { tenantId, key: 'lock:money' },
+          { tenantId, key: "lock:money" },
           { $inc: { seq: 1 } },
           { upsert: true, session },
         );
@@ -70,25 +73,30 @@ async function nextSeq(tenantId, key, session) {
   const c = await Counter.findOneAndUpdate(
     { tenantId, key },
     { $inc: { seq: 1 } },
-    { upsert: true, returnDocument: 'after', session },
+    { upsert: true, returnDocument: "after", session },
   ).lean();
   return c.seq;
 }
 
 /** Fee receipts that still count, summed per account (cash, or the bank chosen for UPI/QR). */
 async function receiptTotals(tenantId, session) {
-  const gone = await ReceiptCancellation.find({ tenantId, status: 'cancelled' })
-    .select('receiptId')
+  const gone = await ReceiptCancellation.find({ tenantId, status: "cancelled" })
+    .select("receiptId")
     .session(session)
     .lean();
   const rows = await Receipt.aggregate([
     { $match: { tenantId, _id: { $nin: gone.map((g) => g.receiptId) } } },
-    { $group: { _id: { mode: '$mode', bankId: '$bankId' }, paise: { $sum: '$totalPaise' } } },
+    {
+      $group: {
+        _id: { mode: "$mode", bankId: "$bankId" },
+        paise: { $sum: "$totalPaise" },
+      },
+    },
   ]).session(session);
   const totals = {};
   let unassignedPaise = 0;
   for (const r of rows) {
-    if (r._id.mode === 'cash') totals.cash = (totals.cash ?? 0) + r.paise;
+    if (r._id.mode === "cash") totals.cash = (totals.cash ?? 0) + r.paise;
     else if (r._id.bankId) {
       const key = `bank:${r._id.bankId}`;
       totals[key] = (totals[key] ?? 0) + r.paise;
@@ -100,12 +108,15 @@ async function receiptTotals(tenantId, session) {
 async function computeBalances(tenantId, session = null) {
   const entries = await LedgerEntry.aggregate([
     { $match: { tenantId } },
-    { $group: { _id: '$account', amountPaise: { $sum: '$amountPaise' } } },
+    { $group: { _id: "$account", amountPaise: { $sum: "$amountPaise" } } },
   ]).session(session);
   const { totals, unassignedPaise } = await receiptTotals(tenantId, session);
   return {
     balances: balancesFrom({
-      entries: entries.map((e) => ({ account: e._id, amountPaise: e.amountPaise })),
+      entries: entries.map((e) => ({
+        account: e._id,
+        amountPaise: e.amountPaise,
+      })),
       receiptTotals: totals,
     }),
     unassignedPaise,
@@ -121,9 +132,14 @@ const ledger = (tenantId, user, rows) =>
     ...r,
   }));
 
-const pageOf = (page, pageSize) => ({ skip: (page - 1) * pageSize, limit: pageSize });
+const pageOf = (page, pageSize) => ({
+  skip: (page - 1) * pageSize,
+  limit: pageSize,
+});
 const dateRange = (field, from, to) =>
-  from || to ? { [field]: { ...(from && { $gte: from }), ...(to && { $lte: to }) } } : {};
+  from || to
+    ? { [field]: { ...(from && { $gte: from }), ...(to && { $lte: to }) } }
+    : {};
 
 export function makeMoneyStore() {
   return {
@@ -160,9 +176,9 @@ export function makeMoneyStore() {
                 {
                   account: `bank:${bank._id}`,
                   amountPaise: input.openingPaise,
-                  type: 'opening',
+                  type: "opening",
                   refId: String(bank._id),
-                  note: 'Opening balance',
+                  note: "Opening balance",
                 },
               ]),
               { session, ordered: true },
@@ -173,7 +189,11 @@ export function makeMoneyStore() {
         return saved;
       } catch (err) {
         if (isDuplicateKey(err))
-          fail('BANK_EXISTS', 'A bank account with this name already exists.', 'name');
+          fail(
+            "BANK_EXISTS",
+            "A bank account with this name already exists.",
+            "name",
+          );
         throw err;
       } finally {
         await session.endSession();
@@ -186,18 +206,23 @@ export function makeMoneyStore() {
         set.nameLower = patch.name.trim().toLowerCase();
       }
       if (patch.active !== undefined) set.active = patch.active;
-      if (patch.defaultForModes !== undefined) set.defaultForModes = patch.defaultForModes;
+      if (patch.defaultForModes !== undefined)
+        set.defaultForModes = patch.defaultForModes;
       try {
         const saved = await BankAccount.findOneAndUpdate(
           { tenantId, _id: id },
           { $set: set },
-          { returnDocument: 'after' },
+          { returnDocument: "after" },
         ).lean();
         if (saved && audit) await audit(saved);
         return saved;
       } catch (err) {
         if (isDuplicateKey(err))
-          fail('BANK_EXISTS', 'A bank account with this name already exists.', 'name');
+          fail(
+            "BANK_EXISTS",
+            "A bank account with this name already exists.",
+            "name",
+          );
         throw err;
       }
     },
@@ -206,13 +231,14 @@ export function makeMoneyStore() {
       try {
         const [row] = await LedgerEntry.create(
           ledger(tenantId, user, [
-            { account, amountPaise, type: 'opening', note: 'Opening balance' },
+            { account, amountPaise, type: "opening", note: "Opening balance" },
           ]),
         );
         if (audit) await audit(row.toObject());
         return row.toObject();
       } catch (err) {
-        if (isDuplicateKey(err)) fail('OPENING_EXISTS', 'The opening balance is already set.');
+        if (isDuplicateKey(err))
+          fail("OPENING_EXISTS", "The opening balance is already set.");
         throw err;
       }
     },
@@ -222,43 +248,64 @@ export function makeMoneyStore() {
      * so the correction is a signed `opening_change` for the difference, with the reason. The
      * history (old opening + every change) stays visible and the balance moves by the delta.
      */
-    async changeOpening({ tenantId, account, amountPaise, reason, user, audit }) {
+    async changeOpening({
+      tenantId,
+      account,
+      amountPaise,
+      reason,
+      user,
+      audit,
+    }) {
       return runTxn(tenantId, async (session) => {
-        if (account.startsWith('bank:')) {
-          const bank = await BankAccount.findOne({ tenantId, _id: account.slice(5) })
+        if (account.startsWith("bank:")) {
+          const bank = await BankAccount.findOne({
+            tenantId,
+            _id: account.slice(5),
+          })
             .session(session)
             .lean();
-          if (!bank) fail('BANK_NOT_FOUND', 'Bank account not found.', 'account');
+          if (!bank)
+            fail("BANK_NOT_FOUND", "Bank account not found.", "account");
         }
         const rows = await LedgerEntry.find({
           tenantId,
           account,
-          type: { $in: ['opening', 'opening_change'] },
+          type: { $in: ["opening", "opening_change"] },
         })
           .session(session)
           .lean();
         const current = rows.reduce((n, r) => n + r.amountPaise, 0);
         const delta = amountPaise - current;
-        if (delta === 0) fail('NO_CHANGE', 'This is already the opening balance.', 'amountPaise');
+        if (delta === 0)
+          fail(
+            "NO_CHANGE",
+            "This is already the opening balance.",
+            "amountPaise",
+          );
         const { balances } = await computeBalances(tenantId, session);
         if ((balances[account] ?? 0) + delta < 0)
           fail(
-            'WOULD_GO_NEGATIVE',
-            'Money already spent from this account is more than this opening balance.',
-            'amountPaise',
+            "WOULD_GO_NEGATIVE",
+            "Money already spent from this account is more than this opening balance.",
+            "amountPaise",
           );
         const [row] = await LedgerEntry.create(
           ledger(tenantId, user, [
             {
               account,
               amountPaise: delta,
-              type: rows.length ? 'opening_change' : 'opening',
+              type: rows.length ? "opening_change" : "opening",
               note: `Opening changed from ${current} to ${amountPaise} paise: ${reason}`,
             },
           ]),
           { session, ordered: true },
         );
-        const result = { account, fromPaise: current, toPaise: amountPaise, reason };
+        const result = {
+          account,
+          fromPaise: current,
+          toPaise: amountPaise,
+          reason,
+        };
         if (audit) await audit({ ...result, _id: row._id }, session);
         return result;
       });
@@ -266,15 +313,28 @@ export function makeMoneyStore() {
 
     // ---------- balances ----------
     async overview(tenantId) {
-      const [{ balances, unassignedPaise }, banks, openRows] = await Promise.all([
-        computeBalances(tenantId),
-        BankAccount.find({ tenantId }).sort({ nameLower: 1 }).lean(),
-        LedgerEntry.aggregate([
-          { $match: { tenantId, type: { $in: ['opening', 'opening_change'] } } },
-          { $group: { _id: '$account', amountPaise: { $sum: '$amountPaise' } } },
-        ]),
-      ]);
-      const openings = Object.fromEntries(openRows.map((r) => [r._id, r.amountPaise]));
+      const [{ balances, unassignedPaise }, banks, openRows] =
+        await Promise.all([
+          computeBalances(tenantId),
+          BankAccount.find({ tenantId }).sort({ nameLower: 1 }).lean(),
+          LedgerEntry.aggregate([
+            {
+              $match: {
+                tenantId,
+                type: { $in: ["opening", "opening_change"] },
+              },
+            },
+            {
+              $group: {
+                _id: "$account",
+                amountPaise: { $sum: "$amountPaise" },
+              },
+            },
+          ]),
+        ]);
+      const openings = Object.fromEntries(
+        openRows.map((r) => [r._id, r.amountPaise]),
+      );
       return {
         openingCashPaise: openings.cash ?? 0,
         openingPettyPaise: openings.petty ?? 0,
@@ -309,7 +369,8 @@ export function makeMoneyStore() {
         if (audit) await audit(head.toObject());
         return head.toObject();
       } catch (err) {
-        if (isDuplicateKey(err)) fail('HEAD_EXISTS', 'This expense head already exists.', 'name');
+        if (isDuplicateKey(err))
+          fail("HEAD_EXISTS", "This expense head already exists.", "name");
         throw err;
       }
     },
@@ -324,12 +385,13 @@ export function makeMoneyStore() {
         const saved = await ExpenseHead.findOneAndUpdate(
           { tenantId, _id: id },
           { $set: set },
-          { returnDocument: 'after' },
+          { returnDocument: "after" },
         ).lean();
         if (saved && audit) await audit(saved);
         return saved;
       } catch (err) {
-        if (isDuplicateKey(err)) fail('HEAD_EXISTS', 'This expense head already exists.', 'name');
+        if (isDuplicateKey(err))
+          fail("HEAD_EXISTS", "This expense head already exists.", "name");
         throw err;
       }
     },
@@ -337,15 +399,23 @@ export function makeMoneyStore() {
     // ---------- vouchers ----------
     async createVoucher({ tenantId, fy, input, idempotencyKey, user, audit }) {
       return runTxn(tenantId, async (session) => {
-        const existing = await ExpenseVoucher.findOne({ tenantId, idempotencyKey })
+        const existing = await ExpenseVoucher.findOne({
+          tenantId,
+          idempotencyKey,
+        })
           .session(session)
           .lean();
         if (existing) return { voucher: existing, replay: true };
         checkVoucherInput(input);
-        const head = await ExpenseHead.findOne({ tenantId, _id: input.headId, active: true })
+        const head = await ExpenseHead.findOne({
+          tenantId,
+          _id: input.headId,
+          active: true,
+        })
           .session(session)
           .lean();
-        if (!head) fail('HEAD_NOT_FOUND', 'Choose an active expense head.', 'headId');
+        if (!head)
+          fail("HEAD_NOT_FOUND", "Choose an active expense head.", "headId");
         const seq = await nextSeq(tenantId, `voucher:${fy}`, session);
         const [created] = await ExpenseVoucher.create(
           [
@@ -360,7 +430,7 @@ export function makeMoneyStore() {
               payeeName: input.payeeName.trim(),
               particulars: input.particulars.trim(),
               amountPaise: input.amountPaise,
-              status: 'pending',
+              status: "pending",
               idempotencyKey,
               ...byUser(user),
             },
@@ -374,20 +444,21 @@ export function makeMoneyStore() {
     },
     /** Principal decision. Only a pending voucher can be decided, and only once. */
     async decideVoucher({ tenantId, id, decision, reason, user, audit }) {
-      if (decision === 'reject') checkReason(reason, 'Write the reason for rejecting.');
+      if (decision === "reject")
+        checkReason(reason, "Write the reason for rejecting.");
       return runTxn(tenantId, async (session) => {
         const voucher = await ExpenseVoucher.findOneAndUpdate(
-          { tenantId, _id: id, status: 'pending' },
+          { tenantId, _id: id, status: "pending" },
           {
             $set: {
-              status: decision === 'approve' ? 'approved' : 'rejected',
+              status: decision === "approve" ? "approved" : "rejected",
               decidedBy: String(user.id),
               decidedByName: user.name,
               decidedAt: new Date(),
-              ...(decision === 'reject' && { rejectionReason: reason.trim() }),
+              ...(decision === "reject" && { rejectionReason: reason.trim() }),
             },
           },
-          { returnDocument: 'after', session },
+          { returnDocument: "after", session },
         ).lean();
         if (!voucher) return null;
         if (audit) await audit(voucher, session);
@@ -396,7 +467,9 @@ export function makeMoneyStore() {
     },
     async addAdjustment({ tenantId, id, input, user, audit }) {
       return runTxn(tenantId, async (session) => {
-        const voucher = await ExpenseVoucher.findOne({ tenantId, _id: id }).session(session).lean();
+        const voucher = await ExpenseVoucher.findOne({ tenantId, _id: id })
+          .session(session)
+          .lean();
         if (!voucher) return null;
         const payments = await ExpensePayment.find({ tenantId, voucherId: id })
           .session(session)
@@ -416,18 +489,23 @@ export function makeMoneyStore() {
               },
             },
           },
-          { returnDocument: 'after', session },
+          { returnDocument: "after", session },
         ).lean();
         if (audit) await audit(saved, session);
         return saved;
       });
     },
     async listVouchers({ tenantId, status, q, from, to, page, pageSize }) {
-      const match = { tenantId, ...dateRange('date', from, to) };
+      const match = { tenantId, ...dateRange("date", from, to) };
       if (status) match.status = status;
       if (q?.trim()) {
-        const rx = { $regex: escapeRegex(q.trim()), $options: 'i' };
-        match.$or = [{ number: rx }, { payeeName: rx }, { headName: rx }, { particulars: rx }];
+        const rx = { $regex: escapeRegex(q.trim()), $options: "i" };
+        match.$or = [
+          { number: rx },
+          { payeeName: rx },
+          { headName: rx },
+          { particulars: rx },
+        ];
       }
       const [rows, total, sums] = await Promise.all([
         ExpenseVoucher.find(match)
@@ -437,13 +515,25 @@ export function makeMoneyStore() {
           .lean(),
         ExpenseVoucher.countDocuments(match),
         ExpenseVoucher.aggregate([
-          { $match: { ...match, status: { $in: ['pending', 'approved'] } } },
-          { $group: { _id: '$status', paise: { $sum: '$amountPaise' }, count: { $sum: 1 } } },
+          { $match: { ...match, status: { $in: ["pending", "approved"] } } },
+          {
+            $group: {
+              _id: "$status",
+              paise: { $sum: "$amountPaise" },
+              count: { $sum: 1 },
+            },
+          },
         ]),
       ]);
       const paidRows = await ExpensePayment.aggregate([
-        { $match: { tenantId, voucherId: { $in: rows.map((r) => r._id) }, status: 'active' } },
-        { $group: { _id: '$voucherId', paise: { $sum: '$amountPaise' } } },
+        {
+          $match: {
+            tenantId,
+            voucherId: { $in: rows.map((r) => r._id) },
+            status: "active",
+          },
+        },
+        { $group: { _id: "$voucherId", paise: { $sum: "$amountPaise" } } },
       ]);
       const paid = new Map(paidRows.map((p) => [String(p._id), p.paise]));
       return {
@@ -455,39 +545,79 @@ export function makeMoneyStore() {
           return { ...v, ...f };
         }),
         total,
-        totals: Object.fromEntries(sums.map((s) => [s._id, { paise: s.paise, count: s.count }])),
+        totals: Object.fromEntries(
+          sums.map((s) => [s._id, { paise: s.paise, count: s.count }]),
+        ),
       };
     },
     async getVoucher(tenantId, id) {
-      const voucher = await ExpenseVoucher.findOne({ tenantId, _id: id }).lean();
+      const voucher = await ExpenseVoucher.findOne({
+        tenantId,
+        _id: id,
+      }).lean();
       if (!voucher) return null;
       const [payments, reversals] = await Promise.all([
-        ExpensePayment.find({ tenantId, voucherId: id }).sort({ seq: 1 }).lean(),
-        ExpenseReversal.find({ tenantId, voucherId: id }).sort({ createdAt: -1 }).lean(),
+        ExpensePayment.find({ tenantId, voucherId: id })
+          .sort({ seq: 1 })
+          .lean(),
+        ExpenseReversal.find({ tenantId, voucherId: id })
+          .sort({ createdAt: -1 })
+          .lean(),
       ]);
-      return { ...voucher, ...voucherFigures({ voucher, payments }), payments, reversals };
+      return {
+        ...voucher,
+        ...voucherFigures({ voucher, payments }),
+        payments,
+        reversals,
+      };
     },
 
     // ---------- payments ----------
-    async createPayment({ tenantId, fy, voucherId, input, idempotencyKey, user, audit }) {
+    async createPayment({
+      tenantId,
+      fy,
+      voucherId,
+      input,
+      idempotencyKey,
+      user,
+      audit,
+    }) {
       return runTxn(tenantId, async (session) => {
-        const existing = await ExpensePayment.findOne({ tenantId, idempotencyKey })
+        const existing = await ExpensePayment.findOne({
+          tenantId,
+          idempotencyKey,
+        })
           .session(session)
           .lean();
         if (existing) return { payment: existing, replay: true };
-        const voucher = await ExpenseVoucher.findOne({ tenantId, _id: voucherId })
+        const voucher = await ExpenseVoucher.findOne({
+          tenantId,
+          _id: voucherId,
+        })
           .session(session)
           .lean();
         if (!voucher) return null;
-        const payments = await ExpensePayment.find({ tenantId, voucherId }).session(session).lean();
+        const payments = await ExpensePayment.find({ tenantId, voucherId })
+          .session(session)
+          .lean();
         const { balances } = await computeBalances(tenantId, session);
-        const { account } = checkPayment({ voucher, payments, input, balances });
+        const { account } = checkPayment({
+          voucher,
+          payments,
+          input,
+          balances,
+        });
         let bank = null;
-        if (input.mode === 'bank') {
-          bank = await BankAccount.findOne({ tenantId, _id: input.bankId, active: true })
+        if (input.mode === "bank") {
+          bank = await BankAccount.findOne({
+            tenantId,
+            _id: input.bankId,
+            active: true,
+          })
             .session(session)
             .lean();
-          if (!bank) fail('BANK_NOT_FOUND', 'Choose an active bank account.', 'bankId');
+          if (!bank)
+            fail("BANK_NOT_FOUND", "Choose an active bank account.", "bankId");
         }
         const seq = await nextSeq(tenantId, `exppay:${fy}`, session);
         const [created] = await ExpensePayment.create(
@@ -501,14 +631,14 @@ export function makeMoneyStore() {
               date: input.date,
               headName: voucher.headName,
               payeeName: voucher.payeeName,
-              details: (input.details ?? '').trim(),
+              details: (input.details ?? "").trim(),
               mode: input.mode,
               bankId: bank ? String(bank._id) : undefined,
               bankName: bank?.name,
               amountPaise: input.amountPaise,
               authorisedBy: input.authorisedBy,
               approvedByName: voucher.decidedByName,
-              remark: (input.remark ?? '').trim(),
+              remark: (input.remark ?? "").trim(),
               idempotencyKey,
               ...byUser(user),
             },
@@ -521,7 +651,7 @@ export function makeMoneyStore() {
             {
               account,
               amountPaise: -input.amountPaise,
-              type: 'expense_payment',
+              type: "expense_payment",
               refId: String(payment._id),
               note: voucher.number,
             },
@@ -533,10 +663,15 @@ export function makeMoneyStore() {
       });
     },
     async listPayments({ tenantId, q, from, to, page, pageSize }) {
-      const match = { tenantId, ...dateRange('date', from, to) };
+      const match = { tenantId, ...dateRange("date", from, to) };
       if (q?.trim()) {
-        const rx = { $regex: escapeRegex(q.trim()), $options: 'i' };
-        match.$or = [{ voucherNumber: rx }, { payeeName: rx }, { headName: rx }, { details: rx }];
+        const rx = { $regex: escapeRegex(q.trim()), $options: "i" };
+        match.$or = [
+          { voucherNumber: rx },
+          { payeeName: rx },
+          { headName: rx },
+          { details: rx },
+        ];
       }
       const [rows, total] = await Promise.all([
         ExpensePayment.find(match)
@@ -551,17 +686,18 @@ export function makeMoneyStore() {
 
     // ---------- reversals (Admin asks, Principal decides) ----------
     async requestReversal({ tenantId, kind, targetId, reason, user, audit }) {
-      checkReason(reason, 'Write the reason for the reversal.');
+      checkReason(reason, "Write the reason for the reversal.");
       return runTxn(tenantId, async (session) => {
         let voucherId;
         let voucherNumberText;
         let amountPaise;
-        if (kind === 'payment') {
+        if (kind === "payment") {
           const p = await ExpensePayment.findOne({ tenantId, _id: targetId })
             .session(session)
             .lean();
           if (!p) return null;
-          if (p.status !== 'active') fail('ALREADY_REVERSED', 'This payment is already reversed.');
+          if (p.status !== "active")
+            fail("ALREADY_REVERSED", "This payment is already reversed.");
           voucherId = p.voucherId;
           voucherNumberText = p.voucherNumber;
           amountPaise = p.amountPaise;
@@ -573,12 +709,12 @@ export function makeMoneyStore() {
           const active = await ExpensePayment.countDocuments({
             tenantId,
             voucherId: targetId,
-            status: 'active',
+            status: "active",
           }).session(session);
-          if (v.status !== 'approved' || active > 0 || v.adjustments.length > 0)
+          if (v.status !== "approved" || active > 0 || v.adjustments.length > 0)
             fail(
-              'NOT_CANCELLABLE',
-              'Only an approved voucher with no payments and no adjustments can be cancelled. Reverse its payments first.',
+              "NOT_CANCELLABLE",
+              "Only an approved voucher with no payments and no adjustments can be cancelled. Reverse its payments first.",
             );
           voucherId = v._id;
           voucherNumberText = v.number;
@@ -588,11 +724,15 @@ export function makeMoneyStore() {
           tenantId,
           kind,
           targetId,
-          status: { $in: ['requested', 'approved'] },
+          status: { $in: ["requested", "approved"] },
         })
           .session(session)
           .lean();
-        if (open) fail('ALREADY_REQUESTED', 'A reversal request already exists for this entry.');
+        if (open)
+          fail(
+            "ALREADY_REQUESTED",
+            "A reversal request already exists for this entry.",
+          );
         const [created] = await ExpenseReversal.create(
           [
             {
@@ -602,7 +742,7 @@ export function makeMoneyStore() {
               voucherId,
               voucherNumber: voucherNumberText,
               amountPaise,
-              status: 'requested',
+              status: "requested",
               reason: reason.trim(),
               requestedBy: String(user.id),
               requestedByName: user.name,
@@ -616,26 +756,32 @@ export function makeMoneyStore() {
       });
     },
     async decideReversal({ tenantId, id, decision, note, user, audit }) {
-      if (decision === 'reject') checkReason(note, 'Write the reason for rejecting.');
+      if (decision === "reject")
+        checkReason(note, "Write the reason for rejecting.");
       return runTxn(tenantId, async (session) => {
-        const req = await ExpenseReversal.findOne({ tenantId, _id: id, status: 'requested' })
+        const req = await ExpenseReversal.findOne({
+          tenantId,
+          _id: id,
+          status: "requested",
+        })
           .session(session)
           .lean();
         if (!req) return null;
-        if (decision === 'approve') {
-          if (req.kind === 'payment') {
+        if (decision === "approve") {
+          if (req.kind === "payment") {
             const p = await ExpensePayment.findOneAndUpdate(
-              { tenantId, _id: req.targetId, status: 'active' },
-              { $set: { status: 'reversed' } },
-              { returnDocument: 'after', session },
+              { tenantId, _id: req.targetId, status: "active" },
+              { $set: { status: "reversed" } },
+              { returnDocument: "after", session },
             ).lean();
-            if (!p) fail('ALREADY_REVERSED', 'This payment is already reversed.');
+            if (!p)
+              fail("ALREADY_REVERSED", "This payment is already reversed.");
             await LedgerEntry.create(
               ledger(tenantId, user, [
                 {
-                  account: p.mode === 'bank' ? `bank:${p.bankId}` : 'cash',
+                  account: p.mode === "bank" ? `bank:${p.bankId}` : "cash",
                   amountPaise: p.amountPaise,
-                  type: 'payment_reversal',
+                  type: "payment_reversal",
                   refId: String(p._id),
                   note: `Reversal of ${p.voucherNumber}`,
                 },
@@ -646,30 +792,37 @@ export function makeMoneyStore() {
             const active = await ExpensePayment.countDocuments({
               tenantId,
               voucherId: req.voucherId,
-              status: 'active',
+              status: "active",
             }).session(session);
             if (active > 0)
-              fail('NOT_CANCELLABLE', 'The voucher has payments again. Reverse them first.');
+              fail(
+                "NOT_CANCELLABLE",
+                "The voucher has payments again. Reverse them first.",
+              );
             const v = await ExpenseVoucher.findOneAndUpdate(
-              { tenantId, _id: req.targetId, status: 'approved' },
-              { $set: { status: 'cancelled' } },
+              { tenantId, _id: req.targetId, status: "approved" },
+              { $set: { status: "cancelled" } },
               { session },
             );
-            if (!v) fail('NOT_CANCELLABLE', 'The voucher can no longer be cancelled.');
+            if (!v)
+              fail(
+                "NOT_CANCELLABLE",
+                "The voucher can no longer be cancelled.",
+              );
           }
         }
         const saved = await ExpenseReversal.findOneAndUpdate(
           { tenantId, _id: id },
           {
             $set: {
-              status: decision === 'approve' ? 'approved' : 'rejected',
+              status: decision === "approve" ? "approved" : "rejected",
               decidedBy: String(user.id),
               decidedByName: user.name,
               decidedAt: new Date(),
               ...(note && { decisionNote: note.trim() }),
             },
           },
-          { returnDocument: 'after', session },
+          { returnDocument: "after", session },
         ).lean();
         if (audit) await audit(saved, session);
         return saved;
@@ -683,8 +836,8 @@ export function makeMoneyStore() {
     },
     async pendingCounts(tenantId) {
       const [vouchers, reversals] = await Promise.all([
-        ExpenseVoucher.countDocuments({ tenantId, status: 'pending' }),
-        ExpenseReversal.countDocuments({ tenantId, status: 'requested' }),
+        ExpenseVoucher.countDocuments({ tenantId, status: "pending" }),
+        ExpenseReversal.countDocuments({ tenantId, status: "requested" }),
       ]);
       return { vouchers, reversals };
     },
@@ -700,10 +853,15 @@ export function makeMoneyStore() {
         checkPettyEntry({ ...input, pettyBalance: balances.petty ?? 0 });
         let head = null;
         if (input.headId) {
-          head = await ExpenseHead.findOne({ tenantId, _id: input.headId, active: true })
+          head = await ExpenseHead.findOne({
+            tenantId,
+            _id: input.headId,
+            active: true,
+          })
             .session(session)
             .lean();
-          if (!head) fail('HEAD_NOT_FOUND', 'Choose an active expense head.', 'headId');
+          if (!head)
+            fail("HEAD_NOT_FOUND", "Choose an active expense head.", "headId");
         }
         const seq = await nextSeq(tenantId, `petty:${fy}`, session);
         const [created] = await PettyEntry.create(
@@ -728,9 +886,9 @@ export function makeMoneyStore() {
         await LedgerEntry.create(
           ledger(tenantId, user, [
             {
-              account: 'petty',
+              account: "petty",
               amountPaise: -input.amountPaise,
-              type: 'petty_entry',
+              type: "petty_entry",
               refId: String(entry._id),
               note: `Petty #${seq}`,
             },
@@ -742,28 +900,28 @@ export function makeMoneyStore() {
       });
     },
     async reversePetty({ tenantId, id, reason, user, audit }) {
-      checkReason(reason, 'Write the reason for the reversal.');
+      checkReason(reason, "Write the reason for the reversal.");
       return runTxn(tenantId, async (session) => {
         const e = await PettyEntry.findOneAndUpdate(
-          { tenantId, _id: id, status: 'active' },
+          { tenantId, _id: id, status: "active" },
           {
             $set: {
-              status: 'reversed',
+              status: "reversed",
               reversalReason: reason.trim(),
               reversedBy: String(user.id),
               reversedByName: user.name,
               reversedAt: new Date(),
             },
           },
-          { returnDocument: 'after', session },
+          { returnDocument: "after", session },
         ).lean();
         if (!e) return null;
         await LedgerEntry.create(
           ledger(tenantId, user, [
             {
-              account: 'petty',
+              account: "petty",
               amountPaise: e.amountPaise,
-              type: 'petty_reversal',
+              type: "petty_reversal",
               refId: String(e._id),
               note: `Reversal of petty #${e.seq}`,
             },
@@ -775,7 +933,7 @@ export function makeMoneyStore() {
       });
     },
     async listPetty({ tenantId, from, to, page, pageSize }) {
-      const match = { tenantId, ...dateRange('date', from, to) };
+      const match = { tenantId, ...dateRange("date", from, to) };
       const [rows, total] = await Promise.all([
         PettyEntry.find(match)
           .sort({ fy: -1, seq: -1 })
@@ -796,20 +954,37 @@ export function makeMoneyStore() {
     },
 
     // ---------- transfers (cash <-> bank, bank <-> bank, cash -> petty) ----------
-    async createTransfer({ tenantId, from, to, amountPaise, note, idempotencyKey, user, audit }) {
+    async createTransfer({
+      tenantId,
+      from,
+      to,
+      amountPaise,
+      note,
+      idempotencyKey,
+      user,
+      audit,
+    }) {
       return runTxn(tenantId, async (session) => {
-        const done = await LedgerEntry.find({ tenantId, transferId: idempotencyKey })
+        const done = await LedgerEntry.find({
+          tenantId,
+          transferId: idempotencyKey,
+        })
           .session(session)
           .lean();
         if (done.length) return { transferId: idempotencyKey, replay: true };
         for (const key of [from, to]) {
-          if (key.startsWith('bank:')) {
-            const bank = await BankAccount.findOne({ tenantId, _id: key.slice(5), active: true })
+          if (key.startsWith("bank:")) {
+            const bank = await BankAccount.findOne({
+              tenantId,
+              _id: key.slice(5),
+              active: true,
+            })
               .session(session)
               .lean();
-            if (!bank) fail('BANK_NOT_FOUND', 'Choose active bank accounts.', 'from');
-          } else if (key !== 'cash' && key !== 'petty')
-            fail('BAD_ACCOUNT', 'Unknown account.', 'from');
+            if (!bank)
+              fail("BANK_NOT_FOUND", "Choose active bank accounts.", "from");
+          } else if (key !== "cash" && key !== "petty")
+            fail("BAD_ACCOUNT", "Unknown account.", "from");
         }
         const { balances } = await computeBalances(tenantId, session);
         checkTransfer({ from, to, amountPaise, balances });
@@ -818,7 +993,7 @@ export function makeMoneyStore() {
             {
               account: from,
               amountPaise: -amountPaise,
-              type: 'transfer',
+              type: "transfer",
               transferId: idempotencyKey,
               refId: idempotencyKey,
               note,
@@ -826,7 +1001,7 @@ export function makeMoneyStore() {
             {
               account: to,
               amountPaise,
-              type: 'transfer',
+              type: "transfer",
               transferId: idempotencyKey,
               refId: idempotencyKey,
               note,
@@ -834,13 +1009,19 @@ export function makeMoneyStore() {
           ]),
           { session, ordered: true },
         );
-        const result = { transferId: idempotencyKey, from, to, amountPaise, note: note ?? '' };
+        const result = {
+          transferId: idempotencyKey,
+          from,
+          to,
+          amountPaise,
+          note: note ?? "",
+        };
         if (audit) await audit(result, session);
         return { ...result, replay: false };
       });
     },
     async listTransfers({ tenantId, page, pageSize }) {
-      const match = { tenantId, type: 'transfer', amountPaise: { $lt: 0 } };
+      const match = { tenantId, type: "transfer", amountPaise: { $lt: 0 } };
       const [outs, total] = await Promise.all([
         LedgerEntry.find(match)
           .sort({ createdAt: -1 })
@@ -851,7 +1032,7 @@ export function makeMoneyStore() {
       ]);
       const ins = await LedgerEntry.find({
         tenantId,
-        type: 'transfer',
+        type: "transfer",
         amountPaise: { $gt: 0 },
         transferId: { $in: outs.map((o) => o.transferId) },
       }).lean();
@@ -861,9 +1042,9 @@ export function makeMoneyStore() {
           transferId: o.transferId,
           date: o.entryDate,
           from: o.account,
-          to: to.get(o.transferId) ?? '',
+          to: to.get(o.transferId) ?? "",
           amountPaise: -o.amountPaise,
-          note: o.note ?? '',
+          note: o.note ?? "",
           byName: o.createdByName,
         })),
         total,
@@ -872,12 +1053,19 @@ export function makeMoneyStore() {
 
     // ---------- cashier PIN ----------
     async setPin({ tenantId, pin, user, audit }) {
-      const salt = crypto.randomBytes(16).toString('hex');
-      const hash = crypto.scryptSync(pin, salt, 32).toString('hex');
+      const salt = crypto.randomBytes(16).toString("hex");
+      const hash = crypto.scryptSync(pin, salt, 32).toString("hex");
       await CashierPin.updateOne(
         { tenantId },
         {
-          $set: { hash, salt, failed: 0, locked: false, setBy: String(user.id), setAt: new Date() },
+          $set: {
+            hash,
+            salt,
+            failed: 0,
+            locked: false,
+            setBy: String(user.id),
+            setAt: new Date(),
+          },
         },
         { upsert: true },
       );
@@ -890,24 +1078,26 @@ export function makeMoneyStore() {
     /** Returns { ok } or { ok:false, reason: 'NOT_SET' | 'LOCKED' | 'WRONG', attemptsLeft }. */
     async verifyPin({ tenantId, pin }) {
       const p = await CashierPin.findOne({ tenantId }).lean();
-      if (!p) return { ok: false, reason: 'NOT_SET' };
-      if (p.locked || p.failed >= PIN_MAX_ATTEMPTS) return { ok: false, reason: 'LOCKED' };
+      if (!p) return { ok: false, reason: "NOT_SET" };
+      if (p.locked || p.failed >= PIN_MAX_ATTEMPTS)
+        return { ok: false, reason: "LOCKED" };
       const given = crypto.scryptSync(pin, p.salt, 32);
-      if (crypto.timingSafeEqual(given, Buffer.from(p.hash, 'hex'))) {
-        if (p.failed > 0) await CashierPin.updateOne({ tenantId }, { $set: { failed: 0 } });
+      if (crypto.timingSafeEqual(given, Buffer.from(p.hash, "hex"))) {
+        if (p.failed > 0)
+          await CashierPin.updateOne({ tenantId }, { $set: { failed: 0 } });
         return { ok: true };
       }
       // Atomic count so parallel guesses cannot all slip under the limit.
       const after = await CashierPin.findOneAndUpdate(
         { tenantId },
         { $inc: { failed: 1 } },
-        { returnDocument: 'after' },
+        { returnDocument: "after" },
       ).lean();
       if (after.failed >= PIN_MAX_ATTEMPTS)
         await CashierPin.updateOne({ tenantId }, { $set: { locked: true } });
       return {
         ok: false,
-        reason: after.failed >= PIN_MAX_ATTEMPTS ? 'LOCKED' : 'WRONG',
+        reason: after.failed >= PIN_MAX_ATTEMPTS ? "LOCKED" : "WRONG",
         attemptsLeft: Math.max(0, PIN_MAX_ATTEMPTS - after.failed),
       };
     },

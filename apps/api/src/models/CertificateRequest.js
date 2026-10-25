@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -14,12 +14,33 @@ registerGlobalPlugins();
  */
 const requestSchema = new mongoose.Schema(
   {
-    kind: { type: String, enum: ['tc', 'bonafide'], required: true, immutable: true },
-    studentId: { type: mongoose.Schema.Types.ObjectId, required: true, immutable: true },
+    kind: {
+      type: String,
+      enum: ["tc", "bonafide"],
+      required: true,
+      immutable: true,
+    },
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      immutable: true,
+    },
     fy: { type: String, required: true, immutable: true },
-    status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
-    payload: { type: mongoose.Schema.Types.Mixed, required: true, immutable: true },
-    preview: { type: mongoose.Schema.Types.Mixed, required: true, immutable: true },
+    status: {
+      type: String,
+      enum: ["pending", "approved", "rejected"],
+      default: "pending",
+    },
+    payload: {
+      type: mongoose.Schema.Types.Mixed,
+      required: true,
+      immutable: true,
+    },
+    preview: {
+      type: mongoose.Schema.Types.Mixed,
+      required: true,
+      immutable: true,
+    },
     // For the list: who, and (TC) the dues the Admin wants to override.
     studentName: { type: String, required: true, immutable: true },
     admissionNo: { type: String, required: true, immutable: true },
@@ -42,8 +63,9 @@ requestSchema.index({ tenantId: 1, admissionNo: 1 });
 // One waiting request per student and kind: a double click or a second Admin cannot stack them.
 requestSchema.index(
   { tenantId: 1, studentId: 1, kind: 1 },
-  { unique: true, partialFilterExpression: { status: 'pending' } },
+  { unique: true, partialFilterExpression: { status: "pending" } },
 );
 
 export const CertificateRequest =
-  mongoose.models.CertificateRequest ?? mongoose.model('CertificateRequest', requestSchema);
+  mongoose.models.CertificateRequest ??
+  mongoose.model("CertificateRequest", requestSchema);

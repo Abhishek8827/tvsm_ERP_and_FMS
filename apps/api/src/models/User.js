@@ -1,6 +1,6 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
-import { ROLES } from '@erp/shared';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
+import { ROLES } from "@erp/shared";
 
 // The tenantId plugin must be registered BEFORE a model is compiled.
 registerGlobalPlugins();
@@ -26,4 +26,4 @@ userSchema.index({ tenantId: 1, firebaseUid: 1 }, { unique: true });
 userSchema.index({ tenantId: 1, email: 1 }, { unique: true });
 userSchema.index({ tenantId: 1, role: 1, isActive: 1 });
 
-export const User = mongoose.models.User ?? mongoose.model('User', userSchema);
+export const User = mongoose.models.User ?? mongoose.model("User", userSchema);

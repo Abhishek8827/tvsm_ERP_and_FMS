@@ -1,5 +1,5 @@
-import { AppError } from '../utils/errors.js';
-import { recordAudit } from '../services/audit.js';
+import { AppError } from "../utils/errors.js";
+import { recordAudit } from "../services/audit.js";
 
 /**
  * Authentication for every protected route (TDD 4.1, prompt rule 12):
@@ -14,28 +14,33 @@ export function createAuthenticate(deps) {
 
   return async function authenticate(req, _res, next) {
     try {
-      const header = req.header('authorization') ?? '';
+      const header = req.header("authorization") ?? "";
       const match = /^Bearer (.+)$/.exec(header);
-      if (!match) throw new AppError('UNAUTHENTICATED', 401, 'Please sign in to continue.');
+      if (!match)
+        throw new AppError(
+          "UNAUTHENTICATED",
+          401,
+          "Please sign in to continue.",
+        );
 
       let decoded;
       try {
         decoded = await verifyToken(match[1]);
       } catch (err) {
-        logger.warn({ requestId: req.id, code: err?.code }, 'Token rejected');
+        logger.warn({ requestId: req.id, code: err?.code }, "Token rejected");
         throw new AppError(
-          'INVALID_TOKEN',
+          "INVALID_TOKEN",
           401,
-          'Your session is not valid. Please sign in again.',
+          "Your session is not valid. Please sign in again.",
         );
       }
 
       const user = await userStore.findByFirebaseUid(tenantId, decoded.uid);
       if (!user) {
         throw new AppError(
-          'NO_ACCOUNT',
+          "NO_ACCOUNT",
           403,
-          'This login is not set up for the school system. Please contact the Admin.',
+          "This login is not set up for the school system. Please contact the Admin.",
         );
       }
       if (!user.isActive) {
@@ -43,21 +48,25 @@ export function createAuthenticate(deps) {
           deps,
           { id: req.id, ip: req.ip, user: undefined },
           {
-            action: 'login_blocked',
-            entity: 'user',
+            action: "login_blocked",
+            entity: "user",
             entityId: String(user._id),
-            reason: 'Deactivated account tried to use the system',
+            reason: "Deactivated account tried to use the system",
           },
         );
         throw new AppError(
-          'ACCOUNT_DISABLED',
+          "ACCOUNT_DISABLED",
           403,
-          'This account has been deactivated. Please contact the Admin.',
+          "This account has been deactivated. Please contact the Admin.",
         );
       }
       if (decoded.role !== user.role || decoded.tenantId !== user.tenantId) {
         // 401 on purpose: the web client force-refreshes the token once and retries.
-        throw new AppError('CLAIMS_STALE', 401, 'Your access was updated. Please sign in again.');
+        throw new AppError(
+          "CLAIMS_STALE",
+          401,
+          "Your access was updated. Please sign in again.",
+        );
       }
 
       req.user = {

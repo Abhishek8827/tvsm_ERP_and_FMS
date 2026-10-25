@@ -1,17 +1,21 @@
-import express, { Router } from 'express';
-import { readSheet } from 'read-excel-file/universal';
-import writeXlsxFile from 'write-excel-file/node';
-import { z } from 'zod';
-import { getFinancialYear } from '@erp/shared';
-import { requireRole } from '../middleware/requireRole.js';
-import { recordAudit } from '../services/audit.js';
-import { postPlans } from '../services/feePlan.js';
-import { TEMPLATE_HEADERS, parseStudentSheet } from '../services/studentImport.js';
-import { AppError } from '../utils/errors.js';
+import express, { Router } from "express";
+import { readSheet } from "read-excel-file/universal";
+import writeXlsxFile from "write-excel-file/node";
+import { z } from "zod";
+import { getFinancialYear } from "@erp/shared";
+import { requireRole } from "../middleware/requireRole.js";
+import { recordAudit } from "../services/audit.js";
+import { postPlans } from "../services/feePlan.js";
+import {
+  TEMPLATE_HEADERS,
+  parseStudentSheet,
+} from "../services/studentImport.js";
+import { AppError } from "../utils/errors.js";
 
 const MAX_ROWS = 5000;
-const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const query = z.object({ commit: z.enum(['true', 'false']).default('false') });
+const XLSX =
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const query = z.object({ commit: z.enum(["true", "false"]).default("false") });
 
 /**
  * Admin-only Excel import of students.
@@ -23,42 +27,65 @@ const query = z.object({ commit: z.enum(['true', 'false']).default('false') });
  */
 export function studentImportRouter(deps, authenticate) {
   const router = Router();
-  const adminOnly = [authenticate, requireRole('admin')];
+  const adminOnly = [authenticate, requireRole("admin")];
 
-  router.get('/students/import-template', ...adminOnly, async (_req, res, next) => {
-    try {
-      const header = TEMPLATE_HEADERS.map((value) => ({ value, fontWeight: 'bold' }));
-      const buffer = await writeXlsxFile([header]).toBuffer();
-      res
-        .set('Content-Type', XLSX)
-        .set('Content-Disposition', 'attachment; filename="student-import-template.xlsx"')
-        .send(buffer);
-    } catch (err) {
-      next(err);
-    }
-  });
+  router.get(
+    "/students/import-template",
+    ...adminOnly,
+    async (_req, res, next) => {
+      try {
+        const header = TEMPLATE_HEADERS.map((value) => ({
+          value,
+          fontWeight: "bold",
+        }));
+        const buffer = await writeXlsxFile([header]).toBuffer();
+        res
+          .set("Content-Type", XLSX)
+          .set(
+            "Content-Disposition",
+            'attachment; filename="student-import-template.xlsx"',
+          )
+          .send(buffer);
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
 
   router.post(
-    '/students/import',
+    "/students/import",
     ...adminOnly,
     // The file arrives as raw bytes (not JSON), so this route has its own size limit.
-    express.raw({ type: 'application/octet-stream', limit: '5mb' }),
+    express.raw({ type: "application/octet-stream", limit: "5mb" }),
     async (req, res, next) => {
       try {
         const { commit } = query.parse(req.query);
         if (!Buffer.isBuffer(req.body) || req.body.length === 0)
-          throw new AppError('NO_FILE', 400, 'Please choose an Excel (.xlsx) file.');
+          throw new AppError(
+            "NO_FILE",
+            400,
+            "Please choose an Excel (.xlsx) file.",
+          );
         let sheet;
         try {
           sheet = await readSheet(new Blob([req.body]));
         } catch {
-          throw new AppError('BAD_FILE', 400, 'This file could not be read. Use an .xlsx file.');
+          throw new AppError(
+            "BAD_FILE",
+            400,
+            "This file could not be read. Use an .xlsx file.",
+          );
         }
         if (sheet.length > MAX_ROWS + 1)
-          throw new AppError('TOO_MANY_ROWS', 400, `Import up to ${MAX_ROWS} rows at a time.`);
+          throw new AppError(
+            "TOO_MANY_ROWS",
+            400,
+            `Import up to ${MAX_ROWS} rows at a time.`,
+          );
 
         const parsed = parseStudentSheet(sheet);
-        if (parsed.fileError) throw new AppError('BAD_TEMPLATE', 400, parsed.fileError);
+        if (parsed.fileError)
+          throw new AppError("BAD_TEMPLATE", 400, parsed.fileError);
 
         const tenantId = req.user.tenantId;
         const existing = await deps.studentStore.existingAdmissionNos(
@@ -79,7 +106,7 @@ export function studentImportRouter(deps, authenticate) {
 
         let created = 0;
         let feePlan = null;
-        if (commit === 'true' && ready.length > 0) {
+        if (commit === "true" && ready.length > 0) {
           created = await deps.studentStore.createMany(
             tenantId,
             ready.map((s) => s.data),
@@ -94,13 +121,17 @@ export function studentImportRouter(deps, authenticate) {
             fy: getFinancialYear(new Date()),
           });
           await recordAudit(deps, req, {
-            action: 'create',
-            entity: 'student_import',
-            newValue: { rowsInFile: sheet.length - 1, created, skipped: errors.length },
+            action: "create",
+            entity: "student_import",
+            newValue: {
+              rowsInFile: sheet.length - 1,
+              created,
+              skipped: errors.length,
+            },
           });
         }
         res.json({
-          committed: commit === 'true',
+          committed: commit === "true",
           rowsInFile: parsed.students.length + parsed.errors.length,
           ready: ready.length,
           created,

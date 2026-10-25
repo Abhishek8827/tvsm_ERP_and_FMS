@@ -6,22 +6,25 @@
  * prints a password. Passwords must be strong and not reused from anywhere else.
  * In production it refuses to run unless you pass --confirm-production.
  */
-import { initFirebaseAuth } from '../auth/firebase.js';
-import { loadEnv } from '../config/env.js';
-import { connectDb, disconnectDb } from '../db.js';
-import { User } from '../models/User.js';
+import { initFirebaseAuth } from "../auth/firebase.js";
+import { loadEnv } from "../config/env.js";
+import { connectDb, disconnectDb } from "../db.js";
+import { User } from "../models/User.js";
 
 const env = loadEnv();
-if (env.NODE_ENV === 'production' && !process.argv.includes('--confirm-production')) {
-  console.error('Refusing to run in production without --confirm-production.');
+if (
+  env.NODE_ENV === "production" &&
+  !process.argv.includes("--confirm-production")
+) {
+  console.error("Refusing to run in production without --confirm-production.");
   process.exit(1);
 }
 
 const ACCOUNTS = [
-  { role: 'admin', name: 'Admin', key: 'SEED_ADMIN' },
-  { role: 'principal', name: 'Principal', key: 'SEED_PRINCIPAL' },
-  { role: 'cashier', name: 'Cashier (Counter 1)', key: 'SEED_CASHIER1' },
-  { role: 'cashier', name: 'Cashier (Counter 2)', key: 'SEED_CASHIER2' },
+  { role: "admin", name: "Admin", key: "SEED_ADMIN" },
+  { role: "principal", name: "Principal", key: "SEED_PRINCIPAL" },
+  { role: "cashier", name: "Cashier (Counter 1)", key: "SEED_CASHIER1" },
+  { role: "cashier", name: "Cashier (Counter 2)", key: "SEED_CASHIER2" },
 ].map((a) => ({
   ...a,
   email: process.env[`${a.key}_EMAIL`]?.trim().toLowerCase(),
@@ -29,17 +32,19 @@ const ACCOUNTS = [
 }));
 
 function validate(account) {
-  if (!account.email && !account.password) return 'skipped (no email and password set)';
-  if (!account.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(account.email)) return 'invalid email';
+  if (!account.email && !account.password)
+    return "skipped (no email and password set)";
+  if (!account.email || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(account.email))
+    return "invalid email";
   if (!account.password || account.password.length < 10)
-    return 'password must be at least 10 characters';
+    return "password must be at least 10 characters";
   return null;
 }
 
 const auth = initFirebaseAuth(env);
 if (!auth) {
   console.error(
-    'Firebase is not configured (FIREBASE_PROJECT_ID + service account, or the emulator).',
+    "Firebase is not configured (FIREBASE_PROJECT_ID + service account, or the emulator).",
   );
   process.exit(1);
 }
@@ -49,8 +54,8 @@ let failed = false;
 for (const account of ACCOUNTS) {
   const problem = validate(account);
   if (problem) {
-    console.log(`${account.role} <${account.email ?? 'not set'}>: ${problem}`);
-    if (!problem.startsWith('skipped')) failed = true;
+    console.log(`${account.role} <${account.email ?? "not set"}>: ${problem}`);
+    if (!problem.startsWith("skipped")) failed = true;
     continue;
   }
   let fbUser;
@@ -62,7 +67,7 @@ for (const account of ACCOUNTS) {
       disabled: false,
     });
   } catch (err) {
-    if (err?.code !== 'auth/user-not-found') throw err;
+    if (err?.code !== "auth/user-not-found") throw err;
     fbUser = await auth.createUser({
       email: account.email,
       password: account.password,
@@ -79,7 +84,12 @@ for (const account of ACCOUNTS) {
   await User.updateOne(
     { tenantId: env.DEFAULT_TENANT_ID, firebaseUid: fbUser.uid },
     {
-      $set: { email: account.email, name: account.name, role: account.role, isActive: true },
+      $set: {
+        email: account.email,
+        name: account.name,
+        role: account.role,
+        isActive: true,
+      },
     },
     { upsert: true },
   );

@@ -1,40 +1,50 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
-import { flushSync } from 'react-dom';
-import { Link, useLocation, useParams } from 'react-router-dom';
-import { SCHOOL, classLabel, formatINR, rupeesInWords } from '@erp/shared';
-import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { printHtml } from '../lib/printHtml';
-import { Badge, Button, ConfirmDialog, ErrorState, Spinner, useToast } from '../components/ui';
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { flushSync } from "react-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { SCHOOL, classLabel, formatINR, rupeesInWords } from "@erp/shared";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { printHtml } from "../lib/printHtml";
+import {
+  Badge,
+  Button,
+  ConfirmDialog,
+  ErrorState,
+  Spinner,
+  useToast,
+} from "../components/ui";
 
-const TITLE = { school: 'SCHOOL FEES RECEIPT', transport: 'TRANSPORT FEES RECEIPT' };
+const TITLE = {
+  school: "SCHOOL FEES RECEIPT",
+  transport: "TRANSPORT FEES RECEIPT",
+};
 // Rows printed on the receipt, in the order of the school's paper receipt book.
 const ROWS = {
   school: [
-    ['admission_form', 'Form Fees', ['form']],
-    ['admission', 'Admission Fees', ['admission']],
-    ['tuition', 'Tuition Fees', ['tuition']],
-    ['old', 'Old Fees', ['old_fees']],
-    ['late', 'Late Fees', ['late']],
-    ['tc', 'T.C.', ['tc']],
-    ['other', 'Other', ['other']],
+    ["admission_form", "Form Fees", ["form"]],
+    ["admission", "Admission Fees", ["admission"]],
+    ["tuition", "Tuition Fees", ["tuition"]],
+    ["old", "Old Fees", ["old_fees"]],
+    ["late", "Late Fees", ["late"]],
+    ["tc", "T.C.", ["tc"]],
+    ["other", "Other", ["other"]],
   ],
   transport: [
-    ['transport', 'Transport Fees (New)', ['transport']],
-    ['old', 'Old Fees', ['transport_old']],
-    ['late', 'Late Fees', ['late']],
+    ["transport", "Transport Fees (New)", ["transport"]],
+    ["old", "Old Fees", ["transport_old"]],
+    ["late", "Late Fees", ["late"]],
   ],
 };
-const MODE_LABEL = { cash: 'Cash', upi: 'UPI', qr: 'QR' };
+const MODE_LABEL = { cash: "Cash", upi: "UPI", qr: "QR" };
 const when = (iso) =>
-  new Date(iso).toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  new Date(iso).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
 /** One quarter-A4 copy (Student copy or Office copy). */
@@ -44,18 +54,18 @@ function Copy({ r, copyName, duplicate, cancelled }) {
     const lines = r.lines.filter((l) => heads.includes(l.head));
     return lines.length ? lines.reduce((s, l) => s + l.amountPaise, 0) : null;
   };
-  const otherLabel = r.lines.find((l) => l.head === 'other')?.label;
+  const otherLabel = r.lines.find((l) => l.head === "other")?.label;
   const s = r.student;
   return (
     <div className="copy">
       <div className="head">
         <img src="/logo.jpg" alt="" />
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: "center" }}>
           <strong>{SCHOOL.name}</strong>
           <div>{SCHOOL.addressLine}</div>
           <div>
             Affiliation No. {SCHOOL.affiliationNo}
-            {SCHOOL.schoolCode ? ` · School Code ${SCHOOL.schoolCode}` : ''}
+            {SCHOOL.schoolCode ? ` · School Code ${SCHOOL.schoolCode}` : ""}
           </div>
         </div>
       </div>
@@ -82,22 +92,22 @@ function Copy({ r, copyName, duplicate, cancelled }) {
       <div className="line">
         <span>
           Class: {classLabel(s.classKey)}
-          {s.section ? `-${s.section}` : ''}
+          {s.section ? `-${s.section}` : ""}
         </span>
         <span>Session: {r.fy}</span>
       </div>
       {s.fatherName && <div className="line">Father: {s.fatherName}</div>}
       <div className="line">
-        <span>Add.: {s.address || s.village || '-'}</span>
-        <span>Mob.: {s.contactNo ?? ''}</span>
+        <span>Add.: {s.address || s.village || "-"}</span>
+        <span>Mob.: {s.contactNo ?? ""}</span>
       </div>
-      <div className="line">Month: {r.monthLabel || '-'}</div>
+      <div className="line">Month: {r.monthLabel || "-"}</div>
       <table>
         <thead>
           <tr>
-            <th style={{ width: '9%' }}>S.No</th>
+            <th style={{ width: "9%" }}>S.No</th>
             <th>Particulars</th>
-            <th style={{ width: '28%' }}>Amount (₹)</th>
+            <th style={{ width: "28%" }}>Amount (₹)</th>
           </tr>
         </thead>
         <tbody>
@@ -106,11 +116,18 @@ function Copy({ r, copyName, duplicate, cancelled }) {
             return (
               <tr key={key}>
                 <td>{i + 1}</td>
-                <td>{key === 'other' && otherLabel ? `Other: ${otherLabel}` : label}</td>
+                <td>
+                  {key === "other" && otherLabel
+                    ? `Other: ${otherLabel}`
+                    : label}
+                </td>
                 <td className="num">
                   {amount === null
-                    ? ''
-                    : formatINR(amount, { hideZeroPaise: true }).replace('₹', '')}
+                    ? ""
+                    : formatINR(amount, { hideZeroPaise: true }).replace(
+                        "₹",
+                        "",
+                      )}
                 </td>
               </tr>
             );
@@ -124,17 +141,19 @@ function Copy({ r, copyName, duplicate, cancelled }) {
       <div className="words">{rupeesInWords(r.totalPaise)}</div>
       <div className="line">
         <span>
-          Old Dues: <b>{formatINR(r.dueAfterOldPaise ?? 0, { hideZeroPaise: true })}</b>
+          Old Dues:{" "}
+          <b>{formatINR(r.dueAfterOldPaise ?? 0, { hideZeroPaise: true })}</b>
         </span>
         <span>
-          New Dues: <b>{formatINR(r.dueAfterNewPaise ?? 0, { hideZeroPaise: true })}</b>
+          New Dues:{" "}
+          <b>{formatINR(r.dueAfterNewPaise ?? 0, { hideZeroPaise: true })}</b>
         </span>
       </div>
       <div className="line">
         <span />
         <span>
           Mode: {MODE_LABEL[r.mode]}
-          {r.reference ? ` · Ref: ${r.reference}` : ''}
+          {r.reference ? ` · Ref: ${r.reference}` : ""}
         </span>
       </div>
       <div className="note">Note: Fees once paid are non-refundable.</div>
@@ -185,7 +204,7 @@ export function ReceiptView() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const [cancelOpen, setCancelOpen] = useState(false);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const [printedOnce, setPrintedOnce] = useState(false);
   const [duplicate, setDuplicate] = useState(false);
   const [printing, setPrinting] = useState(false);
@@ -193,7 +212,7 @@ export function ReceiptView() {
   const fresh = Boolean(location.state?.fresh);
 
   const receipt = useQuery({
-    queryKey: ['receipt', id],
+    queryKey: ["receipt", id],
     queryFn: () => api(`/api/receipts/${id}`),
   });
   async function printNow() {
@@ -205,49 +224,69 @@ export function ReceiptView() {
         title: `Receipt ${receipt.data.number}`,
       });
     } catch (e) {
-      notify(`Could not open the print window. ${e.message}`, 'error');
+      notify(`Could not open the print window. ${e.message}`, "error");
     } finally {
       setPrinting(false);
     }
   }
   const reprint = useMutation({
-    mutationFn: () => api(`/api/receipts/${id}/reprint`, { method: 'POST' }),
+    mutationFn: () => api(`/api/receipts/${id}/reprint`, { method: "POST" }),
     onSuccess: () => {
       // The DUPLICATE stamp must be in the page BEFORE it is copied for printing.
       flushSync(() => setDuplicate(true));
       void printNow();
     },
-    onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
+    onError: (e) =>
+      notify(
+        `${e.message}${e.requestId ? ` (ref ${e.requestId})` : ""}`,
+        "error",
+      ),
   });
 
   const cancelMutation = useMutation({
     mutationFn: () =>
-      api(role === 'admin' ? `/api/receipts/${id}/cancel` : `/api/receipts/${id}/cancel-request`, {
-        method: 'POST',
-        body: { reason },
-      }),
+      api(
+        role === "admin"
+          ? `/api/receipts/${id}/cancel`
+          : `/api/receipts/${id}/cancel-request`,
+        {
+          method: "POST",
+          body: { reason },
+        },
+      ),
     onSuccess: async () => {
       setCancelOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ['receipt', id] });
-      await queryClient.invalidateQueries({ queryKey: ['receipts'] });
-      await queryClient.invalidateQueries({ queryKey: ['fees-database'] });
-      await queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      await queryClient.invalidateQueries({ queryKey: ["receipt", id] });
+      await queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      await queryClient.invalidateQueries({ queryKey: ["fees-database"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       notify(
-        role === 'admin' ? 'Receipt cancelled.' : 'Cancellation request sent for approval.',
-        'success',
+        role === "admin"
+          ? "Receipt cancelled."
+          : "Cancellation request sent for approval.",
+        "success",
       );
     },
-    onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
+    onError: (e) =>
+      notify(
+        `${e.message}${e.requestId ? ` (ref ${e.requestId})` : ""}`,
+        "error",
+      ),
   });
 
   if (receipt.isPending) return <Spinner label="Loading receipt" />;
   if (receipt.isError)
-    return <ErrorState message={receipt.error.message} onRetry={() => receipt.refetch()} />;
+    return (
+      <ErrorState
+        message={receipt.error.message}
+        onRetry={() => receipt.refetch()}
+      />
+    );
   const r = receipt.data;
 
-  const cancelled = r.status === 'cancelled';
+  const cancelled = r.status === "cancelled";
   const original = fresh && !printedOnce && !cancelled;
-  const canReprint = role === 'cashier' || role === 'admin';
+  const canReprint = role === "cashier" || role === "admin";
   const phone = r.student.contactNo ? `91${r.student.contactNo}` : null;
   const message = `TVSM School: fee receipt ${r.number} of ${formatINR(r.totalPaise, { hideZeroPaise: true })} received for ${r.student.name} (Sch. ${r.student.admissionNo}) on ${when(r.issuedAt)}. Thank you.`;
 
@@ -269,7 +308,10 @@ export function ReceiptView() {
             </Button>
           ) : (
             canReprint && (
-              <Button loading={reprint.isPending || printing} onClick={() => reprint.mutate()}>
+              <Button
+                loading={reprint.isPending || printing}
+                onClick={() => reprint.mutate()}
+              >
                 Print duplicate
               </Button>
             )
@@ -284,16 +326,20 @@ export function ReceiptView() {
               Send on WhatsApp
             </a>
           ) : (
-            <Button variant="secondary" disabled title="No mobile number saved for this student">
+            <Button
+              variant="secondary"
+              disabled
+              title="No mobile number saved for this student"
+            >
               Send on WhatsApp
             </Button>
           )}
-          {r.status === 'valid' && (role === 'admin' || role === 'cashier') && (
+          {r.status === "valid" && (role === "admin" || role === "cashier") && (
             <Button variant="danger" onClick={() => setCancelOpen(true)}>
-              {role === 'admin' ? 'Cancel receipt' : 'Request cancellation'}
+              {role === "admin" ? "Cancel receipt" : "Request cancellation"}
             </Button>
           )}
-          {role === 'cashier' && (
+          {role === "cashier" && (
             <Link
               to="/collect-fee"
               className="inline-flex min-h-10 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-ink hover:bg-app"
@@ -308,11 +354,13 @@ export function ReceiptView() {
           <Badge tone="danger">Cancelled</Badge>
           <span className="text-sm text-ink-muted">
             {r.cancellation?.reason}
-            {r.cancellation?.decidedByName ? ` (by ${r.cancellation.decidedByName})` : ''}
+            {r.cancellation?.decidedByName
+              ? ` (by ${r.cancellation.decidedByName})`
+              : ""}
           </span>
         </div>
       )}
-      {r.status === 'cancel_requested' && (
+      {r.status === "cancel_requested" && (
         <div className="no-print flex items-center gap-2">
           <Badge tone="warning">Cancellation requested</Badge>
           <span className="text-sm text-ink-muted">
@@ -322,26 +370,38 @@ export function ReceiptView() {
       )}
       <p className="no-print text-sm text-ink-muted">
         {original
-          ? 'Print once now: this is the original receipt. Any later print is marked DUPLICATE.'
-          : 'This receipt has been issued. Printing again marks it DUPLICATE and is recorded.'}{' '}
+          ? "Print once now: this is the original receipt. Any later print is marked DUPLICATE."
+          : "This receipt has been issued. Printing again marks it DUPLICATE and is recorded."}{" "}
         Choose A4 paper, margins None, scale 100%.
       </p>
       <div className="overflow-x-auto">
         <div ref={sheetRef} className="sheet border border-line">
-          <Copy r={r} copyName="STUDENT COPY" duplicate={duplicate} cancelled={cancelled} />
-          <Copy r={r} copyName="OFFICE COPY" duplicate={duplicate} cancelled={cancelled} />
+          <Copy
+            r={r}
+            copyName="STUDENT COPY"
+            duplicate={duplicate}
+            cancelled={cancelled}
+          />
+          <Copy
+            r={r}
+            copyName="OFFICE COPY"
+            duplicate={duplicate}
+            cancelled={cancelled}
+          />
         </div>
       </div>
       <ConfirmDialog
         open={cancelOpen}
         tone="danger"
-        title={role === 'admin' ? 'Cancel this receipt?' : 'Request cancellation?'}
-        description={
-          role === 'admin'
-            ? 'The receipt stays on record, marked CANCELLED, and its payments stop counting, so those fees become payable again. This is written to the audit log.'
-            : 'The receipt stays valid until it is approved. The reason is written to the audit log.'
+        title={
+          role === "admin" ? "Cancel this receipt?" : "Request cancellation?"
         }
-        confirmLabel={role === 'admin' ? 'Cancel receipt' : 'Send request'}
+        description={
+          role === "admin"
+            ? "The receipt stays on record, marked CANCELLED, and its payments stop counting, so those fees become payable again. This is written to the audit log."
+            : "The receipt stays valid until it is approved. The reason is written to the audit log."
+        }
+        confirmLabel={role === "admin" ? "Cancel receipt" : "Send request"}
         requireReason
         onReasonChange={setReason}
         loading={cancelMutation.isPending}

@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -31,4 +31,5 @@ const settingsSchema = new mongoose.Schema(
 settingsSchema.index({ tenantId: 1 }, { unique: true });
 
 export const CashbookSettings =
-  mongoose.models.CashbookSettings ?? mongoose.model('CashbookSettings', settingsSchema);
+  mongoose.models.CashbookSettings ??
+  mongoose.model("CashbookSettings", settingsSchema);

@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -14,7 +14,11 @@ const tcSchema = new mongoose.Schema(
     fy: { type: String, required: true, immutable: true },
     slNo: { type: Number, required: true, immutable: true },
     bookNo: { type: String, required: true, immutable: true },
-    studentId: { type: mongoose.Schema.Types.ObjectId, required: true, immutable: true },
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      immutable: true,
+    },
     // Fields 1-8, 13, 14 as printed (copied from the student record / fee records at issue time).
     snapshot: {
       type: new mongoose.Schema(
@@ -71,7 +75,7 @@ const tcSchema = new mongoose.Schema(
       ),
       immutable: true,
     },
-    status: { type: String, enum: ['issued', 'cancelled'], default: 'issued' },
+    status: { type: String, enum: ["issued", "cancelled"], default: "issued" },
     cancelReason: String,
     cancelledAt: Date,
     cancelledByName: String,
@@ -93,7 +97,8 @@ tcSchema.index({ tenantId: 1, fy: 1, slNo: 1 }, { unique: true });
 tcSchema.index({ tenantId: 1, idempotencyKey: 1 }, { unique: true });
 tcSchema.index({ tenantId: 1, studentId: 1, status: 1 });
 tcSchema.index({ tenantId: 1, createdAt: -1 });
-tcSchema.index({ tenantId: 1, 'snapshot.admissionNo': 1 });
+tcSchema.index({ tenantId: 1, "snapshot.admissionNo": 1 });
 
 export const TransferCertificate =
-  mongoose.models.TransferCertificate ?? mongoose.model('TransferCertificate', tcSchema);
+  mongoose.models.TransferCertificate ??
+  mongoose.model("TransferCertificate", tcSchema);

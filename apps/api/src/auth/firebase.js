@@ -1,5 +1,10 @@
-import { applicationDefault, cert, getApps, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import {
+  applicationDefault,
+  cert,
+  getApps,
+  initializeApp,
+} from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 
 /**
  * Firebase Admin SDK setup. Two ways to run:
@@ -14,17 +19,22 @@ export function initFirebaseAuth(env) {
     if (env.FIREBASE_AUTH_EMULATOR_HOST) {
       // The Admin SDK reads this variable by itself to talk to the emulator.
       process.env.FIREBASE_AUTH_EMULATOR_HOST = env.FIREBASE_AUTH_EMULATOR_HOST;
-      initializeApp({ projectId: env.FIREBASE_PROJECT_ID ?? 'demo-school-erp' });
+      initializeApp({
+        projectId: env.FIREBASE_PROJECT_ID ?? "demo-school-erp",
+      });
     } else if (env.FIREBASE_ADMIN_SA_JSON_B64) {
       const json = JSON.parse(
-        Buffer.from(env.FIREBASE_ADMIN_SA_JSON_B64, 'base64').toString('utf8'),
+        Buffer.from(env.FIREBASE_ADMIN_SA_JSON_B64, "base64").toString("utf8"),
       );
       initializeApp({
         credential: cert(json),
         projectId: env.FIREBASE_PROJECT_ID ?? json.project_id,
       });
     } else if (env.FIREBASE_PROJECT_ID) {
-      initializeApp({ credential: applicationDefault(), projectId: env.FIREBASE_PROJECT_ID });
+      initializeApp({
+        credential: applicationDefault(),
+        projectId: env.FIREBASE_PROJECT_ID,
+      });
     } else {
       return null;
     }

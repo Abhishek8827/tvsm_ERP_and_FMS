@@ -4,7 +4,9 @@ export function Card({ title, subtitle, actions, children }) {
       {(title || actions) && (
         <header className="mb-4 flex items-start justify-between gap-3">
           <div>
-            {title && <h2 className="text-base font-semibold text-ink">{title}</h2>}
+            {title && (
+              <h2 className="text-base font-semibold text-ink">{title}</h2>
+            )}
             {subtitle && <p className="text-sm text-ink-muted">{subtitle}</p>}
           </div>
           {actions}

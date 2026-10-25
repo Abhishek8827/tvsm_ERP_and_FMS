@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -14,11 +14,12 @@ const bankSchema = new mongoose.Schema(
     nameLower: { type: String, required: true },
     last4: { type: String, match: /^\d{4}$/ },
     active: { type: Boolean, default: true },
-    defaultForModes: { type: [String], enum: ['upi', 'qr'], default: [] },
+    defaultForModes: { type: [String], enum: ["upi", "qr"], default: [] },
     createdBy: { type: String },
   },
   { timestamps: true },
 );
 bankSchema.index({ tenantId: 1, nameLower: 1 }, { unique: true });
 
-export const BankAccount = mongoose.models.BankAccount ?? mongoose.model('BankAccount', bankSchema);
+export const BankAccount =
+  mongoose.models.BankAccount ?? mongoose.model("BankAccount", bankSchema);

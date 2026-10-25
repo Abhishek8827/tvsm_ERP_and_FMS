@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -19,4 +19,5 @@ const counterSchema = new mongoose.Schema(
 );
 counterSchema.index({ tenantId: 1, key: 1 }, { unique: true });
 
-export const Counter = mongoose.models.Counter ?? mongoose.model('Counter', counterSchema);
+export const Counter =
+  mongoose.models.Counter ?? mongoose.model("Counter", counterSchema);

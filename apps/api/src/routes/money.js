@@ -1,6 +1,6 @@
-import { Router } from 'express';
-import rateLimit from 'express-rate-limit';
-import { z } from 'zod';
+import { Router } from "express";
+import rateLimit from "express-rate-limit";
+import { z } from "zod";
 import {
   AUTHORISERS,
   ExpenseRuleError,
@@ -8,10 +8,10 @@ import {
   getFinancialYear,
   isValidPin,
   todayIst,
-} from '@erp/shared';
-import { requireRole } from '../middleware/requireRole.js';
-import { recordAudit } from '../services/audit.js';
-import { AppError, notFound } from '../utils/errors.js';
+} from "@erp/shared";
+import { requireRole } from "../middleware/requireRole.js";
+import { recordAudit } from "../services/audit.js";
+import { AppError, notFound } from "../utils/errors.js";
 
 /**
  * School expenses, petty cash, bank & cash (Step 6). Roles (confirmed by the school):
@@ -20,33 +20,40 @@ import { AppError, notFound } from '../utils/errors.js';
  *  Cashier   sees only the petty cash balance + last 5 entries, bank names for Collect Fee, and
  *            (with the 4-digit PIN) all balances. Nothing else.
  */
-const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Invalid id');
+const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
 const idemKey = z
-  .string({ error: 'Idempotency-Key header is required' })
-  .regex(/^[\w-]{8,100}$/, 'Idempotency-Key must be 8-100 letters, digits, - or _');
+  .string({ error: "Idempotency-Key header is required" })
+  .regex(
+    /^[\w-]{8,100}$/,
+    "Idempotency-Key must be 8-100 letters, digits, - or _",
+  );
 const paise = z.number().int().min(1).max(100_000_000_00);
-const dateField = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use a date like 2026-06-30');
+const dateField = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-06-30");
 const text = (max) => z.string().trim().max(max);
 const pageQuery = {
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 };
 const rangeQuery = { from: dateField.optional(), to: dateField.optional() };
-const accountKey = z.string().regex(/^(cash|petty|bank:[a-f\d]{24})$/, 'Unknown account');
+const accountKey = z
+  .string()
+  .regex(/^(cash|petty|bank:[a-f\d]{24})$/, "Unknown account");
 
 const bankBody = z.object({
-  name: text(60).min(2, 'Write the bank name'),
+  name: text(60).min(2, "Write the bank name"),
   last4: z
     .string()
-    .regex(/^\d{4}$/, 'Last 4 digits of the account')
+    .regex(/^\d{4}$/, "Last 4 digits of the account")
     .optional(),
   openingPaise: z.number().int().min(0).max(100_000_000_00).optional(),
-  defaultForModes: z.array(z.enum(['upi', 'qr'])).optional(),
+  defaultForModes: z.array(z.enum(["upi", "qr"])).optional(),
 });
 const bankPatch = z.object({
   name: text(60).min(2).optional(),
   active: z.boolean().optional(),
-  defaultForModes: z.array(z.enum(['upi', 'qr'])).optional(),
+  defaultForModes: z.array(z.enum(["upi", "qr"])).optional(),
 });
 const voucherBody = z.object({
   date: dateField,
@@ -66,8 +73,8 @@ const paymentBody = z.object({
 });
 const adjustmentBody = z.object({
   amountPaise: paise,
-  reason: text(200).min(3, 'Write the reason'),
-  remark: text(300).min(3, 'Write the supporting remark'),
+  reason: text(200).min(3, "Write the reason"),
+  remark: text(300).min(3, "Write the supporting remark"),
 });
 const pettyBody = z.object({
   date: dateField,
@@ -76,8 +83,8 @@ const pettyBody = z.object({
   particulars: text(300),
   amountPaise: paise,
 });
-const reasonText = text(300).min(3, 'Write the reason');
-const reasonBody = z.object({ reason: text(300).min(3, 'Write the reason') });
+const reasonText = text(300).min(3, "Write the reason");
+const reasonBody = z.object({ reason: text(300).min(3, "Write the reason") });
 
 const shapeVoucher = (v) => ({
   id: String(v._id),
@@ -116,7 +123,7 @@ const shapePayment = (p) => ({
   bankName: p.bankName ?? null,
   amountPaise: p.amountPaise,
   // "Approved by" shows the Principal who approved the voucher and who authorised the payment.
-  approvedBy: [p.approvedByName, p.authorisedBy].filter(Boolean).join(' / '),
+  approvedBy: [p.approvedByName, p.authorisedBy].filter(Boolean).join(" / "),
   authorisedBy: p.authorisedBy,
   remark: p.remark,
   status: p.status,
@@ -154,7 +161,12 @@ const wrap = (fn) => async (req, res, next) => {
   } catch (e) {
     if (e instanceof ExpenseRuleError)
       return next(
-        new AppError(e.code, 422, e.message, e.field ? { [e.field]: e.message } : undefined),
+        new AppError(
+          e.code,
+          422,
+          e.message,
+          e.field ? { [e.field]: e.message } : undefined,
+        ),
       );
     next(e);
   }
@@ -163,10 +175,10 @@ const wrap = (fn) => async (req, res, next) => {
 export function moneyRouter(deps, authenticate) {
   const router = Router();
   const store = () => deps.moneyStore;
-  const adminOnly = [authenticate, requireRole('admin')];
-  const principalOnly = [authenticate, requireRole('principal')];
-  const adminOrPrincipal = [authenticate, requireRole('admin', 'principal')];
-  const anyRole = [authenticate, requireRole('admin', 'principal', 'cashier')];
+  const adminOnly = [authenticate, requireRole("admin")];
+  const principalOnly = [authenticate, requireRole("principal")];
+  const adminOrPrincipal = [authenticate, requireRole("admin", "principal")];
+  const anyRole = [authenticate, requireRole("admin", "principal", "cashier")];
   const tenant = (req) => req.user.tenantId;
   const audit = (req, entry) => (saved, session) =>
     recordAudit(deps, req, { ...entry(saved) }, { critical: true, session });
@@ -176,32 +188,37 @@ export function moneyRouter(deps, authenticate) {
   };
   const noFuture = (date) => {
     if (date > todayIst())
-      throw new AppError('FUTURE_DATE', 422, 'The date cannot be in the future.', {
-        date: 'The date cannot be in the future.',
-      });
+      throw new AppError(
+        "FUTURE_DATE",
+        422,
+        "The date cannot be in the future.",
+        {
+          date: "The date cannot be in the future.",
+        },
+      );
   };
 
   // ----- balances -----
   router.get(
-    '/money/overview',
+    "/money/overview",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
       res.json(await store().overview(tenant(req)));
     }),
   );
   router.get(
-    '/money/pending',
+    "/money/pending",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
       res.json(await store().pendingCounts(tenant(req)));
     }),
   );
   router.post(
-    '/money/opening',
+    "/money/opening",
     ...adminOnly,
     wrap(async (req, res) => {
       const body = z
-        .object({ account: z.enum(['cash', 'petty']), amountPaise: paise })
+        .object({ account: z.enum(["cash", "petty"]), amountPaise: paise })
         .parse(req.body);
       const row = await store().setOpening({
         tenantId: tenant(req),
@@ -212,8 +229,8 @@ export function moneyRouter(deps, authenticate) {
             deps,
             req,
             {
-              action: 'create',
-              entity: 'opening_balance',
+              action: "create",
+              entity: "opening_balance",
               entityId: String(saved._id),
               newValue: body,
             },
@@ -226,7 +243,7 @@ export function moneyRouter(deps, authenticate) {
 
   // Edit any opening balance (cash, petty or a bank). Reason is compulsory; history is kept.
   router.put(
-    '/money/opening',
+    "/money/opening",
     ...adminOnly,
     wrap(async (req, res) => {
       const body = z
@@ -241,8 +258,8 @@ export function moneyRouter(deps, authenticate) {
             deps,
             req,
             {
-              action: 'update',
-              entity: 'opening_balance',
+              action: "update",
+              entity: "opening_balance",
               entityId: body.account,
               reason: body.reason,
               oldValue: { amountPaise: saved.fromPaise },
@@ -258,7 +275,7 @@ export function moneyRouter(deps, authenticate) {
   // ----- bank accounts -----
   // Names only (no balances): the Cashier needs them to choose the bank for a UPI / QR receipt.
   router.get(
-    '/banks/options',
+    "/banks/options",
     ...anyRole,
     wrap(async (req, res) => {
       const banks = await store().listBanks(tenant(req), { onlyActive: true });
@@ -273,7 +290,7 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
   router.post(
-    '/banks',
+    "/banks",
     ...adminOnly,
     wrap(async (req, res) => {
       const body = bankBody.parse(req.body);
@@ -282,8 +299,8 @@ export function moneyRouter(deps, authenticate) {
         input: body,
         user: req.user,
         audit: audit(req, (b) => ({
-          action: 'create',
-          entity: 'bank_account',
+          action: "create",
+          entity: "bank_account",
           entityId: String(b._id),
           newValue: { name: b.name, openingPaise: body.openingPaise ?? 0 },
         })),
@@ -292,7 +309,7 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
   router.patch(
-    '/banks/:id',
+    "/banks/:id",
     ...adminOnly,
     wrap(async (req, res) => {
       const patch = bankPatch.parse(req.body);
@@ -304,31 +321,42 @@ export function moneyRouter(deps, authenticate) {
           recordAudit(
             deps,
             req,
-            { action: 'update', entity: 'bank_account', entityId: String(b._id), newValue: patch },
+            {
+              action: "update",
+              entity: "bank_account",
+              entityId: String(b._id),
+              newValue: patch,
+            },
             { critical: true },
           ),
       });
-      notFoundIfNull(bank, 'Bank account');
+      notFoundIfNull(bank, "Bank account");
       res.json({ id: String(bank._id) });
     }),
   );
 
   // ----- expense heads -----
   router.get(
-    '/expense-heads',
+    "/expense-heads",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
       const heads = await store().listHeads(tenant(req));
       res.json({
-        heads: heads.map((h) => ({ id: String(h._id), name: h.name, active: h.active })),
+        heads: heads.map((h) => ({
+          id: String(h._id),
+          name: h.name,
+          active: h.active,
+        })),
       });
     }),
   );
   router.post(
-    '/expense-heads',
+    "/expense-heads",
     ...adminOnly,
     wrap(async (req, res) => {
-      const { name } = z.object({ name: text(60).min(2, 'Write the head name') }).parse(req.body);
+      const { name } = z
+        .object({ name: text(60).min(2, "Write the head name") })
+        .parse(req.body);
       const head = await store().createHead({
         tenantId: tenant(req),
         name,
@@ -338,23 +366,28 @@ export function moneyRouter(deps, authenticate) {
             deps,
             req,
             {
-              action: 'create',
-              entity: 'expense_head',
+              action: "create",
+              entity: "expense_head",
               entityId: String(h._id),
               newValue: { name },
             },
             { critical: true },
           ),
       });
-      res.status(201).json({ id: String(head._id), name: head.name, active: head.active });
+      res
+        .status(201)
+        .json({ id: String(head._id), name: head.name, active: head.active });
     }),
   );
   router.patch(
-    '/expense-heads/:id',
+    "/expense-heads/:id",
     ...adminOnly,
     wrap(async (req, res) => {
       const patch = z
-        .object({ name: text(60).min(2).optional(), active: z.boolean().optional() })
+        .object({
+          name: text(60).min(2).optional(),
+          active: z.boolean().optional(),
+        })
         .parse(req.body);
       const head = await store().updateHead({
         tenantId: tenant(req),
@@ -364,25 +397,32 @@ export function moneyRouter(deps, authenticate) {
           recordAudit(
             deps,
             req,
-            { action: 'update', entity: 'expense_head', entityId: String(h._id), newValue: patch },
+            {
+              action: "update",
+              entity: "expense_head",
+              entityId: String(h._id),
+              newValue: patch,
+            },
             { critical: true },
           ),
       });
-      notFoundIfNull(head, 'Expense head');
+      notFoundIfNull(head, "Expense head");
       res.json({ id: String(head._id), name: head.name, active: head.active });
     }),
   );
 
   // ----- vouchers -----
   router.get(
-    '/vouchers',
+    "/vouchers",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
       const f = z
         .object({
           ...pageQuery,
           ...rangeQuery,
-          status: z.enum(['pending', 'approved', 'rejected', 'cancelled']).optional(),
+          status: z
+            .enum(["pending", "approved", "rejected", "cancelled"])
+            .optional(),
           q: text(60).optional(),
         })
         .parse(req.query);
@@ -397,12 +437,12 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
   router.get(
-    '/vouchers/:id',
+    "/vouchers/:id",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
       const v = notFoundIfNull(
         await store().getVoucher(tenant(req), objectId.parse(req.params.id)),
-        'Voucher',
+        "Voucher",
       );
       res.json({
         ...shapeVoucher(v),
@@ -412,11 +452,11 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
   router.post(
-    '/vouchers',
+    "/vouchers",
     ...adminOnly,
     rateLimit({ windowMs: 60_000, limit: 60 }),
     wrap(async (req, res) => {
-      const key = idemKey.parse(req.get('Idempotency-Key'));
+      const key = idemKey.parse(req.get("Idempotency-Key"));
       const body = voucherBody.parse(req.body);
       noFuture(body.date);
       const { voucher, replay } = await store().createVoucher({
@@ -426,38 +466,47 @@ export function moneyRouter(deps, authenticate) {
         idempotencyKey: key,
         user: req.user,
         audit: audit(req, (v) => ({
-          action: 'create',
-          entity: 'expense_voucher',
+          action: "create",
+          entity: "expense_voucher",
           entityId: String(v._id),
-          newValue: { number: v.number, amountPaise: v.amountPaise, payeeName: v.payeeName },
+          newValue: {
+            number: v.number,
+            amountPaise: v.amountPaise,
+            payeeName: v.payeeName,
+          },
         })),
       });
       res.status(replay ? 200 : 201).json({ ...shapeVoucher(voucher), replay });
     }),
   );
   router.post(
-    '/vouchers/:id/approve',
+    "/vouchers/:id/approve",
     ...principalOnly,
     wrap(async (req, res) => {
       const id = objectId.parse(req.params.id);
       const v = await store().decideVoucher({
         tenantId: tenant(req),
         id,
-        decision: 'approve',
+        decision: "approve",
         user: req.user,
         audit: audit(req, (x) => ({
-          action: 'approve',
-          entity: 'expense_voucher',
+          action: "approve",
+          entity: "expense_voucher",
           entityId: String(x._id),
           newValue: { number: x.number, amountPaise: x.amountPaise },
         })),
       });
-      if (!v) throw new AppError('NOT_PENDING', 409, 'This voucher is not waiting for a decision.');
+      if (!v)
+        throw new AppError(
+          "NOT_PENDING",
+          409,
+          "This voucher is not waiting for a decision.",
+        );
       res.json(shapeVoucher(v));
     }),
   );
   router.post(
-    '/vouchers/:id/reject',
+    "/vouchers/:id/reject",
     ...principalOnly,
     wrap(async (req, res) => {
       const id = objectId.parse(req.params.id);
@@ -465,22 +514,27 @@ export function moneyRouter(deps, authenticate) {
       const v = await store().decideVoucher({
         tenantId: tenant(req),
         id,
-        decision: 'reject',
+        decision: "reject",
         reason,
         user: req.user,
         audit: audit(req, (x) => ({
-          action: 'reject',
-          entity: 'expense_voucher',
+          action: "reject",
+          entity: "expense_voucher",
           entityId: String(x._id),
           reason,
         })),
       });
-      if (!v) throw new AppError('NOT_PENDING', 409, 'This voucher is not waiting for a decision.');
+      if (!v)
+        throw new AppError(
+          "NOT_PENDING",
+          409,
+          "This voucher is not waiting for a decision.",
+        );
       res.json(shapeVoucher(v));
     }),
   );
   router.post(
-    '/vouchers/:id/adjustments',
+    "/vouchers/:id/adjustments",
     ...adminOnly,
     wrap(async (req, res) => {
       const input = adjustmentBody.parse(req.body);
@@ -491,24 +545,24 @@ export function moneyRouter(deps, authenticate) {
           input,
           user: req.user,
           audit: audit(req, (x) => ({
-            action: 'update',
-            entity: 'expense_voucher',
+            action: "update",
+            entity: "expense_voucher",
             entityId: String(x._id),
             newValue: { adjustmentPaise: input.amountPaise },
             reason: `${input.reason} | ${input.remark}`,
           })),
         }),
-        'Voucher',
+        "Voucher",
       );
       res.status(201).json({ id: String(v._id) });
     }),
   );
   router.post(
-    '/vouchers/:id/payments',
+    "/vouchers/:id/payments",
     ...adminOnly,
     rateLimit({ windowMs: 60_000, limit: 60 }),
     wrap(async (req, res) => {
-      const key = idemKey.parse(req.get('Idempotency-Key'));
+      const key = idemKey.parse(req.get("Idempotency-Key"));
       const input = paymentBody.parse(req.body);
       noFuture(input.date);
       const out = notFoundIfNull(
@@ -520,8 +574,8 @@ export function moneyRouter(deps, authenticate) {
           idempotencyKey: key,
           user: req.user,
           audit: audit(req, (p) => ({
-            action: 'create',
-            entity: 'expense_payment',
+            action: "create",
+            entity: "expense_payment",
             entityId: String(p._id),
             newValue: {
               voucherNumber: p.voucherNumber,
@@ -531,16 +585,20 @@ export function moneyRouter(deps, authenticate) {
             },
           })),
         }),
-        'Voucher',
+        "Voucher",
       );
-      res.status(out.replay ? 200 : 201).json({ ...shapePayment(out.payment), replay: out.replay });
+      res
+        .status(out.replay ? 200 : 201)
+        .json({ ...shapePayment(out.payment), replay: out.replay });
     }),
   );
   router.get(
-    '/expense-payments',
+    "/expense-payments",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
-      const f = z.object({ ...pageQuery, ...rangeQuery, q: text(60).optional() }).parse(req.query);
+      const f = z
+        .object({ ...pageQuery, ...rangeQuery, q: text(60).optional() })
+        .parse(req.query);
       const out = await store().listPayments({ tenantId: tenant(req), ...f });
       res.json({
         rows: out.rows.map(shapePayment),
@@ -553,22 +611,31 @@ export function moneyRouter(deps, authenticate) {
 
   // ----- reversals: Admin asks (reason compulsory), Principal decides -----
   router.get(
-    '/expense-reversals',
+    "/expense-reversals",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
       const { status } = z
-        .object({ status: z.enum(['requested', 'approved', 'rejected']).optional() })
+        .object({
+          status: z.enum(["requested", "approved", "rejected"]).optional(),
+        })
         .parse(req.query);
-      const rows = await store().listReversals({ tenantId: tenant(req), status });
+      const rows = await store().listReversals({
+        tenantId: tenant(req),
+        status,
+      });
       res.json({ rows: rows.map(shapeReversal) });
     }),
   );
   router.post(
-    '/expense-reversals',
+    "/expense-reversals",
     ...adminOnly,
     wrap(async (req, res) => {
       const body = z
-        .object({ kind: z.enum(['payment', 'voucher']), targetId: objectId, reason: text(300) })
+        .object({
+          kind: z.enum(["payment", "voucher"]),
+          targetId: objectId,
+          reason: text(300),
+        })
         .parse(req.body);
       const row = notFoundIfNull(
         await store().requestReversal({
@@ -576,25 +643,31 @@ export function moneyRouter(deps, authenticate) {
           ...body,
           user: req.user,
           audit: audit(req, (r) => ({
-            action: 'create',
-            entity: 'expense_reversal',
+            action: "create",
+            entity: "expense_reversal",
             entityId: String(r._id),
-            newValue: { kind: r.kind, voucherNumber: r.voucherNumber, amountPaise: r.amountPaise },
+            newValue: {
+              kind: r.kind,
+              voucherNumber: r.voucherNumber,
+              amountPaise: r.amountPaise,
+            },
             reason: body.reason,
           })),
         }),
-        'Entry',
+        "Entry",
       );
       res.status(201).json(shapeReversal(row));
     }),
   );
-  for (const decision of ['approve', 'reject']) {
+  for (const decision of ["approve", "reject"]) {
     router.post(
       `/expense-reversals/:id/${decision}`,
       ...principalOnly,
       wrap(async (req, res) => {
         const { reason } =
-          decision === 'reject' ? reasonBody.parse(req.body) : { reason: undefined };
+          decision === "reject"
+            ? reasonBody.parse(req.body)
+            : { reason: undefined };
         const row = await store().decideReversal({
           tenantId: tenant(req),
           id: objectId.parse(req.params.id),
@@ -603,13 +676,17 @@ export function moneyRouter(deps, authenticate) {
           user: req.user,
           audit: audit(req, (r) => ({
             action: decision,
-            entity: 'expense_reversal',
+            entity: "expense_reversal",
             entityId: String(r._id),
             reason,
           })),
         });
         if (!row)
-          throw new AppError('NOT_PENDING', 409, 'This request is not waiting for a decision.');
+          throw new AppError(
+            "NOT_PENDING",
+            409,
+            "This request is not waiting for a decision.",
+          );
         res.json(shapeReversal(row));
       }),
     );
@@ -617,7 +694,7 @@ export function moneyRouter(deps, authenticate) {
 
   // ----- petty cash -----
   router.get(
-    '/petty/summary',
+    "/petty/summary",
     ...anyRole,
     wrap(async (req, res) => {
       const s = await store().pettySummary(tenant(req));
@@ -625,7 +702,7 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
   router.get(
-    '/petty',
+    "/petty",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
       const f = z.object({ ...pageQuery, ...rangeQuery }).parse(req.query);
@@ -639,11 +716,11 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
   router.post(
-    '/petty',
+    "/petty",
     ...adminOnly,
     rateLimit({ windowMs: 60_000, limit: 60 }),
     wrap(async (req, res) => {
-      const key = idemKey.parse(req.get('Idempotency-Key'));
+      const key = idemKey.parse(req.get("Idempotency-Key"));
       const body = pettyBody.parse(req.body);
       noFuture(body.date);
       const { entry, replay } = await store().createPetty({
@@ -653,17 +730,21 @@ export function moneyRouter(deps, authenticate) {
         idempotencyKey: key,
         user: req.user,
         audit: audit(req, (e) => ({
-          action: 'create',
-          entity: 'petty_entry',
+          action: "create",
+          entity: "petty_entry",
           entityId: String(e._id),
-          newValue: { seq: e.seq, amountPaise: e.amountPaise, payeeName: e.payeeName },
+          newValue: {
+            seq: e.seq,
+            amountPaise: e.amountPaise,
+            payeeName: e.payeeName,
+          },
         })),
       });
       res.status(replay ? 200 : 201).json({ ...shapePetty(entry), replay });
     }),
   );
   router.post(
-    '/petty/:id/reverse',
+    "/petty/:id/reverse",
     ...adminOnly,
     wrap(async (req, res) => {
       const { reason } = reasonBody.parse(req.body);
@@ -673,20 +754,25 @@ export function moneyRouter(deps, authenticate) {
         reason,
         user: req.user,
         audit: audit(req, (x) => ({
-          action: 'cancel',
-          entity: 'petty_entry',
+          action: "cancel",
+          entity: "petty_entry",
           entityId: String(x._id),
           reason,
         })),
       });
-      if (!e) throw new AppError('NOT_FOUND', 404, 'Entry not found or already reversed.');
+      if (!e)
+        throw new AppError(
+          "NOT_FOUND",
+          404,
+          "Entry not found or already reversed.",
+        );
       res.json(shapePetty(e));
     }),
   );
 
   // ----- transfers (cash <-> bank, bank <-> bank, cash -> petty top-up) -----
   router.get(
-    '/transfers',
+    "/transfers",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
       const f = z.object(pageQuery).parse(req.query);
@@ -695,11 +781,11 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
   router.post(
-    '/transfers',
+    "/transfers",
     ...adminOnly,
     rateLimit({ windowMs: 60_000, limit: 60 }),
     wrap(async (req, res) => {
-      const key = idemKey.parse(req.get('Idempotency-Key'));
+      const key = idemKey.parse(req.get("Idempotency-Key"));
       const body = z
         .object({
           from: accountKey,
@@ -714,33 +800,40 @@ export function moneyRouter(deps, authenticate) {
         idempotencyKey: key,
         user: req.user,
         audit: audit(req, () => ({
-          action: 'create',
-          entity: 'transfer',
+          action: "create",
+          entity: "transfer",
           entityId: key,
           newValue: body,
         })),
       });
-      res.status(out.replay ? 200 : 201).json({ transferId: out.transferId, replay: out.replay });
+      res
+        .status(out.replay ? 200 : 201)
+        .json({ transferId: out.transferId, replay: out.replay });
     }),
   );
 
   // ----- Cashier PIN -----
   router.get(
-    '/cashier-pin',
+    "/cashier-pin",
     ...adminOnly,
     wrap(async (req, res) => {
       res.json(await store().pinStatus(tenant(req)));
     }),
   );
   router.put(
-    '/cashier-pin',
+    "/cashier-pin",
     ...adminOnly,
     wrap(async (req, res) => {
       const { pin } = z.object({ pin: z.string() }).parse(req.body);
       if (!isValidPin(pin))
-        throw new AppError('BAD_PIN', 422, 'The PIN must be exactly 4 digits.', {
-          pin: 'Use 4 digits',
-        });
+        throw new AppError(
+          "BAD_PIN",
+          422,
+          "The PIN must be exactly 4 digits.",
+          {
+            pin: "Use 4 digits",
+          },
+        );
       await store().setPin({
         tenantId: tenant(req),
         pin,
@@ -750,7 +843,11 @@ export function moneyRouter(deps, authenticate) {
           recordAudit(
             deps,
             req,
-            { action: 'update', entity: 'cashier_pin', newValue: { reset: true } },
+            {
+              action: "update",
+              entity: "cashier_pin",
+              newValue: { reset: true },
+            },
             { critical: true },
           ),
       });
@@ -759,40 +856,55 @@ export function moneyRouter(deps, authenticate) {
   );
   // All balances for the Cashier, only with the correct PIN. Strict rate limit on top of the lockout.
   router.post(
-    '/money/cashier-view',
-    rateLimit({ windowMs: 60_000, limit: 20, standardHeaders: 'draft-7', legacyHeaders: false }),
+    "/money/cashier-view",
+    rateLimit({
+      windowMs: 60_000,
+      limit: 20,
+      standardHeaders: "draft-7",
+      legacyHeaders: false,
+    }),
     authenticate,
-    requireRole('cashier'),
+    requireRole("cashier"),
     wrap(async (req, res) => {
       const { pin } = z.object({ pin: z.string() }).parse(req.body);
       if (!isValidPin(pin))
-        throw new AppError('BAD_PIN', 422, 'The PIN must be exactly 4 digits.', {
-          pin: 'Use 4 digits',
-        });
+        throw new AppError(
+          "BAD_PIN",
+          422,
+          "The PIN must be exactly 4 digits.",
+          {
+            pin: "Use 4 digits",
+          },
+        );
       const r = await store().verifyPin({ tenantId: tenant(req), pin });
       if (!r.ok) {
-        if (r.reason === 'NOT_SET')
+        if (r.reason === "NOT_SET")
           throw new AppError(
-            'PIN_NOT_SET',
+            "PIN_NOT_SET",
             409,
-            'The PIN is not set yet. Ask the Admin to set it.',
+            "The PIN is not set yet. Ask the Admin to set it.",
           );
-        if (r.reason === 'LOCKED') {
+        if (r.reason === "LOCKED") {
           await recordAudit(deps, req, {
-            action: 'login_blocked',
-            entity: 'cashier_pin',
-            reason: 'PIN locked after wrong attempts',
+            action: "login_blocked",
+            entity: "cashier_pin",
+            reason: "PIN locked after wrong attempts",
           });
           throw new AppError(
-            'PIN_LOCKED',
+            "PIN_LOCKED",
             423,
-            'The PIN is locked. Ask the Admin to set a new PIN.',
+            "The PIN is locked. Ask the Admin to set a new PIN.",
           );
         }
         // WHY 422 and not 401: the web client treats every 401 as an expired session and signs out.
-        throw new AppError('PIN_WRONG', 422, `Wrong PIN. ${r.attemptsLeft} tries left.`, {
-          pin: 'Wrong PIN',
-        });
+        throw new AppError(
+          "PIN_WRONG",
+          422,
+          `Wrong PIN. ${r.attemptsLeft} tries left.`,
+          {
+            pin: "Wrong PIN",
+          },
+        );
       }
       res.json(await store().overview(tenant(req)));
     }),

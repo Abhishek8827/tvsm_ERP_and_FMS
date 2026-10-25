@@ -1,9 +1,16 @@
-import { useMutation } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api } from '../api/client';
-import { Badge, Button, Card, EmptyState, StatCard, useToast } from '../components/ui';
+import { useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../api/client";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  StatCard,
+  useToast,
+} from "../components/ui";
 
 /**
  * Admin: import students from the school's Excel sheet.
@@ -19,28 +26,28 @@ export function ImportStudents() {
 
   const send = useMutation({
     mutationFn: ({ commit }) =>
-      api(`/api/students/import?commit=${commit}`, { method: 'POST', file }),
+      api(`/api/students/import?commit=${commit}`, { method: "POST", file }),
     onSuccess: async (res) => {
       setResult(res);
       if (res.committed) {
-        await queryClient.invalidateQueries({ queryKey: ['students'] });
-        notify(`${res.created} students imported.`, 'success');
+        await queryClient.invalidateQueries({ queryKey: ["students"] });
+        notify(`${res.created} students imported.`, "success");
       }
     },
-    onError: (e) => notify(e.message, 'error'),
+    onError: (e) => notify(e.message, "error"),
   });
 
   async function downloadTemplate() {
     try {
-      const blob = await api('/api/students/import-template', { blob: true });
+      const blob = await api("/api/students/import-template", { blob: true });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = 'student-import-template.xlsx';
+      a.download = "student-import-template.xlsx";
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      notify(e.message, 'error');
+      notify(e.message, "error");
     }
   }
 
@@ -61,9 +68,10 @@ export function ImportStudents() {
 
       <Card title="1. Get the template">
         <p className="text-sm text-ink-muted">
-          Use the school's column names. SCH. is the admission number. For bus students put the
-          village in ADDRESS and TRANSPORT = YES. REMARK = RTE marks an RTE student. INACTIVE
-          students need INACTIVE STATUS as "with TC" or "without TC". AGE is not needed.
+          Use the school's column names. SCH. is the admission number. For bus
+          students put the village in ADDRESS and TRANSPORT = YES. REMARK = RTE
+          marks an RTE student. INACTIVE students need INACTIVE STATUS as "with
+          TC" or "without TC". AGE is not needed.
         </p>
         <div className="mt-3">
           <Button variant="secondary" onClick={() => void downloadTemplate()}>
@@ -83,9 +91,9 @@ export function ImportStudents() {
             className="text-sm"
           />
           <Button
-            loading={send.isPending && send.variables?.commit === 'false'}
+            loading={send.isPending && send.variables?.commit === "false"}
             disabled={!file || send.isPending}
-            onClick={() => send.mutate({ commit: 'false' })}
+            onClick={() => send.mutate({ commit: "false" })}
           >
             Check file
           </Button>
@@ -93,26 +101,37 @@ export function ImportStudents() {
       </Card>
 
       {result && (
-        <Card title={result.committed ? 'Import finished' : 'Check result (nothing saved yet)'}>
+        <Card
+          title={
+            result.committed
+              ? "Import finished"
+              : "Check result (nothing saved yet)"
+          }
+        >
           <div className="grid gap-3 sm:grid-cols-3">
             <StatCard label="Rows in file" value={result.rowsInFile} />
             <StatCard
-              label={result.committed ? 'Imported' : 'Ready to import'}
+              label={result.committed ? "Imported" : "Ready to import"}
               value={result.committed ? result.created : result.ready}
             />
-            <StatCard label="Skipped" value={result.skipped} caption="Problems or already exist" />
+            <StatCard
+              label="Skipped"
+              value={result.skipped}
+              caption="Problems or already exist"
+            />
           </div>
 
           {result.feePlan && (
             <div className="mt-4 rounded-lg border border-line bg-app p-3 text-sm">
               <p>
-                Fees for {result.feePlan.fy} were posted for {result.feePlan.posted} of{' '}
-                {result.feePlan.students} students.
+                Fees for {result.feePlan.fy} were posted for{" "}
+                {result.feePlan.posted} of {result.feePlan.students} students.
               </p>
               {result.feePlan.skipped.length > 0 && (
                 <>
                   <p className="mt-2 font-medium text-warning">
-                    {result.feePlan.skipped.length} students have no fees posted yet:
+                    {result.feePlan.skipped.length} students have no fees posted
+                    yet:
                   </p>
                   <ul className="mt-1 list-disc pl-5 text-ink-muted">
                     {result.feePlan.skipped.slice(0, 10).map((x) => (
@@ -166,14 +185,16 @@ export function ImportStudents() {
           {!result.committed && result.ready > 0 && (
             <div className="mt-4 flex items-center gap-3">
               <Button
-                loading={send.isPending && send.variables?.commit === 'true'}
+                loading={send.isPending && send.variables?.commit === "true"}
                 disabled={send.isPending}
-                onClick={() => send.mutate({ commit: 'true' })}
+                onClick={() => send.mutate({ commit: "true" })}
               >
                 Import {result.ready} students
               </Button>
               {result.skipped > 0 && (
-                <Badge tone="warning">{result.skipped} rows will be skipped</Badge>
+                <Badge tone="warning">
+                  {result.skipped} rows will be skipped
+                </Badge>
               )}
             </div>
           )}

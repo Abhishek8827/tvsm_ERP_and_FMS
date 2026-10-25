@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -12,7 +12,11 @@ const bonafideSchema = new mongoose.Schema(
     fy: { type: String, required: true, immutable: true },
     seq: { type: Number, required: true, immutable: true },
     number: { type: String, required: true, immutable: true },
-    studentId: { type: mongoose.Schema.Types.ObjectId, required: true, immutable: true },
+    studentId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      immutable: true,
+    },
     snapshot: {
       type: new mongoose.Schema(
         {
@@ -32,7 +36,7 @@ const bonafideSchema = new mongoose.Schema(
     academicYear: { type: String, required: true, immutable: true },
     purpose: { type: String, required: true, immutable: true },
     dateOfIssue: { type: String, required: true, immutable: true }, // YYYY-MM-DD
-    status: { type: String, enum: ['issued', 'cancelled'], default: 'issued' },
+    status: { type: String, enum: ["issued", "cancelled"], default: "issued" },
     cancelReason: String,
     cancelledAt: Date,
     cancelledByName: String,
@@ -56,4 +60,5 @@ bonafideSchema.index({ tenantId: 1, studentId: 1 });
 bonafideSchema.index({ tenantId: 1, createdAt: -1 });
 
 export const BonafideCertificate =
-  mongoose.models.BonafideCertificate ?? mongoose.model('BonafideCertificate', bonafideSchema);
+  mongoose.models.BonafideCertificate ??
+  mongoose.model("BonafideCertificate", bonafideSchema);

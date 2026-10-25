@@ -1,10 +1,10 @@
-import { assertPaise } from './money.js';
+import { assertPaise } from "./money.js";
 
 /** A Day Close rule was broken (the route turns it into a 422 with this code). */
 export class DayCloseRuleError extends Error {
   constructor(code, message, field) {
     super(message);
-    this.name = 'DayCloseRuleError';
+    this.name = "DayCloseRuleError";
     this.code = code;
     this.field = field;
   }
@@ -25,18 +25,26 @@ export function expectedCash({ cashReceiptPaise, cashCancelledPaise }) {
  */
 export function checkClose({ expectedPaise, countedPaise, reason }) {
   try {
-    assertPaise(countedPaise, 'countedPaise');
+    assertPaise(countedPaise, "countedPaise");
   } catch {
-    throw new DayCloseRuleError('BAD_AMOUNT', 'Cash counted must be whole paise.', 'countedPaise');
+    throw new DayCloseRuleError(
+      "BAD_AMOUNT",
+      "Cash counted must be whole paise.",
+      "countedPaise",
+    );
   }
   if (countedPaise < 0)
-    throw new DayCloseRuleError('BAD_AMOUNT', 'Cash counted cannot be negative.', 'countedPaise');
-  const differencePaise = countedPaise - expectedPaise;
-  if (differencePaise !== 0 && (reason ?? '').trim().length < 3)
     throw new DayCloseRuleError(
-      'REASON_REQUIRED',
-      'The counted cash is different from the expected cash. Write the reason.',
-      'reason',
+      "BAD_AMOUNT",
+      "Cash counted cannot be negative.",
+      "countedPaise",
+    );
+  const differencePaise = countedPaise - expectedPaise;
+  if (differencePaise !== 0 && (reason ?? "").trim().length < 3)
+    throw new DayCloseRuleError(
+      "REASON_REQUIRED",
+      "The counted cash is different from the expected cash. Write the reason.",
+      "reason",
     );
   return { differencePaise };
 }

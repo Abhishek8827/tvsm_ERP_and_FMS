@@ -1,4 +1,4 @@
-import { EmptyState, ErrorState, Spinner } from './states';
+import { EmptyState, ErrorState, Spinner } from "./states";
 export function Table({
   columns,
   rows,
@@ -6,7 +6,7 @@ export function Table({
   loading,
   error,
   onRetry,
-  emptyTitle = 'Nothing here yet',
+  emptyTitle = "Nothing here yet",
   emptyDescription,
 }) {
   if (loading) return <Spinner />;
@@ -22,7 +22,7 @@ export function Table({
               <th
                 key={c.key}
                 scope="col"
-                className={`px-4 py-3 font-medium ${c.align === 'right' ? 'text-right' : ''}`}
+                className={`px-4 py-3 font-medium ${c.align === "right" ? "text-right" : ""}`}
               >
                 {c.header}
               </th>
@@ -35,7 +35,7 @@ export function Table({
               {columns.map((c) => (
                 <td
                   key={c.key}
-                  className={`px-4 py-3 ${c.align === 'right' ? 'text-right tabular-nums' : ''}`}
+                  className={`px-4 py-3 ${c.align === "right" ? "text-right tabular-nums" : ""}`}
                 >
                   {c.render(row)}
                 </td>

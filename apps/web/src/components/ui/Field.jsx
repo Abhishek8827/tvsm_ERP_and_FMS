@@ -1,4 +1,4 @@
-import { forwardRef, useId } from 'react';
+import { forwardRef, useId } from "react";
 function FieldShell({ label, error, hint, id, required, children }) {
   return (
     <div className="flex flex-col gap-1">
@@ -6,7 +6,7 @@ function FieldShell({ label, error, hint, id, required, children }) {
         {label}
         {required && (
           <span className="text-danger" aria-hidden>
-            {' '}
+            {" "}
             *
           </span>
         )}
@@ -23,40 +23,51 @@ function FieldShell({ label, error, hint, id, required, children }) {
   );
 }
 const control =
-  'min-h-10 w-full rounded-lg border bg-surface px-3 text-sm text-ink placeholder:text-ink-muted disabled:bg-app';
+  "min-h-10 w-full rounded-lg border bg-surface px-3 text-sm text-ink placeholder:text-ink-muted disabled:bg-app";
 /** Field-level error support (rule 15): the server's `fields` map is passed straight to `error`. */
 export const Input = forwardRef(function Input(
-  { label, error, hint, id, className = '', ...rest },
+  { label, error, hint, id, className = "", ...rest },
   ref,
 ) {
   const auto = useId();
   const fieldId = id ?? auto;
   return (
-    <FieldShell label={label} error={error} hint={hint} id={fieldId} required={rest.required}>
+    <FieldShell
+      label={label}
+      error={error}
+      hint={hint}
+      id={fieldId}
+      required={rest.required}
+    >
       <input
         ref={ref}
         id={fieldId}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${fieldId}-error` : undefined}
-        className={`${control} ${error ? 'border-danger' : 'border-line'} ${className}`}
+        className={`${control} ${error ? "border-danger" : "border-line"} ${className}`}
         {...rest}
       />
     </FieldShell>
   );
 });
 export const Select = forwardRef(function Select(
-  { label, error, id, options, className = '', ...rest },
+  { label, error, id, options, className = "", ...rest },
   ref,
 ) {
   const auto = useId();
   const fieldId = id ?? auto;
   return (
-    <FieldShell label={label} error={error} id={fieldId} required={rest.required}>
+    <FieldShell
+      label={label}
+      error={error}
+      id={fieldId}
+      required={rest.required}
+    >
       <select
         ref={ref}
         id={fieldId}
         aria-invalid={error ? true : undefined}
-        className={`${control} ${error ? 'border-danger' : 'border-line'} ${className}`}
+        className={`${control} ${error ? "border-danger" : "border-line"} ${className}`}
         {...rest}
       >
         {options.map((o) => (

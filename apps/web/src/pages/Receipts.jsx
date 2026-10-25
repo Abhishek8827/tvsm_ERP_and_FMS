@@ -1,9 +1,9 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { classLabel, formatINR, todayIst } from '@erp/shared';
-import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { classLabel, formatINR, todayIst } from "@erp/shared";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import {
   Badge,
   Button,
@@ -14,33 +14,33 @@ import {
   StatCard,
   Table,
   useToast,
-} from '../components/ui';
+} from "../components/ui";
 
 const KINDS = [
-  { value: '', label: 'School + Transport' },
-  { value: 'school', label: 'School fees' },
-  { value: 'transport', label: 'Transport fees' },
+  { value: "", label: "School + Transport" },
+  { value: "school", label: "School fees" },
+  { value: "transport", label: "Transport fees" },
 ];
 const MODES = [
-  { value: '', label: 'All modes' },
-  { value: 'cash', label: 'Cash' },
-  { value: 'upi', label: 'UPI' },
-  { value: 'qr', label: 'QR' },
+  { value: "", label: "All modes" },
+  { value: "cash", label: "Cash" },
+  { value: "upi", label: "UPI" },
+  { value: "qr", label: "QR" },
 ];
 const STATUSES = [
-  { value: '', label: 'All receipts' },
-  { value: 'valid', label: 'Not cancelled' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: "", label: "All receipts" },
+  { value: "valid", label: "Not cancelled" },
+  { value: "cancelled", label: "Cancelled" },
 ];
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const dateTime = (iso) =>
-  new Date(iso).toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata',
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+  new Date(iso).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 
 /**
@@ -53,11 +53,11 @@ export function Receipts() {
   const today = todayIst();
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
-  const [kind, setKind] = useState('');
-  const [mode, setMode] = useState('');
-  const [status, setStatus] = useState('');
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
+  const [kind, setKind] = useState("");
+  const [mode, setMode] = useState("");
+  const [status, setStatus] = useState("");
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [exporting, setExporting] = useState(false);
@@ -72,20 +72,20 @@ export function Receipts() {
 
   const filters = () => {
     const p = new URLSearchParams();
-    if (from) p.set('from', from);
-    if (to) p.set('to', to);
-    if (kind) p.set('kind', kind);
-    if (mode) p.set('mode', mode);
-    if (status) p.set('status', status);
-    if (q) p.set('q', q);
+    if (from) p.set("from", from);
+    if (to) p.set("to", to);
+    if (kind) p.set("kind", kind);
+    if (mode) p.set("mode", mode);
+    if (status) p.set("status", status);
+    if (q) p.set("q", q);
     return p;
   };
   const query = useQuery({
-    queryKey: ['receipts', { from, to, kind, mode, status, q, page, pageSize }],
+    queryKey: ["receipts", { from, to, kind, mode, status, q, page, pageSize }],
     queryFn: () => {
       const p = filters();
-      p.set('page', page);
-      p.set('pageSize', pageSize);
+      p.set("page", page);
+      p.set("pageSize", pageSize);
       return api(`/api/receipts?${p}`);
     },
     placeholderData: keepPreviousData,
@@ -99,15 +99,20 @@ export function Receipts() {
   async function exportExcel() {
     setExporting(true);
     try {
-      const blob = await api(`/api/receipts/export?${filters()}`, { blob: true });
+      const blob = await api(`/api/receipts/export?${filters()}`, {
+        blob: true,
+      });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `receipts-${from || 'all'}-to-${to || 'all'}.xlsx`;
+      a.download = `receipts-${from || "all"}-to-${to || "all"}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error');
+      notify(
+        `${e.message}${e.requestId ? ` (ref ${e.requestId})` : ""}`,
+        "error",
+      );
     } finally {
       setExporting(false);
     }
@@ -117,18 +122,21 @@ export function Receipts() {
   const t = data?.totals;
   const columns = [
     {
-      key: 'no',
-      header: 'Receipt no.',
+      key: "no",
+      header: "Receipt no.",
       render: (r) => (
-        <Link className="font-medium text-brand hover:underline" to={`/receipts/${r.id}`}>
+        <Link
+          className="font-medium text-brand hover:underline"
+          to={`/receipts/${r.id}`}
+        >
           {r.number}
         </Link>
       ),
     },
-    { key: 'date', header: 'Date', render: (r) => dateTime(r.issuedAt) },
+    { key: "date", header: "Date", render: (r) => dateTime(r.issuedAt) },
     {
-      key: 'student',
-      header: 'Student',
+      key: "student",
+      header: "Student",
       render: (r) => (
         <div>
           <p className="font-medium text-ink">{r.student.name}</p>
@@ -138,17 +146,26 @@ export function Receipts() {
         </div>
       ),
     },
-    { key: 'kind', header: 'Type', render: (r) => (r.kind === 'school' ? 'School' : 'Transport') },
-    { key: 'month', header: 'Month', render: (r) => r.monthLabel || '-' },
-    { key: 'mode', header: 'Mode', render: (r) => r.mode.toUpperCase() },
-    { key: 'amount', header: 'Amount', align: 'right', render: (r) => money(r.totalPaise) },
     {
-      key: 'status',
-      header: 'Status',
+      key: "kind",
+      header: "Type",
+      render: (r) => (r.kind === "school" ? "School" : "Transport"),
+    },
+    { key: "month", header: "Month", render: (r) => r.monthLabel || "-" },
+    { key: "mode", header: "Mode", render: (r) => r.mode.toUpperCase() },
+    {
+      key: "amount",
+      header: "Amount",
+      align: "right",
+      render: (r) => money(r.totalPaise),
+    },
+    {
+      key: "status",
+      header: "Status",
       render: (r) =>
-        r.status === 'cancelled' ? (
+        r.status === "cancelled" ? (
           <Badge tone="danger">Cancelled</Badge>
-        ) : r.status === 'cancel_requested' ? (
+        ) : r.status === "cancel_requested" ? (
           <Badge tone="warning">Cancel requested</Badge>
         ) : (
           <Badge tone="success">Valid</Badge>
@@ -160,17 +177,25 @@ export function Receipts() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-ink">
-          {role === 'admin' ? 'Fees & Receipts' : 'Receipts'}
+          {role === "admin" ? "Fees & Receipts" : "Receipts"}
         </h1>
-        {role === 'admin' && (
-          <Button variant="secondary" loading={exporting} onClick={() => void exportExcel()}>
+        {role === "admin" && (
+          <Button
+            variant="secondary"
+            loading={exporting}
+            onClick={() => void exportExcel()}
+          >
             Export to Excel
           </Button>
         )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Collected" value={money(t?.paise)} caption={`${t?.count ?? 0} receipts`} />
+        <StatCard
+          label="Collected"
+          value={money(t?.paise)}
+          caption={`${t?.count ?? 0} receipts`}
+        />
         <StatCard label="School fees" value={money(t?.byKind?.school)} />
         <StatCard label="Transport fees" value={money(t?.byKind?.transport)} />
         <StatCard
@@ -180,11 +205,31 @@ export function Receipts() {
       </div>
 
       <FilterBar>
-        <Input label="From" type="date" value={from} onChange={reset(setFrom)} />
+        <Input
+          label="From"
+          type="date"
+          value={from}
+          onChange={reset(setFrom)}
+        />
         <Input label="To" type="date" value={to} onChange={reset(setTo)} />
-        <Select label="Type" options={KINDS} value={kind} onChange={reset(setKind)} />
-        <Select label="Mode" options={MODES} value={mode} onChange={reset(setMode)} />
-        <Select label="Status" options={STATUSES} value={status} onChange={reset(setStatus)} />
+        <Select
+          label="Type"
+          options={KINDS}
+          value={kind}
+          onChange={reset(setKind)}
+        />
+        <Select
+          label="Mode"
+          options={MODES}
+          value={mode}
+          onChange={reset(setMode)}
+        />
+        <Select
+          label="Status"
+          options={STATUSES}
+          value={status}
+          onChange={reset(setStatus)}
+        />
         <Input
           label="Search"
           placeholder="Receipt no., name or scholar no."

@@ -1,5 +1,5 @@
-import { NavLink } from 'react-router-dom';
-import { NavIcon } from '../../layout/NavIcon';
+import { NavLink } from "react-router-dom";
+import { NavIcon } from "../../layout/NavIcon";
 
 /**
  * One sidebar link. `rail` = the narrow sidebar: only the icon shows until the sidebar is
@@ -10,21 +10,21 @@ export function NavItem({ to, label, icon, soon, rail = false, onNavigate }) {
   return (
     <NavLink
       to={to}
-      end={to === '/'}
+      end={to === "/"}
       onClick={onNavigate}
       title={rail ? label : undefined}
       className={({ isActive }) =>
         `flex min-h-10 items-center gap-3 rounded-lg px-3 text-sm transition-colors ${
           isActive
-            ? 'bg-white/15 font-medium text-white'
-            : 'text-white/75 hover:bg-white/10 hover:text-white'
+            ? "bg-white/15 font-medium text-white"
+            : "text-white/75 hover:bg-white/10 hover:text-white"
         }`
       }
     >
       <NavIcon name={icon} />
       <span
         className={`flex flex-1 items-center justify-between whitespace-nowrap ${
-          rail ? 'opacity-0 transition-opacity group-hover:opacity-100' : ''
+          rail ? "opacity-0 transition-opacity group-hover:opacity-100" : ""
         }`}
       >
         <span>{label}</span>

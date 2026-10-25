@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 // The tenantId plugin must be registered BEFORE a model is compiled.
 registerGlobalPlugins();
@@ -17,7 +17,14 @@ const chargeSchema = new mongoose.Schema(
     head: {
       type: String,
       // old_fees / transport_old: unpaid amounts brought from before this system (Excel import).
-      enum: ['tuition', 'transport', 'admission', 'form', 'old_fees', 'transport_old'],
+      enum: [
+        "tuition",
+        "transport",
+        "admission",
+        "form",
+        "old_fees",
+        "transport_old",
+      ],
       required: true,
     },
     period: { type: String, required: true }, // '2026-06', 'once' or 'opening' (old fees)
@@ -27,7 +34,11 @@ const chargeSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-chargeSchema.index({ tenantId: 1, studentId: 1, fy: 1, head: 1, period: 1 }, { unique: true });
+chargeSchema.index(
+  { tenantId: 1, studentId: 1, fy: 1, head: 1, period: 1 },
+  { unique: true },
+);
 chargeSchema.index({ tenantId: 1, dueDate: 1 }); // "who is overdue" reports
 
-export const Charge = mongoose.models.Charge ?? mongoose.model('Charge', chargeSchema);
+export const Charge =
+  mongoose.models.Charge ?? mongoose.model("Charge", chargeSchema);

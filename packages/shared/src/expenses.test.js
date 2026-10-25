@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from "vitest";
 import {
   ExpenseRuleError,
   balancesFrom,
@@ -9,7 +9,7 @@ import {
   checkVoucherInput,
   voucherFigures,
   voucherNumber,
-} from './expenses.js';
+} from "./expenses.js";
 
 const rs = (n) => n * 100;
 const code = (fn) => {
@@ -20,9 +20,9 @@ const code = (fn) => {
   }
   return null;
 };
-const voucher = { status: 'approved', amountPaise: rs(10000), adjustments: [] };
+const voucher = { status: "approved", amountPaise: rs(10000), adjustments: [] };
 
-describe('voucher and petty limits', () => {
+describe("voucher and petty limits", () => {
   it('exactly Rs 500 is a voucher, Rs 499.99 is petty cash', () => {
     expect(code(() => checkVoucherInput({ amountPaise: 49999, payeeName: 'Raj', particulars: 'Pens' }))).toBe('USE_PETTY_CASH');
     expect(code(() => checkVoucherInput({ amountPaise: 50000, payeeName: 'Raj', particulars: 'Pens' }))).toBe(null);
@@ -40,16 +40,28 @@ describe('voucher and petty limits', () => {
   }); // prettier-ignore
 });
 
-describe('payments, part payments and adjustments', () => {
-  const ok = { amountPaise: rs(4000), mode: 'bank', bankId: 'b1', authorisedBy: 'President' };
-  const balances = { 'bank:b1': rs(50000), cash: rs(100) };
+describe("payments, part payments and adjustments", () => {
+  const ok = {
+    amountPaise: rs(4000),
+    mode: "bank",
+    bankId: "b1",
+    authorisedBy: "President",
+  };
+  const balances = { "bank:b1": rs(50000), cash: rs(100) };
 
-  it('balance due = amount - payments - adjustments; reversed payments do not count', () => {
+  it("balance due = amount - payments - adjustments; reversed payments do not count", () => {
     const f = voucherFigures({
       voucher: { ...voucher, adjustments: [{ amountPaise: rs(500) }] },
-      payments: [{ amountPaise: rs(3000) }, { amountPaise: rs(2000), status: 'reversed' }],
+      payments: [
+        { amountPaise: rs(3000) },
+        { amountPaise: rs(2000), status: "reversed" },
+      ],
     });
-    expect(f).toEqual({ paidPaise: rs(3000), adjustedPaise: rs(500), balanceDuePaise: rs(6500) });
+    expect(f).toEqual({
+      paidPaise: rs(3000),
+      adjustedPaise: rs(500),
+      balanceDuePaise: rs(6500),
+    });
   });
 
   it('allows part payments but not more than the balance due', () => {
@@ -76,7 +88,7 @@ describe('payments, part payments and adjustments', () => {
   }); // prettier-ignore
 });
 
-describe('transfers and balances', () => {
+describe("transfers and balances", () => {
   it('a transfer needs two different accounts and enough money', () => {
     const balances = { cash: rs(1000) };
     expect(code(() => checkTransfer({ from: 'cash', to: 'cash', amountPaise: 100, balances }))).toBe('SAME_ACCOUNT');
@@ -84,17 +96,20 @@ describe('transfers and balances', () => {
     expect(code(() => checkTransfer({ from: 'cash', to: 'petty', amountPaise: rs(500), balances }))).toBe(null);
   }); // prettier-ignore
 
-  it('a transfer moves money between accounts and the total stays the same', () => {
+  it("a transfer moves money between accounts and the total stays the same", () => {
     const entries = [
-      { account: 'cash', amountPaise: rs(1000) },
-      { account: 'cash', amountPaise: -rs(400) },
-      { account: 'petty', amountPaise: rs(400) },
+      { account: "cash", amountPaise: rs(1000) },
+      { account: "cash", amountPaise: -rs(400) },
+      { account: "petty", amountPaise: rs(400) },
     ];
-    const b = balancesFrom({ entries, receiptTotals: { cash: rs(50), 'bank:b1': rs(70) } });
-    expect(b).toEqual({ cash: rs(650), petty: rs(400), 'bank:b1': rs(70) });
+    const b = balancesFrom({
+      entries,
+      receiptTotals: { cash: rs(50), "bank:b1": rs(70) },
+    });
+    expect(b).toEqual({ cash: rs(650), petty: rs(400), "bank:b1": rs(70) });
   });
 
-  it('voucher numbers look like EXP-FY2026-27/0001', () => {
-    expect(voucherNumber('2026-27', 1)).toBe('EXP-FY2026-27/0001');
+  it("voucher numbers look like EXP-FY2026-27/0001", () => {
+    expect(voucherNumber("2026-27", 1)).toBe("EXP-FY2026-27/0001");
   });
 });

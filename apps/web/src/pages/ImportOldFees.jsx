@@ -1,9 +1,16 @@
-import { useMutation } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { api } from '../api/client';
-import { Badge, Button, Card, EmptyState, StatCard, useToast } from '../components/ui';
+import { useMutation } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { api } from "../api/client";
+import {
+  Badge,
+  Button,
+  Card,
+  EmptyState,
+  StatCard,
+  useToast,
+} from "../components/ui";
 
 /**
  * Admin: import OLD fees (unpaid before this system started) from an Excel sheet.
@@ -19,28 +26,35 @@ export function ImportOldFees() {
 
   const send = useMutation({
     mutationFn: ({ commit }) =>
-      api(`/api/old-dues/import?commit=${commit}`, { method: 'POST', file }),
+      api(`/api/old-dues/import?commit=${commit}`, { method: "POST", file }),
     onSuccess: async (res) => {
       setResult(res);
       if (res.committed) {
-        await queryClient.invalidateQueries({ queryKey: ['ledger'] });
-        notify(`${res.created} old fee entries imported.`, 'success');
+        await queryClient.invalidateQueries({ queryKey: ["ledger"] });
+        notify(`${res.created} old fee entries imported.`, "success");
       }
     },
-    onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
+    onError: (e) =>
+      notify(
+        `${e.message}${e.requestId ? ` (ref ${e.requestId})` : ""}`,
+        "error",
+      ),
   });
 
   async function downloadTemplate() {
     try {
-      const blob = await api('/api/old-dues/template', { blob: true });
+      const blob = await api("/api/old-dues/template", { blob: true });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = 'old-fees-import-template.xlsx';
+      a.download = "old-fees-import-template.xlsx";
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
-      notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error');
+      notify(
+        `${e.message}${e.requestId ? ` (ref ${e.requestId})` : ""}`,
+        "error",
+      );
     }
   }
 
@@ -61,10 +75,12 @@ export function ImportOldFees() {
 
       <Card title="1. Get the template">
         <p className="text-sm text-ink-muted">
-          Old fees are amounts a student still owed BEFORE this system started. One row per student:
-          SCH. (scholar number), OLD SCHOOL FEES and OLD TRANSPORT FEES in rupees. They are saved
-          for the current financial year and must be paid before any new fee. A student who already
-          has old fees imported is skipped, so the same file can be imported again safely.
+          Old fees are amounts a student still owed BEFORE this system started.
+          One row per student: SCH. (scholar number), OLD SCHOOL FEES and OLD
+          TRANSPORT FEES in rupees. They are saved for the current financial
+          year and must be paid before any new fee. A student who already has
+          old fees imported is skipped, so the same file can be imported again
+          safely.
         </p>
         <div className="mt-3">
           <Button variant="secondary" onClick={() => void downloadTemplate()}>
@@ -84,9 +100,9 @@ export function ImportOldFees() {
             className="text-sm"
           />
           <Button
-            loading={send.isPending && send.variables?.commit === 'false'}
+            loading={send.isPending && send.variables?.commit === "false"}
             disabled={!file || send.isPending}
-            onClick={() => send.mutate({ commit: 'false' })}
+            onClick={() => send.mutate({ commit: "false" })}
           >
             Check file
           </Button>
@@ -94,11 +110,17 @@ export function ImportOldFees() {
       </Card>
 
       {result && (
-        <Card title={result.committed ? 'Import finished' : 'Check result (nothing saved yet)'}>
+        <Card
+          title={
+            result.committed
+              ? "Import finished"
+              : "Check result (nothing saved yet)"
+          }
+        >
           <div className="grid gap-3 sm:grid-cols-3">
             <StatCard label="Rows in file" value={result.rowsInFile} />
             <StatCard
-              label={result.committed ? 'Imported' : 'Ready to import'}
+              label={result.committed ? "Imported" : "Ready to import"}
               value={result.committed ? result.created : result.ready}
             />
             <StatCard
@@ -145,14 +167,16 @@ export function ImportOldFees() {
           {!result.committed && result.ready > 0 && (
             <div className="mt-4 flex items-center gap-3">
               <Button
-                loading={send.isPending && send.variables?.commit === 'true'}
+                loading={send.isPending && send.variables?.commit === "true"}
                 disabled={send.isPending}
-                onClick={() => send.mutate({ commit: 'true' })}
+                onClick={() => send.mutate({ commit: "true" })}
               >
                 Import {result.ready} old fee entries
               </Button>
               {result.skipped > 0 && (
-                <Badge tone="warning">{result.skipped} rows will be skipped</Badge>
+                <Badge tone="warning">
+                  {result.skipped} rows will be skipped
+                </Badge>
               )}
             </div>
           )}

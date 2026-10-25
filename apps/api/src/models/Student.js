@@ -1,6 +1,6 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
-import { CLASS_KEYS, STREAMS } from '@erp/shared';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
+import { CLASS_KEYS, STREAMS } from "@erp/shared";
 
 // The tenantId plugin must be registered BEFORE a model is compiled.
 registerGlobalPlugins();
@@ -21,7 +21,7 @@ const studentSchema = new mongoose.Schema(
     classKey: { type: String, enum: CLASS_KEYS, required: true },
     stream: { type: String, enum: [...STREAMS, null] }, // only for 11th / 12th
     section: { type: String, trim: true, uppercase: true },
-    gender: { type: String, enum: ['MALE', 'FEMALE', 'OTHER'] },
+    gender: { type: String, enum: ["MALE", "FEMALE", "OTHER"] },
     dateOfBirth: { type: Date },
     contactNo: { type: String, trim: true },
     address: { type: String, trim: true },
@@ -49,11 +49,11 @@ const studentSchema = new mongoose.Schema(
     // Admin enters him in the Transport module.
     transportFrom: { type: String, match: /^\d{4}-\d{2}$/ },
     transportUntil: { type: String, match: /^\d{4}-\d{2}$/ },
-    status: { type: String, enum: ['active', 'inactive'], default: 'active' },
+    status: { type: String, enum: ["active", "inactive"], default: "active" },
     // Only when inactive: did the student take a Transfer Certificate?
     inactiveReason: {
       type: String,
-      enum: ['left_with_tc', 'left_without_tc', null],
+      enum: ["left_with_tc", "left_without_tc", null],
       default: null,
     },
   },
@@ -68,7 +68,11 @@ studentSchema.index({ tenantId: 1, status: 1 });
 // Same "numbers as numbers" ordering the list uses, so the default order is served by an index.
 studentSchema.index(
   { tenantId: 1, admissionNo: 1 },
-  { name: 'tenant_admissionNo_numeric', collation: { locale: 'en', numericOrdering: true } },
+  {
+    name: "tenant_admissionNo_numeric",
+    collation: { locale: "en", numericOrdering: true },
+  },
 );
 
-export const Student = mongoose.models.Student ?? mongoose.model('Student', studentSchema);
+export const Student =
+  mongoose.models.Student ?? mongoose.model("Student", studentSchema);

@@ -1,9 +1,14 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
-import { formatINR } from '@erp/shared';
-import { api, newIdempotencyKey } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { errorText, parseRupees, todayInput } from '../lib/rupees';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useRef, useState } from "react";
+import { formatINR } from "@erp/shared";
+import { api, newIdempotencyKey } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { errorText, parseRupees, todayInput } from "../lib/rupees";
 import {
   Badge,
   Button,
@@ -18,7 +23,7 @@ import {
   StatCard,
   Table,
   useToast,
-} from '../components/ui';
+} from "../components/ui";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 
@@ -26,12 +31,18 @@ function EntryDialog({ open, onClose }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const heads = useQuery({
-    queryKey: ['expense-heads'],
-    queryFn: () => api('/api/expense-heads'),
+    queryKey: ["expense-heads"],
+    queryFn: () => api("/api/expense-heads"),
     enabled: open,
   });
   const key = useRef(newIdempotencyKey());
-  const empty = { date: todayInput(), headId: '', payeeName: '', particulars: '', amount: '' };
+  const empty = {
+    date: todayInput(),
+    headId: "",
+    payeeName: "",
+    particulars: "",
+    amount: "",
+  };
   const [f, setF] = useState(empty);
   const [errors, setErrors] = useState({});
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
@@ -39,8 +50,8 @@ function EntryDialog({ open, onClose }) {
   const active = (heads.data?.heads ?? []).filter((h) => h.active);
   const save = useMutation({
     mutationFn: () =>
-      api('/api/petty', {
-        method: 'POST',
+      api("/api/petty", {
+        method: "POST",
         idempotencyKey: key.current,
         body: {
           date: f.date,
@@ -52,9 +63,9 @@ function EntryDialog({ open, onClose }) {
       }),
     onSuccess: async (e) => {
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ['petty'] });
-      await queryClient.invalidateQueries({ queryKey: ['money'] });
-      notify(`Petty cash entry no. ${e.seq} saved.`, 'success');
+      await queryClient.invalidateQueries({ queryKey: ["petty"] });
+      await queryClient.invalidateQueries({ queryKey: ["money"] });
+      notify(`Petty cash entry no. ${e.seq} saved.`, "success");
       setF(empty);
       setErrors({});
       onClose();
@@ -62,10 +73,14 @@ function EntryDialog({ open, onClose }) {
     onError: (e) => {
       setErrors(e.fields ?? {});
       if (e.status >= 400 && e.status < 500) key.current = newIdempotencyKey();
-      notify(errorText(e), 'error');
+      notify(errorText(e), "error");
     },
   });
-  const ready = f.payeeName.trim() && f.particulars.trim() && !amount.error && amount.paise > 0;
+  const ready =
+    f.payeeName.trim() &&
+    f.particulars.trim() &&
+    !amount.error &&
+    amount.paise > 0;
   return (
     <Dialog
       open={open}
@@ -73,10 +88,18 @@ function EntryDialog({ open, onClose }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={save.isPending}
+          >
             Cancel
           </Button>
-          <Button loading={save.isPending} disabled={!ready} onClick={() => save.mutate()}>
+          <Button
+            loading={save.isPending}
+            disabled={!ready}
+            onClick={() => save.mutate()}
+          >
             Save entry
           </Button>
         </>
@@ -97,7 +120,7 @@ function EntryDialog({ open, onClose }) {
           error={errors.headId}
           onChange={(e) => set({ headId: e.target.value })}
           options={[
-            { value: '', label: 'No head' },
+            { value: "", label: "No head" },
             ...active.map((h) => ({ value: h.id, label: h.name })),
           ]}
         />
@@ -131,29 +154,34 @@ function TopUpDialog({ open, onClose, cashPaise }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const key = useRef(newIdempotencyKey());
-  const [amountText, setAmountText] = useState('');
-  const [error, setError] = useState('');
+  const [amountText, setAmountText] = useState("");
+  const [error, setError] = useState("");
   const amount = parseRupees(amountText);
   const top = useMutation({
     mutationFn: () =>
-      api('/api/transfers', {
-        method: 'POST',
+      api("/api/transfers", {
+        method: "POST",
         idempotencyKey: key.current,
-        body: { from: 'cash', to: 'petty', amountPaise: amount.paise, note: 'Petty cash top-up' },
+        body: {
+          from: "cash",
+          to: "petty",
+          amountPaise: amount.paise,
+          note: "Petty cash top-up",
+        },
       }),
     onSuccess: async () => {
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ['petty'] });
-      await queryClient.invalidateQueries({ queryKey: ['money'] });
-      notify('Petty cash topped up from cash in hand.', 'success');
-      setAmountText('');
-      setError('');
+      await queryClient.invalidateQueries({ queryKey: ["petty"] });
+      await queryClient.invalidateQueries({ queryKey: ["money"] });
+      notify("Petty cash topped up from cash in hand.", "success");
+      setAmountText("");
+      setError("");
       onClose();
     },
     onError: (e) => {
       setError(e.fields?.amountPaise ?? e.message);
       if (e.status >= 400 && e.status < 500) key.current = newIdempotencyKey();
-      notify(errorText(e), 'error');
+      notify(errorText(e), "error");
     },
   });
   return (
@@ -163,7 +191,11 @@ function TopUpDialog({ open, onClose, cashPaise }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={top.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={top.isPending}
+          >
             Cancel
           </Button>
           <Button
@@ -178,8 +210,9 @@ function TopUpDialog({ open, onClose, cashPaise }) {
     >
       <div className="flex flex-col gap-3">
         <p className="text-ink-muted">
-          Money moves from cash in hand{cashPaise !== undefined ? ` (${money(cashPaise)})` : ''} to
-          petty cash.
+          Money moves from cash in hand
+          {cashPaise !== undefined ? ` (${money(cashPaise)})` : ""} to petty
+          cash.
         </p>
         <Input
           label="Amount (₹)"
@@ -196,27 +229,40 @@ function TopUpDialog({ open, onClose, cashPaise }) {
 /** Cashier: only the remaining balance and the last 5 entries. */
 function CashierView() {
   const q = useQuery({
-    queryKey: ['petty', 'summary'],
-    queryFn: () => api('/api/petty/summary'),
-    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
+    queryKey: ["petty", "summary"],
+    queryFn: () => api("/api/petty/summary"),
+    refetchInterval: (query) =>
+      query.state.status === "error" ? false : 60_000,
   });
   if (q.isPending) return <Spinner label="Loading petty cash" />;
-  if (q.isError) return <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />;
+  if (q.isError)
+    return (
+      <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />
+    );
   const columns = [
-    { key: 'no', header: 'Serial no.', render: (e) => e.seq },
-    { key: 'date', header: 'Date', render: (e) => e.date },
-    { key: 'payee', header: 'Payee', render: (e) => e.payeeName },
-    { key: 'part', header: 'Particulars', render: (e) => e.particulars },
-    { key: 'amt', header: 'Amount', align: 'right', render: (e) => money(e.amountPaise) },
+    { key: "no", header: "Serial no.", render: (e) => e.seq },
+    { key: "date", header: "Date", render: (e) => e.date },
+    { key: "payee", header: "Payee", render: (e) => e.payeeName },
+    { key: "part", header: "Particulars", render: (e) => e.particulars },
     {
-      key: 'st',
-      header: '',
-      render: (e) => (e.status === 'reversed' ? <Badge tone="danger">Reversed</Badge> : null),
+      key: "amt",
+      header: "Amount",
+      align: "right",
+      render: (e) => money(e.amountPaise),
+    },
+    {
+      key: "st",
+      header: "",
+      render: (e) =>
+        e.status === "reversed" ? <Badge tone="danger">Reversed</Badge> : null,
     },
   ];
   return (
     <div className="flex flex-col gap-4">
-      <StatCard label="Petty cash remaining" value={money(q.data.balancePaise)} />
+      <StatCard
+        label="Petty cash remaining"
+        value={money(q.data.balancePaise)}
+      />
       <Card title="Last 5 entries" subtitle="Entries are made by the Admin.">
         <Table
           columns={columns}
@@ -234,22 +280,22 @@ function RegisterView({ isAdmin }) {
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
   const [adding, setAdding] = useState(false);
   const [topping, setTopping] = useState(false);
   const [reversing, setReversing] = useState(null);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const balance = useQuery({
-    queryKey: ['petty', 'summary'],
-    queryFn: () => api('/api/petty/summary'),
+    queryKey: ["petty", "summary"],
+    queryFn: () => api("/api/petty/summary"),
   });
   const overview = useQuery({
-    queryKey: ['money', 'overview'],
-    queryFn: () => api('/api/money/overview'),
+    queryKey: ["money", "overview"],
+    queryFn: () => api("/api/money/overview"),
   });
   const list = useQuery({
-    queryKey: ['petty', 'list', { page, pageSize, from, to }],
+    queryKey: ["petty", "list", { page, pageSize, from, to }],
     queryFn: () =>
       api(
         `/api/petty?${new URLSearchParams({ page, pageSize, ...(from && { from }), ...(to && { to }) })}`,
@@ -257,36 +303,45 @@ function RegisterView({ isAdmin }) {
     placeholderData: keepPreviousData,
   });
   const reverse = useMutation({
-    mutationFn: () => api(`/api/petty/${reversing}/reverse`, { method: 'POST', body: { reason } }),
+    mutationFn: () =>
+      api(`/api/petty/${reversing}/reverse`, {
+        method: "POST",
+        body: { reason },
+      }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['petty'] });
-      await queryClient.invalidateQueries({ queryKey: ['money'] });
-      notify('Entry reversed. The amount is back in petty cash.', 'success');
+      await queryClient.invalidateQueries({ queryKey: ["petty"] });
+      await queryClient.invalidateQueries({ queryKey: ["money"] });
+      notify("Entry reversed. The amount is back in petty cash.", "success");
       setReversing(null);
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
   const d = list.data;
   const columns = [
-    { key: 'no', header: 'Serial no.', render: (e) => e.seq },
-    { key: 'date', header: 'Date', render: (e) => e.date },
-    { key: 'head', header: 'Head', render: (e) => e.headName ?? '-' },
-    { key: 'payee', header: 'Payee', render: (e) => e.payeeName },
-    { key: 'part', header: 'Particulars', render: (e) => e.particulars },
-    { key: 'amt', header: 'Amount', align: 'right', render: (e) => money(e.amountPaise) },
+    { key: "no", header: "Serial no.", render: (e) => e.seq },
+    { key: "date", header: "Date", render: (e) => e.date },
+    { key: "head", header: "Head", render: (e) => e.headName ?? "-" },
+    { key: "payee", header: "Payee", render: (e) => e.payeeName },
+    { key: "part", header: "Particulars", render: (e) => e.particulars },
     {
-      key: 'act',
-      header: '',
+      key: "amt",
+      header: "Amount",
+      align: "right",
+      render: (e) => money(e.amountPaise),
+    },
+    {
+      key: "act",
+      header: "",
       render: (e) =>
-        e.status === 'reversed' ? (
-          <Badge tone="danger" title={e.reversalReason ?? ''}>
+        e.status === "reversed" ? (
+          <Badge tone="danger" title={e.reversalReason ?? ""}>
             Reversed
           </Badge>
         ) : isAdmin ? (
           <Button
             variant="secondary"
             onClick={() => {
-              setReason('');
+              setReason("");
               setReversing(e.id);
             }}
           >
@@ -300,12 +355,12 @@ function RegisterView({ isAdmin }) {
       <div className="grid gap-3 sm:grid-cols-2">
         <StatCard
           label="Petty cash remaining"
-          value={balance.data ? money(balance.data.balancePaise) : '-'}
+          value={balance.data ? money(balance.data.balancePaise) : "-"}
         />
         {isAdmin && (
           <StatCard
             label="Cash in hand"
-            value={overview.data ? money(overview.data.cashPaise) : '-'}
+            value={overview.data ? money(overview.data.cashPaise) : "-"}
             caption="Petty cash is topped up from here"
           />
         )}
@@ -348,7 +403,7 @@ function RegisterView({ isAdmin }) {
         emptyTitle="No petty cash entries"
         emptyDescription={
           isAdmin
-            ? 'Set the opening petty cash on the Bank & Cash screen, then add entries under ₹500.'
+            ? "Set the opening petty cash on the Bank & Cash screen, then add entries under ₹500."
             : undefined
         }
       />
@@ -364,7 +419,9 @@ function RegisterView({ isAdmin }) {
           }}
         />
       )}
-      {isAdmin && <EntryDialog open={adding} onClose={() => setAdding(false)} />}
+      {isAdmin && (
+        <EntryDialog open={adding} onClose={() => setAdding(false)} />
+      )}
       {isAdmin && (
         <TopUpDialog
           open={topping}
@@ -395,10 +452,15 @@ export function PettyCash() {
       <div>
         <h1 className="text-2xl font-semibold text-ink">Petty Cash</h1>
         <p className="text-sm text-ink-muted">
-          Expenses under ₹500. No voucher number and no approval, only a serial number.
+          Expenses under ₹500. No voucher number and no approval, only a serial
+          number.
         </p>
       </div>
-      {role === 'cashier' ? <CashierView /> : <RegisterView isAdmin={role === 'admin'} />}
+      {role === "cashier" ? (
+        <CashierView />
+      ) : (
+        <RegisterView isAdmin={role === "admin"} />
+      )}
     </div>
   );
 }

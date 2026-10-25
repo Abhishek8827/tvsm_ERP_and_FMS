@@ -6,9 +6,9 @@
  * fee is never guessed. Returns the chart's village object or null.
  */
 const clean = (s) =>
-  String(s ?? '')
+  String(s ?? "")
     .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, ' ')
+    .replace(/[^A-Z0-9]+/g, " ")
     .trim();
 export function matchVillage(address, villages) {
   const a = clean(address);
@@ -28,11 +28,11 @@ export function fyMonths(fy) {
   return Array.from({ length: 12 }, (_, i) => {
     const m = ((3 + i) % 12) + 1;
     const y = m >= 4 ? start : start + 1;
-    return `${y}-${String(m).padStart(2, '0')}`;
+    return `${y}-${String(m).padStart(2, "0")}`;
   });
 }
 /** "2026-09" -> "2026-08" */
 export function prevMonth(ym) {
-  const [y, m] = ym.split('-').map(Number);
-  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`;
+  const [y, m] = ym.split("-").map(Number);
+  return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
 }

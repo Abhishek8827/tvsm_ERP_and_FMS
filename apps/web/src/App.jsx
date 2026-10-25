@@ -1,38 +1,42 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
-import { Navigate, Route, Routes, useNavigate } from 'react-router-dom';
-import { navForRole } from '@erp/shared';
-import { useAuth } from './auth/AuthContext';
-import { ErrorState, Spinner } from './components/ui';
-import { AppShell } from './layout/AppShell';
-import { ComingSoon } from './pages/ComingSoon';
-import { Dashboard } from './pages/Dashboard';
-import { BankCash } from './pages/BankCash';
-import { CollectFee } from './pages/CollectFee';
-import { ExpenseVoucher } from './pages/ExpenseVoucher';
-import { Expenses } from './pages/Expenses';
-import { PettyCash } from './pages/PettyCash';
-import { Cashbook } from './pages/Cashbook';
-import { TcBonafide } from './pages/TcBonafide';
-import { Rebates } from './pages/Rebates';
-import { Transport } from './pages/Transport';
-import { FeeStructure } from './pages/FeeStructure';
-import { FeesDatabase } from './pages/FeesDatabase';
-import { UsersSettings } from './pages/UsersSettings';
-import { Approvals } from './pages/Approvals';
-import { DayClose } from './pages/DayClose';
-import { DataImport } from './pages/DataImport';
-import { ImportOldFees } from './pages/ImportOldFees';
-import { ReceiptView } from './pages/ReceiptView';
-import { Receipts } from './pages/Receipts';
-import { ImportStudents } from './pages/ImportStudents';
-import { Login } from './pages/Login';
-import { StudentProfile } from './pages/StudentProfile';
-import { StudentForm } from './pages/StudentForm';
-import { Students } from './pages/Students';
+import { useQueryClient } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { navForRole } from "@erp/shared";
+import { useAuth } from "./auth/AuthContext";
+import { ErrorState, Spinner } from "./components/ui";
+import { AppShell } from "./layout/AppShell";
+import { ComingSoon } from "./pages/ComingSoon";
+import { Dashboard } from "./pages/Dashboard";
+import { BankCash } from "./pages/BankCash";
+import { CollectFee } from "./pages/CollectFee";
+import { ExpenseVoucher } from "./pages/ExpenseVoucher";
+import { Expenses } from "./pages/Expenses";
+import { PettyCash } from "./pages/PettyCash";
+import { Cashbook } from "./pages/Cashbook";
+import { TcBonafide } from "./pages/TcBonafide";
+import { Rebates } from "./pages/Rebates";
+import { Transport } from "./pages/Transport";
+import { FeeStructure } from "./pages/FeeStructure";
+import { FeesDatabase } from "./pages/FeesDatabase";
+import { UsersSettings } from "./pages/UsersSettings";
+import { Approvals } from "./pages/Approvals";
+import { DayClose } from "./pages/DayClose";
+import { DataImport } from "./pages/DataImport";
+import { ImportOldFees } from "./pages/ImportOldFees";
+import { ReceiptView } from "./pages/ReceiptView";
+import { Receipts } from "./pages/Receipts";
+import { ImportStudents } from "./pages/ImportStudents";
+import { Login } from "./pages/Login";
+import { StudentProfile } from "./pages/StudentProfile";
+import { StudentForm } from "./pages/StudentForm";
+import { Students } from "./pages/Students";
 
 function FullPage({ children }) {
-  return <div className="mx-auto flex min-h-full max-w-md items-center p-6">{children}</div>;
+  return (
+    <div className="mx-auto flex min-h-full max-w-md items-center p-6">
+      {children}
+    </div>
+  );
 }
 
 /**
@@ -48,36 +52,36 @@ export function App() {
   // After sign-out: forget everything the last person saw (so the next login never shows their
   // cached data) and go back to the dashboard, so a new login always starts at "/".
   useEffect(() => {
-    if (status === 'signedOut') {
+    if (status === "signedOut") {
       queryClient.clear();
-      navigate('/', { replace: true });
+      navigate("/", { replace: true });
     }
   }, [status, queryClient, navigate]);
 
-  if (status === 'unconfigured') {
+  if (status === "unconfigured") {
     return (
       <FullPage>
         <ErrorState message="Sign-in is not configured. Add the VITE_FIREBASE_* values to apps/web/.env.local and restart (see README)." />
       </FullPage>
     );
   }
-  if (status === 'loading') {
+  if (status === "loading") {
     return (
       <FullPage>
         <Spinner label="Checking sign-in" />
       </FullPage>
     );
   }
-  if (status === 'error') {
+  if (status === "error") {
     return (
       <FullPage>
         <ErrorState message={loadError} onRetry={retry} />
       </FullPage>
     );
   }
-  if (status === 'signedOut') return <Login />;
+  if (status === "signedOut") return <Login />;
 
-  const items = navForRole(role).filter((i) => i.path !== '/');
+  const items = navForRole(role).filter((i) => i.path !== "/");
   return (
     <Routes>
       <Route element={<AppShell />}>
@@ -85,59 +89,77 @@ export function App() {
         {items
           .filter(
             (i) =>
-              i.key !== 'students' &&
-              i.key !== 'data-import' &&
-              i.key !== 'fee-structure' &&
-              i.key !== 'collect-fee' &&
-              i.key !== 'receipts' &&
-              i.key !== 'expenses' &&
-              i.key !== 'petty-cash' &&
-              i.key !== 'bank-cash' &&
-              i.key !== 'fees-receipts' &&
-              i.key !== 'fees-database' &&
-              i.key !== 'rebates' &&
-              i.key !== 'transport' &&
-              i.key !== 'cashbook' &&
-              i.key !== 'tc-bonafide' &&
-              i.key !== 'day-close' &&
-              i.key !== 'approvals' &&
-              i.key !== 'users-settings',
+              i.key !== "students" &&
+              i.key !== "data-import" &&
+              i.key !== "fee-structure" &&
+              i.key !== "collect-fee" &&
+              i.key !== "receipts" &&
+              i.key !== "expenses" &&
+              i.key !== "petty-cash" &&
+              i.key !== "bank-cash" &&
+              i.key !== "fees-receipts" &&
+              i.key !== "fees-database" &&
+              i.key !== "rebates" &&
+              i.key !== "transport" &&
+              i.key !== "cashbook" &&
+              i.key !== "tc-bonafide" &&
+              i.key !== "day-close" &&
+              i.key !== "approvals" &&
+              i.key !== "users-settings",
           )
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
           ))}
         <Route path="/petty-cash" element={<PettyCash />} />
         <Route path="/bank-cash" element={<BankCash />} />
-        {(role === 'admin' || role === 'principal') && (
+        {(role === "admin" || role === "principal") && (
           <Route path="/expenses" element={<Expenses />} />
         )}
-        {(role === 'admin' || role === 'principal') && (
+        {(role === "admin" || role === "principal") && (
           <Route path="/expenses/:id" element={<ExpenseVoucher />} />
         )}
         <Route path="/fees-database" element={<FeesDatabase />} />
-        {(role === 'admin' || role === 'principal') && (
+        {(role === "admin" || role === "principal") && (
           <Route path="/rebates" element={<Rebates />} />
         )}
         <Route path="/transport" element={<Transport />} />
         <Route path="/cashbook" element={<Cashbook />} />
         <Route path="/tc-bonafide" element={<TcBonafide />} />
         <Route path="/day-close" element={<DayClose />} />
-        {role === 'principal' && <Route path="/approvals" element={<Approvals />} />}
-        {role === 'admin' && <Route path="/users-settings" element={<UsersSettings />} />}
+        {role === "principal" && (
+          <Route path="/approvals" element={<Approvals />} />
+        )}
+        {role === "admin" && (
+          <Route path="/users-settings" element={<UsersSettings />} />
+        )}
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />
         <Route path="/fee-structure" element={<FeeStructure />} />
         <Route path="/receipts/:id" element={<ReceiptView />} />
-        {role === 'cashier' && <Route path="/receipts" element={<Receipts />} />}
-        {role === 'admin' && <Route path="/fees-receipts" element={<Receipts />} />}
-        {(role === 'cashier' || role === 'admin') && (
+        {role === "cashier" && (
+          <Route path="/receipts" element={<Receipts />} />
+        )}
+        {role === "admin" && (
+          <Route path="/fees-receipts" element={<Receipts />} />
+        )}
+        {(role === "cashier" || role === "admin") && (
           <Route path="/collect-fee" element={<CollectFee />} />
         )}
-        {role === 'admin' && <Route path="/data-import" element={<DataImport />} />}
-        {role === 'admin' && <Route path="/data-import/students" element={<ImportStudents />} />}
-        {role === 'admin' && <Route path="/data-import/old-fees" element={<ImportOldFees />} />}
-        {role === 'admin' && <Route path="/students/new" element={<StudentForm />} />}
-        {role === 'admin' && <Route path="/students/:id/edit" element={<StudentForm />} />}
+        {role === "admin" && (
+          <Route path="/data-import" element={<DataImport />} />
+        )}
+        {role === "admin" && (
+          <Route path="/data-import/students" element={<ImportStudents />} />
+        )}
+        {role === "admin" && (
+          <Route path="/data-import/old-fees" element={<ImportOldFees />} />
+        )}
+        {role === "admin" && (
+          <Route path="/students/new" element={<StudentForm />} />
+        )}
+        {role === "admin" && (
+          <Route path="/students/:id/edit" element={<StudentForm />} />
+        )}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

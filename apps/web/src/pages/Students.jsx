@@ -1,9 +1,14 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { CLASSES, classLabel } from '@erp/shared';
-import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { CLASSES, classLabel } from "@erp/shared";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import {
   Badge,
   Button,
@@ -15,15 +20,15 @@ import {
   StatCard,
   Table,
   useToast,
-} from '../components/ui';
+} from "../components/ui";
 
-const CLASS_OPTIONS = [{ value: '', label: 'All classes' }].concat(
+const CLASS_OPTIONS = [{ value: "", label: "All classes" }].concat(
   CLASSES.map((c) => ({ value: c.key, label: c.label })),
 );
 const STATUS_OPTIONS = [
-  { value: '', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'inactive', label: 'Inactive' },
+  { value: "", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
 ];
 
 /** Column title that sorts when clicked (first click A to Z / small to big, second click reverses). */
@@ -37,7 +42,7 @@ function SortHeader({ label, field, sort, dir, onSort }) {
       aria-label={`Sort by ${label}`}
     >
       {label}
-      <span aria-hidden>{active ? (dir === 'asc' ? '▲' : '▼') : '↕'}</span>
+      <span aria-hidden>{active ? (dir === "asc" ? "▲" : "▼") : "↕"}</span>
     </button>
   );
 }
@@ -47,19 +52,19 @@ export function Students() {
   const { role } = useAuth();
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const isAdmin = role === 'admin';
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
-  const [classKey, setClassKey] = useState('');
-  const [section, setSection] = useState('');
-  const [status, setStatus] = useState('active');
-  const [sort, setSort] = useState('admissionNo');
-  const [dir, setDir] = useState('asc');
+  const isAdmin = role === "admin";
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
+  const [classKey, setClassKey] = useState("");
+  const [section, setSection] = useState("");
+  const [status, setStatus] = useState("active");
+  const [sort, setSort] = useState("admissionNo");
+  const [dir, setDir] = useState("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [selected, setSelected] = useState([]);
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
 
   // Wait until typing pauses so we do not call the server on every keystroke.
   useEffect(() => {
@@ -71,13 +76,16 @@ export function Students() {
   }, [search]);
 
   const query = useQuery({
-    queryKey: ['students', { q, classKey, section, status, sort, dir, page, pageSize }],
+    queryKey: [
+      "students",
+      { q, classKey, section, status, sort, dir, page, pageSize },
+    ],
     queryFn: () => {
       const params = new URLSearchParams({ page, pageSize, sort, dir });
-      if (q) params.set('q', q);
-      if (classKey) params.set('classKey', classKey);
-      if (section) params.set('section', section);
-      if (status) params.set('status', status);
+      if (q) params.set("q", q);
+      if (classKey) params.set("classKey", classKey);
+      if (section) params.set("section", section);
+      if (status) params.set("status", status);
       return api(`/api/students?${params}`);
     },
     placeholderData: keepPreviousData,
@@ -85,15 +93,22 @@ export function Students() {
 
   const bulkDelete = useMutation({
     mutationFn: () =>
-      api('/api/students/bulk-delete', { method: 'POST', body: { ids: selected, reason } }),
+      api("/api/students/bulk-delete", {
+        method: "POST",
+        body: { ids: selected, reason },
+      }),
     onSuccess: async (res) => {
       setConfirmOpen(false);
       setSelected([]);
-      await queryClient.invalidateQueries({ queryKey: ['students'] });
-      notify(`${res.deleted} students permanently deleted.`, 'success');
+      await queryClient.invalidateQueries({ queryKey: ["students"] });
+      notify(`${res.deleted} students permanently deleted.`, "success");
     },
     // The reference number lets us find the exact request in the server log if it ever fails.
-    onError: (e) => notify(`${e.message}${e.requestId ? ` (ref ${e.requestId})` : ''}`, 'error'),
+    onError: (e) =>
+      notify(
+        `${e.message}${e.requestId ? ` (ref ${e.requestId})` : ""}`,
+        "error",
+      ),
   });
 
   // Any change of what is on screen clears the ticks, so nobody deletes rows they cannot see.
@@ -105,7 +120,7 @@ export function Students() {
     };
   }
   function onSort(field) {
-    setDir(sort === field && dir === 'asc' ? 'desc' : 'asc');
+    setDir(sort === field && dir === "asc" ? "desc" : "asc");
     setSort(field);
     setPage(1);
     setSelected([]);
@@ -113,14 +128,17 @@ export function Students() {
 
   const data = query.data;
   const rows = data?.rows ?? [];
-  const allTicked = rows.length > 0 && rows.every((s) => selected.includes(s.id));
+  const allTicked =
+    rows.length > 0 && rows.every((s) => selected.includes(s.id));
   const toggle = (id) =>
-    setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
+    setSelected((cur) =>
+      cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id],
+    );
 
   const columns = [];
   if (isAdmin)
     columns.push({
-      key: 'pick',
+      key: "pick",
       header: (
         <input
           type="checkbox"
@@ -140,43 +158,86 @@ export function Students() {
     });
   columns.push(
     {
-      key: 'adm',
+      key: "adm",
       header: (
-        <SortHeader label="Adm. no" field="admissionNo" sort={sort} dir={dir} onSort={onSort} />
+        <SortHeader
+          label="Adm. no"
+          field="admissionNo"
+          sort={sort}
+          dir={dir}
+          onSort={onSort}
+        />
       ),
       render: (s) => s.admissionNo,
     },
     {
-      key: 'name',
-      header: <SortHeader label="Student" field="name" sort={sort} dir={dir} onSort={onSort} />,
+      key: "name",
+      header: (
+        <SortHeader
+          label="Student"
+          field="name"
+          sort={sort}
+          dir={dir}
+          onSort={onSort}
+        />
+      ),
       render: (s) => (
         <div>
-          <Link className="font-medium text-brand hover:underline" to={`/students/${s.id}`}>
+          <Link
+            className="font-medium text-brand hover:underline"
+            to={`/students/${s.id}`}
+          >
             {s.name}
           </Link>
-          {s.fatherName && <p className="text-xs text-ink-muted">S/o {s.fatherName}</p>}
+          {s.fatherName && (
+            <p className="text-xs text-ink-muted">S/o {s.fatherName}</p>
+          )}
         </div>
       ),
     },
     {
-      key: 'class',
-      header: <SortHeader label="Class" field="class" sort={sort} dir={dir} onSort={onSort} />,
+      key: "class",
+      header: (
+        <SortHeader
+          label="Class"
+          field="class"
+          sort={sort}
+          dir={dir}
+          onSort={onSort}
+        />
+      ),
       render: (s) => classLabel(s.classKey),
     },
     {
-      key: 'section',
-      header: <SortHeader label="Section" field="section" sort={sort} dir={dir} onSort={onSort} />,
-      render: (s) => s.section ?? '-',
+      key: "section",
+      header: (
+        <SortHeader
+          label="Section"
+          field="section"
+          sort={sort}
+          dir={dir}
+          onSort={onSort}
+        />
+      ),
+      render: (s) => s.section ?? "-",
     },
-    { key: 'contact', header: 'Contact', render: (s) => s.contactNo ?? '-' },
+    { key: "contact", header: "Contact", render: (s) => s.contactNo ?? "-" },
     {
-      key: 'address',
-      header: <SortHeader label="Address" field="address" sort={sort} dir={dir} onSort={onSort} />,
-      render: (s) => s.address ?? '-',
+      key: "address",
+      header: (
+        <SortHeader
+          label="Address"
+          field="address"
+          sort={sort}
+          dir={dir}
+          onSort={onSort}
+        />
+      ),
+      render: (s) => s.address ?? "-",
     },
     {
-      key: 'tags',
-      header: 'Tags',
+      key: "tags",
+      header: "Tags",
       render: (s) => (
         <div className="flex flex-wrap gap-1">
           {s.isRTE && <Badge tone="info">RTE</Badge>}
@@ -186,30 +247,43 @@ export function Students() {
       ),
     },
     {
-      key: 'status',
-      header: <SortHeader label="Status" field="status" sort={sort} dir={dir} onSort={onSort} />,
+      key: "status",
+      header: (
+        <SortHeader
+          label="Status"
+          field="status"
+          sort={sort}
+          dir={dir}
+          onSort={onSort}
+        />
+      ),
       render: (s) =>
-        s.status === 'active' ? (
+        s.status === "active" ? (
           <Badge tone="success">Active</Badge>
         ) : (
           <Badge tone="danger">
-            {s.inactiveReason === 'left_with_tc' ? 'Left with TC' : 'Left without TC'}
+            {s.inactiveReason === "left_with_tc"
+              ? "Left with TC"
+              : "Left without TC"}
           </Badge>
         ),
     },
   );
   if (isAdmin)
     columns.push({
-      key: 'edit',
-      header: '',
+      key: "edit",
+      header: "",
       render: (s) => (
-        <Link className="text-brand hover:underline" to={`/students/${s.id}/edit`}>
+        <Link
+          className="text-brand hover:underline"
+          to={`/students/${s.id}/edit`}
+        >
           Edit
         </Link>
       ),
     });
 
-  const sectionOptions = [{ value: '', label: 'All sections' }].concat(
+  const sectionOptions = [{ value: "", label: "All sections" }].concat(
     (data?.sections ?? []).map((s) => ({ value: s, label: s })),
   );
 
@@ -241,7 +315,11 @@ export function Students() {
           <StatCard
             label="Grand total"
             value={data.counts.total}
-            caption={classKey || section ? 'For the selected class / section' : 'Whole school'}
+            caption={
+              classKey || section
+                ? "For the selected class / section"
+                : "Whole school"
+            }
           />
         </div>
       )}
@@ -259,7 +337,7 @@ export function Students() {
           value={classKey}
           onChange={(e) => {
             change(setClassKey)(e.target.value);
-            setSection('');
+            setSection("");
           }}
         />
         <Select
@@ -285,9 +363,9 @@ export function Students() {
         onRetry={() => void query.refetch()}
         emptyTitle="No students found"
         emptyDescription={
-          q || classKey || section || status !== 'active'
-            ? 'Try a different search or filter.'
-            : 'Students will appear here once they are added.'
+          q || classKey || section || status !== "active"
+            ? "Try a different search or filter."
+            : "Students will appear here once they are added."
         }
       />
       {data && data.total > 0 && (

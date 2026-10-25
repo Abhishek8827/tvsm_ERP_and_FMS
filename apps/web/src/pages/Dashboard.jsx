@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { Link } from 'react-router-dom';
-import { classLabel, formatINR, todayIst } from '@erp/shared';
-import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { errorText } from '../lib/rupees';
-import { Badge, Card, ErrorState, Spinner, StatCard } from '../components/ui';
+import { useQuery } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
+import { classLabel, formatINR, todayIst } from "@erp/shared";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { errorText } from "../lib/rupees";
+import { Badge, Card, ErrorState, Spinner, StatCard } from "../components/ui";
 /**
  * Step 1 dashboard intentionally shows NO business numbers: there is no data yet, and rule 1
  * forbids placeholders. The only live information is the API/database health from /api/health.
@@ -16,15 +16,24 @@ const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 function TodayCollection() {
   const today = todayIst();
   const q = useQuery({
-    queryKey: ['receipts', 'today', today],
+    queryKey: ["receipts", "today", today],
     queryFn: () => api(`/api/receipts?from=${today}&to=${today}&pageSize=1`),
-    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
+    refetchInterval: (query) =>
+      query.state.status === "error" ? false : 60_000,
     retry: false,
   });
   return (
-    <Card title="Today's collection" subtitle="All receipts made today, by every cashier">
+    <Card
+      title="Today's collection"
+      subtitle="All receipts made today, by every cashier"
+    >
       {q.isPending && <Spinner label="Loading today's collection" />}
-      {q.isError && <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />}
+      {q.isError && (
+        <ErrorState
+          message={q.error.message}
+          onRetry={() => void q.refetch()}
+        />
+      )}
       {q.data && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <StatCard
@@ -32,8 +41,14 @@ function TodayCollection() {
             value={money(q.data.totals.paise)}
             caption={`${q.data.totals.count} receipts`}
           />
-          <StatCard label="School fees" value={money(q.data.totals.byKind.school)} />
-          <StatCard label="Transport fees" value={money(q.data.totals.byKind.transport)} />
+          <StatCard
+            label="School fees"
+            value={money(q.data.totals.byKind.school)}
+          />
+          <StatCard
+            label="Transport fees"
+            value={money(q.data.totals.byKind.transport)}
+          />
           <StatCard label="Cash" value={money(q.data.totals.byMode.cash)} />
           <StatCard label="UPI" value={money(q.data.totals.byMode.upi)} />
           <StatCard label="QR" value={money(q.data.totals.byMode.qr)} />
@@ -46,14 +61,20 @@ function TodayCollection() {
 /** Admin and Principal: funds, fees, class-wise students and what is waiting, all from real records. */
 function Overview() {
   const q = useQuery({
-    queryKey: ['dashboard', 'overview'],
-    queryFn: () => api('/api/dashboard/overview'),
-    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
+    queryKey: ["dashboard", "overview"],
+    queryFn: () => api("/api/dashboard/overview"),
+    refetchInterval: (query) =>
+      query.state.status === "error" ? false : 60_000,
     retry: false,
   });
   if (q.isPending) return <Spinner label="Loading the overview" />;
   if (q.isError)
-    return <ErrorState message={errorText(q.error)} onRetry={() => void q.refetch()} />;
+    return (
+      <ErrorState
+        message={errorText(q.error)}
+        onRetry={() => void q.refetch()}
+      />
+    );
   const d = q.data;
   const bankTotal = d.funds.banks.reduce((n, b) => n + b.balancePaise, 0);
   return (
@@ -65,7 +86,9 @@ function Overview() {
           <StatCard
             label="Banks"
             value={money(bankTotal)}
-            caption={d.funds.banks.map((b) => `${b.name} ${money(b.balancePaise)}`).join(' · ')}
+            caption={d.funds.banks
+              .map((b) => `${b.name} ${money(b.balancePaise)}`)
+              .join(" · ")}
           />
           <StatCard
             label="Collected today"
@@ -74,9 +97,15 @@ function Overview() {
           />
         </div>
       </Card>
-      <Card title={`Fees ${d.fy}`} subtitle="Active students, from the fee ledger">
+      <Card
+        title={`Fees ${d.fy}`}
+        subtitle="Active students, from the fee ledger"
+      >
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Billed (till this month)" value={money(d.fees.billedPaise)} />
+          <StatCard
+            label="Billed (till this month)"
+            value={money(d.fees.billedPaise)}
+          />
           <StatCard
             label="Collected"
             value={money(d.fees.paidPaise)}
@@ -87,11 +116,14 @@ function Overview() {
             value={money(d.fees.dueNowPaise)}
             caption={`Overdue ${money(d.fees.overduePaise)}`}
           />
-          <StatCard label="Outstanding" value={money(d.fees.outstandingPaise)} />
+          <StatCard
+            label="Outstanding"
+            value={money(d.fees.outstandingPaise)}
+          />
         </div>
         {d.noPlanStudents > 0 && (
           <p className="mt-3 text-sm text-warning">
-            {d.noPlanStudents} students have no fees posted yet.{' '}
+            {d.noPlanStudents} students have no fees posted yet.{" "}
             <Link className="underline" to="/fees-database">
               Open Fees Database
             </Link>
@@ -101,13 +133,14 @@ function Overview() {
         {d.feePlan?.problems?.length > 0 && (
           <div className="mt-3 rounded-lg border border-warning/40 bg-warning/10 p-3 text-sm">
             <p className="font-medium text-warning">
-              Fees were NOT posted for some students (fix the fee chart or the student record):
+              Fees were NOT posted for some students (fix the fee chart or the
+              student record):
             </p>
             <ul className="mt-1 list-disc pl-5 text-ink-muted">
               {d.feePlan.problems.map((p) => (
                 <li key={p.reason}>
-                  {p.count} student{p.count > 1 ? 's' : ''}: {p.reason} (e.g.{' '}
-                  {p.examples.join(', ')})
+                  {p.count} student{p.count > 1 ? "s" : ""}: {p.reason} (e.g.{" "}
+                  {p.examples.join(", ")})
                 </li>
               ))}
             </ul>
@@ -133,7 +166,10 @@ function Overview() {
           />
         </div>
       </Card>
-      <Card title="Students class-wise" subtitle={`${d.fees.students} active students`}>
+      <Card
+        title="Students class-wise"
+        subtitle={`${d.fees.students} active students`}
+      >
         {d.classes.length === 0 ? (
           <p className="text-sm text-ink-muted">No active students yet.</p>
         ) : (
@@ -143,15 +179,21 @@ function Overview() {
                 <tr>
                   <th className="py-2 pr-4 font-medium">Class</th>
                   <th className="py-2 pr-4 text-right font-medium">Students</th>
-                  <th className="py-2 text-right font-medium">Due till today</th>
+                  <th className="py-2 text-right font-medium">
+                    Due till today
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {d.classes.map((c) => (
                   <tr key={c.classKey}>
                     <td className="py-2 pr-4">{classLabel(c.classKey)}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums">{c.students}</td>
-                    <td className="py-2 text-right tabular-nums">{money(c.dueNowPaise)}</td>
+                    <td className="py-2 pr-4 text-right tabular-nums">
+                      {c.students}
+                    </td>
+                    <td className="py-2 text-right tabular-nums">
+                      {money(c.dueNowPaise)}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -166,9 +208,10 @@ function Overview() {
 export function Dashboard() {
   const { user, role } = useAuth();
   const health = useQuery({
-    queryKey: ['health'],
-    queryFn: () => api('/api/health'),
-    refetchInterval: (query) => (query.state.status === 'error' ? false : 30_000),
+    queryKey: ["health"],
+    queryFn: () => api("/api/health"),
+    refetchInterval: (query) =>
+      query.state.status === "error" ? false : 30_000,
     retry: false,
   });
   return (
@@ -179,19 +222,26 @@ export function Dashboard() {
           Signed in as {user.name} ({user.role}).
         </p>
       </div>
-      {role === 'cashier' && <TodayCollection />}
-      {(role === 'admin' || role === 'principal') && <Overview />}
+      {role === "cashier" && <TodayCollection />}
+      {(role === "admin" || role === "principal") && <Overview />}
       <Card title="System status" subtitle="Live from the API">
         {health.isPending && <Spinner label="Checking the server" />}
         {health.isError && (
-          <ErrorState message={health.error.message} onRetry={() => void health.refetch()} />
+          <ErrorState
+            message={health.error.message}
+            onRetry={() => void health.refetch()}
+          />
         )}
         {health.data && (
           <div className="flex items-center gap-3">
-            <Badge tone={health.data.status === 'ok' ? 'success' : 'warning'}>
-              {health.data.status === 'ok' ? 'All systems normal' : 'Database not connected'}
+            <Badge tone={health.data.status === "ok" ? "success" : "warning"}>
+              {health.data.status === "ok"
+                ? "All systems normal"
+                : "Database not connected"}
             </Badge>
-            <span className="text-sm text-ink-muted">Database: {health.data.db}</span>
+            <span className="text-sm text-ink-muted">
+              Database: {health.data.db}
+            </span>
           </div>
         )}
       </Card>

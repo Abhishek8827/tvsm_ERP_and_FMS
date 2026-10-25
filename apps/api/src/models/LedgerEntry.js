@@ -1,6 +1,6 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
-import { makeImmutable } from './Immutable.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
+import { makeImmutable } from "./Immutable.js";
 
 registerGlobalPlugins();
 
@@ -11,13 +11,13 @@ registerGlobalPlugins();
  * so it moves money without being income or expense.
  */
 export const LEDGER_TYPES = [
-  'opening',
-  'opening_change', // Admin corrects an opening balance (reason in note); old entries stay
-  'transfer',
-  'petty_entry',
-  'petty_reversal',
-  'expense_payment',
-  'payment_reversal',
+  "opening",
+  "opening_change", // Admin corrects an opening balance (reason in note); old entries stay
+  "transfer",
+  "petty_entry",
+  "petty_reversal",
+  "expense_payment",
+  "payment_reversal",
 ];
 const ledgerSchema = new mongoose.Schema(
   {
@@ -39,9 +39,9 @@ ledgerSchema.index({ tenantId: 1, refId: 1 });
 // One opening entry per account: the opening balance can be set only once (later fixes are entries).
 ledgerSchema.index(
   { tenantId: 1, account: 1 },
-  { unique: true, partialFilterExpression: { type: 'opening' } },
+  { unique: true, partialFilterExpression: { type: "opening" } },
 );
-makeImmutable(ledgerSchema, 'Ledger entries');
+makeImmutable(ledgerSchema, "Ledger entries");
 
 export const LedgerEntry =
-  mongoose.models.LedgerEntry ?? mongoose.model('LedgerEntry', ledgerSchema);
+  mongoose.models.LedgerEntry ?? mongoose.model("LedgerEntry", ledgerSchema);

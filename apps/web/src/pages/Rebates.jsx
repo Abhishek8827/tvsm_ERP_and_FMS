@@ -1,9 +1,19 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { REBATE_CATEGORIES, REBATE_CATEGORY_KEYS, classLabel, formatINR } from '@erp/shared';
-import { api } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  REBATE_CATEGORIES,
+  REBATE_CATEGORY_KEYS,
+  classLabel,
+  formatINR,
+} from "@erp/shared";
+import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import {
   Badge,
   Button,
@@ -18,42 +28,46 @@ import {
   StatCard,
   Table,
   useToast,
-} from '../components/ui';
-import { errorText, parseRupees } from '../lib/rupees';
+} from "../components/ui";
+import { errorText, parseRupees } from "../lib/rupees";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const TYPES = [
-  { value: 'school', label: 'School fees' },
-  { value: 'transport', label: 'Transport fees' },
-  { value: 'admission', label: 'Admission fees' },
+  { value: "school", label: "School fees" },
+  { value: "transport", label: "Transport fees" },
+  { value: "admission", label: "Admission fees" },
 ];
 const TYPE_LABEL = {
   ...Object.fromEntries(TYPES.map((t) => [t.value, t.label])),
-  late_fee: 'Late fee waiver',
+  late_fee: "Late fee waiver",
 };
 const ADJUST_OPTIONS = [
-  { value: 'oldest', label: 'Oldest unpaid fee first (normal)' },
-  { value: 'last', label: "Last month's fee" },
-  { value: 'all', label: 'All months of the year' },
+  { value: "oldest", label: "Oldest unpaid fee first (normal)" },
+  { value: "last", label: "Last month's fee" },
+  { value: "all", label: "All months of the year" },
 ];
-const ADJUST_LABEL = { oldest: 'Oldest unpaid', last: 'Last month', all: 'All months' };
+const ADJUST_LABEL = {
+  oldest: "Oldest unpaid",
+  last: "Last month",
+  all: "All months",
+};
 const ADJUST_HINT = {
   last: "Lowers the last month's fee of the year.",
-  all: 'Lowers every month of the year (the months not started yet are posted for this).',
-  other: 'You choose below which fee it lowers.',
+  all: "Lowers every month of the year (the months not started yet are posted for this).",
+  other: "You choose below which fee it lowers.",
 };
 
 async function download(path, name, notify) {
   try {
     const blob = await api(path, { blob: true });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
+    const a = document.createElement("a");
     a.href = url;
     a.download = name;
     a.click();
     URL.revokeObjectURL(url);
   } catch (e) {
-    notify(errorText(e), 'error');
+    notify(errorText(e), "error");
   }
 }
 
@@ -64,16 +78,16 @@ async function download(path, name, notify) {
  */
 export function Rebates() {
   const { role } = useAuth();
-  const isAdmin = role === 'admin';
+  const isAdmin = role === "admin";
   const { notify } = useToast();
-  const [mode, setMode] = useState('list'); // 'list' | 'import'
+  const [mode, setMode] = useState("list"); // 'list' | 'import'
   const [giving, setGiving] = useState(false);
   const [reversing, setReversing] = useState(null);
-  const [reason, setReason] = useState('');
-  const [search, setSearch] = useState('');
-  const [q, setQ] = useState('');
-  const [type, setType] = useState('');
-  const [status, setStatus] = useState('');
+  const [reason, setReason] = useState("");
+  const [search, setSearch] = useState("");
+  const [q, setQ] = useState("");
+  const [type, setType] = useState("");
+  const [status, setStatus] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const queryClient = useQueryClient();
@@ -88,91 +102,126 @@ export function Rebates() {
 
   const qs = (extra = {}) => {
     const p = new URLSearchParams(extra);
-    if (q) p.set('q', q);
-    if (type) p.set('type', type);
-    if (status) p.set('status', status);
+    if (q) p.set("q", q);
+    if (type) p.set("type", type);
+    if (status) p.set("status", status);
     return p;
   };
   const query = useQuery({
-    queryKey: ['rebates', { q, type, status, page, pageSize }],
+    queryKey: ["rebates", { q, type, status, page, pageSize }],
     queryFn: () => api(`/api/rebates?${qs({ page, pageSize })}`),
     placeholderData: keepPreviousData,
   });
   const reverse = useMutation({
     mutationFn: () =>
-      api(`/api/rebates/${reversing.id}/reverse`, { method: 'POST', body: { reason } }),
+      api(`/api/rebates/${reversing.id}/reverse`, {
+        method: "POST",
+        body: { reason },
+      }),
     onSuccess: async () => {
-      for (const key of ['rebates', 'fees-database', 'dues', 'ledger', 'dashboard'])
+      for (const key of [
+        "rebates",
+        "fees-database",
+        "dues",
+        "ledger",
+        "dashboard",
+      ])
         await queryClient.invalidateQueries({ queryKey: [key] });
-      notify('Rebate reversed.', 'success');
+      notify("Rebate reversed.", "success");
       setReversing(null);
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
 
   const d = query.data;
-  const rows = d?.rows?.map((r, i) => ({ ...r, _n: (page - 1) * pageSize + i + 1 }));
+  const rows = d?.rows?.map((r, i) => ({
+    ...r,
+    _n: (page - 1) * pageSize + i + 1,
+  }));
   const columns = [
-    { key: 'sno', header: 'S.No', render: (r) => r._n },
-    { key: 'adm', header: 'Sch. ID', render: (r) => r.student?.admissionNo ?? '-' },
+    { key: "sno", header: "S.No", render: (r) => r._n },
     {
-      key: 'name',
-      header: 'Student',
+      key: "adm",
+      header: "Sch. ID",
+      render: (r) => r.student?.admissionNo ?? "-",
+    },
+    {
+      key: "name",
+      header: "Student",
       render: (r) =>
         r.studentId ? (
-          <Link className="font-medium text-brand hover:underline" to={`/students/${r.studentId}`}>
-            {r.student?.name ?? 'Student'}
+          <Link
+            className="font-medium text-brand hover:underline"
+            to={`/students/${r.studentId}`}
+          >
+            {r.student?.name ?? "Student"}
           </Link>
         ) : (
-          '-'
+          "-"
         ),
     },
     {
-      key: 'class',
-      header: 'Class',
-      render: (r) => (r.student?.classKey ? classLabel(r.student.classKey) : '-'),
-    },
-    { key: 'type', header: 'Rebate type', render: (r) => TYPE_LABEL[r.type] ?? r.type },
-    { key: 'amt', header: 'Amount', align: 'right', render: (r) => money(r.totalPaise) },
-    {
-      key: 'on',
-      header: 'Adjusted on',
+      key: "class",
+      header: "Class",
       render: (r) =>
-        r.type === 'late_fee'
-          ? r.periods.join(', ')
-          : (ADJUST_LABEL[r.adjustOn] ?? 'Oldest unpaid'),
+        r.student?.classKey ? classLabel(r.student.classKey) : "-",
     },
     {
-      key: 'cat',
-      header: 'Category',
+      key: "type",
+      header: "Rebate type",
+      render: (r) => TYPE_LABEL[r.type] ?? r.type,
+    },
+    {
+      key: "amt",
+      header: "Amount",
+      align: "right",
+      render: (r) => money(r.totalPaise),
+    },
+    {
+      key: "on",
+      header: "Adjusted on",
+      render: (r) =>
+        r.type === "late_fee"
+          ? r.periods.join(", ")
+          : (ADJUST_LABEL[r.adjustOn] ?? "Oldest unpaid"),
+    },
+    {
+      key: "cat",
+      header: "Category",
       render: (r) => (
         <div>
-          {r.category ? REBATE_CATEGORIES[r.category]?.label : '-'}
+          {r.category ? REBATE_CATEGORIES[r.category]?.label : "-"}
           {r.sibling && (
             <p className="text-xs text-ink-muted">
-              Sibling: {r.sibling.name} (Sch. {r.sibling.admissionNo},{' '}
+              Sibling: {r.sibling.name} (Sch. {r.sibling.admissionNo},{" "}
               {classLabel(r.sibling.classKey)})
             </p>
           )}
-          {r.receiptNo && <p className="text-xs text-ink-muted">Receipt: {r.receiptNo}</p>}
+          {r.receiptNo && (
+            <p className="text-xs text-ink-muted">Receipt: {r.receiptNo}</p>
+          )}
         </div>
       ),
     },
-    { key: 'reason', header: 'Reason', render: (r) => r.reason },
+    { key: "reason", header: "Reason", render: (r) => r.reason },
     {
-      key: 'date',
-      header: 'Date',
+      key: "date",
+      header: "Date",
       render: (r) =>
-        new Date(r.createdAt).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' }),
+        new Date(r.createdAt).toLocaleDateString("en-IN", {
+          timeZone: "Asia/Kolkata",
+        }),
     },
     {
-      key: 'status',
-      header: 'Status',
+      key: "status",
+      header: "Status",
       render: (r) =>
-        r.status === 'reversed' ? (
+        r.status === "reversed" ? (
           <div>
             <Badge tone="danger">Reversed</Badge>
-            {r.reversedReason && <p className="mt-1 text-xs text-ink-muted">{r.reversedReason}</p>}
+            {r.reversedReason && (
+              <p className="mt-1 text-xs text-ink-muted">{r.reversedReason}</p>
+            )}
           </div>
         ) : (
           <Badge tone="success">Active</Badge>
@@ -181,14 +230,14 @@ export function Rebates() {
   ];
   if (isAdmin)
     columns.push({
-      key: 'act',
-      header: '',
+      key: "act",
+      header: "",
       render: (r) =>
-        r.status === 'active' ? (
+        r.status === "active" ? (
           <Button
             variant="secondary"
             onClick={() => {
-              setReason('');
+              setReason("");
               setReversing(r);
             }}
           >
@@ -203,38 +252,53 @@ export function Rebates() {
         <div>
           <h1 className="text-2xl font-semibold text-ink">Rebates</h1>
           <p className="text-sm text-ink-muted">
-            Every concession given to students. Reversed rebates stay in the list.
+            Every concession given to students. Reversed rebates stay in the
+            list.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {isAdmin && <Button onClick={() => setGiving(true)}>Give rebate</Button>}
+          {isAdmin && (
+            <Button onClick={() => setGiving(true)}>Give rebate</Button>
+          )}
           {isAdmin && (
             <Button
               variant="secondary"
-              onClick={() => setMode(mode === 'import' ? 'list' : 'import')}
+              onClick={() => setMode(mode === "import" ? "list" : "import")}
             >
-              {mode === 'import' ? 'Back to list' : 'Import from Excel'}
+              {mode === "import" ? "Back to list" : "Import from Excel"}
             </Button>
           )}
           <Button
             variant="secondary"
-            onClick={() => void download(`/api/rebates/export?${qs()}`, 'rebates.xlsx', notify)}
+            onClick={() =>
+              void download(
+                `/api/rebates/export?${qs()}`,
+                "rebates.xlsx",
+                notify,
+              )
+            }
           >
             Export to Excel
           </Button>
         </div>
       </div>
 
-      {mode === 'import' && isAdmin && (
+      {mode === "import" && isAdmin && (
         <ImportPanel
           onDone={async () => {
-            for (const key of ['rebates', 'fees-database', 'dues', 'ledger', 'dashboard'])
+            for (const key of [
+              "rebates",
+              "fees-database",
+              "dues",
+              "ledger",
+              "dashboard",
+            ])
               await queryClient.invalidateQueries({ queryKey: [key] });
           }}
         />
       )}
 
-      {mode === 'list' && (
+      {mode === "list" && (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <StatCard
@@ -242,7 +306,10 @@ export function Rebates() {
               value={d?.totals?.count ?? 0}
               caption="Matching the filters"
             />
-            <StatCard label="Total rebate amount" value={money(d?.totals?.paise)} />
+            <StatCard
+              label="Total rebate amount"
+              value={money(d?.totals?.paise)}
+            />
           </div>
           <FilterBar>
             <Input
@@ -259,9 +326,9 @@ export function Rebates() {
                 setPage(1);
               }}
               options={[
-                { value: '', label: 'All' },
+                { value: "", label: "All" },
                 ...TYPES,
-                { value: 'late_fee', label: 'Late fee waiver' },
+                { value: "late_fee", label: "Late fee waiver" },
               ]}
             />
             <Select
@@ -272,9 +339,9 @@ export function Rebates() {
                 setPage(1);
               }}
               options={[
-                { value: '', label: 'All' },
-                { value: 'active', label: 'Active' },
-                { value: 'reversed', label: 'Reversed' },
+                { value: "", label: "All" },
+                { value: "active", label: "Active" },
+                { value: "reversed", label: "Reversed" },
               ]}
             />
           </FilterBar>
@@ -289,7 +356,7 @@ export function Rebates() {
             emptyDescription={
               isAdmin
                 ? 'Use "Give rebate" or "Import from Excel" to add one.'
-                : 'The Admin has not given any rebate for these filters.'
+                : "The Admin has not given any rebate for these filters."
             }
           />
           {d && d.total > 0 && (
@@ -326,19 +393,24 @@ export function Rebates() {
 
 /** Looks a student up by scholar number (waits a moment after typing; no request while empty). */
 function useScholar(text) {
-  const [no, setNo] = useState('');
+  const [no, setNo] = useState("");
   useEffect(() => {
     const t = window.setTimeout(() => setNo(text.trim()), 400);
     return () => window.clearTimeout(t);
   }, [text]);
   const query = useQuery({
-    queryKey: ['rebate-lookup', no],
+    queryKey: ["rebate-lookup", no],
     enabled: no.length > 0,
     retry: false,
     queryFn: () => api(`/api/rebates/lookup/${encodeURIComponent(no)}`),
   });
   const waiting = text.trim() !== no || (no.length > 0 && query.isPending);
-  return { student: text.trim() === no ? (query.data ?? null) : null, waiting, query, no };
+  return {
+    student: text.trim() === no ? (query.data ?? null) : null,
+    waiting,
+    query,
+    no,
+  };
 }
 
 /**
@@ -349,54 +421,72 @@ function useScholar(text) {
 function GiveDialog({ onClose }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const [schNo, setSchNo] = useState('');
-  const [category, setCategory] = useState('other');
-  const [sibNo, setSibNo] = useState('');
-  const [receiptNo, setReceiptNo] = useState('');
+  const [schNo, setSchNo] = useState("");
+  const [category, setCategory] = useState("other");
+  const [sibNo, setSibNo] = useState("");
+  const [receiptNo, setReceiptNo] = useState("");
   const [ticked, setTicked] = useState({}); // type -> amount text
-  const [reason, setReason] = useState('');
-  const [adjustOn, setAdjustOn] = useState('oldest');
+  const [reason, setReason] = useState("");
+  const [adjustOn, setAdjustOn] = useState("oldest");
   const main = useScholar(schNo);
   const sib = useScholar(sibNo);
   const student = main.student;
   const needs = REBATE_CATEGORIES[category].needs;
-  const items = Object.entries(ticked).map(([type, text]) => ({ type, parsed: parseRupees(text) }));
+  const items = Object.entries(ticked).map(([type, text]) => ({
+    type,
+    parsed: parseRupees(text),
+  }));
   const ready =
     !!student &&
     items.length > 0 &&
     items.every((i) => !i.parsed.error && i.parsed.paise > 0) &&
     reason.trim().length >= 2 &&
-    (needs !== 'sibling' || (!!sib.student && sib.student.id !== student.id)) &&
-    (needs !== 'receipt' || receiptNo.trim().length > 0);
+    (needs !== "sibling" || (!!sib.student && sib.student.id !== student.id)) &&
+    (needs !== "receipt" || receiptNo.trim().length > 0);
   const save = useMutation({
     mutationFn: () =>
-      api('/api/rebates', {
-        method: 'POST',
+      api("/api/rebates", {
+        method: "POST",
         body: {
           studentId: student.id,
-          items: items.map((i) => ({ type: i.type, amountPaise: i.parsed.paise })),
+          items: items.map((i) => ({
+            type: i.type,
+            amountPaise: i.parsed.paise,
+          })),
           reason: reason.trim(),
           category,
-          ...(needs === 'sibling' ? { siblingNo: sib.student.admissionNo } : {}),
-          ...(needs === 'receipt' ? { receiptNo: receiptNo.trim() } : {}),
+          ...(needs === "sibling"
+            ? { siblingNo: sib.student.admissionNo }
+            : {}),
+          ...(needs === "receipt" ? { receiptNo: receiptNo.trim() } : {}),
           adjustOn,
         },
       }),
     onSuccess: async (res) => {
-      for (const key of ['rebates', 'fees-database', 'dues', 'ledger', 'dashboard'])
+      for (const key of [
+        "rebates",
+        "fees-database",
+        "dues",
+        "ledger",
+        "dashboard",
+      ])
         await queryClient.invalidateQueries({ queryKey: [key] });
-      notify(`${res.created.length} rebate${res.created.length > 1 ? 's' : ''} given.`, 'success');
+      notify(
+        `${res.created.length} rebate${res.created.length > 1 ? "s" : ""} given.`,
+        "success",
+      );
       // Some types may have failed (e.g. more than what is unpaid): say which and why.
-      for (const f of res.failed ?? []) notify(`${TYPE_LABEL[f.type]}: ${f.message}`, 'error');
+      for (const f of res.failed ?? [])
+        notify(`${TYPE_LABEL[f.type]}: ${f.message}`, "error");
       onClose();
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
   const toggle = (type) =>
     setTicked((t) => {
       const next = { ...t };
       if (type in next) delete next[type];
-      else next[type] = '';
+      else next[type] = "";
       return next;
     });
   const lookupNote = (l, label) =>
@@ -404,7 +494,9 @@ function GiveDialog({ onClose }) {
       <p className="mt-1 text-xs text-ink-muted">Searching…</p>
     ) : l.query.isError ? (
       <p className="mt-1 text-xs text-danger">
-        {l.query.error?.status === 404 ? `${label} not found.` : errorText(l.query.error)}
+        {l.query.error?.status === 404
+          ? `${label} not found.`
+          : errorText(l.query.error)}
       </p>
     ) : null;
   return (
@@ -414,10 +506,18 @@ function GiveDialog({ onClose }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={save.isPending}
+          >
             Cancel
           </Button>
-          <Button disabled={!ready} loading={save.isPending} onClick={() => save.mutate()}>
+          <Button
+            disabled={!ready}
+            loading={save.isPending}
+            onClick={() => save.mutate()}
+          >
             Give rebate
           </Button>
         </>
@@ -430,7 +530,7 @@ function GiveDialog({ onClose }) {
             value={schNo}
             onChange={(e) => setSchNo(e.target.value)}
           />
-          {lookupNote(main, 'Scholar number')}
+          {lookupNote(main, "Scholar number")}
         </div>
         {student && (
           <dl className="grid gap-x-4 gap-y-1 rounded-lg border border-line bg-app p-3 text-sm sm:grid-cols-2">
@@ -440,24 +540,24 @@ function GiveDialog({ onClose }) {
             </div>
             <div>
               <dt className="text-xs text-ink-muted">Father</dt>
-              <dd>{student.fatherName || '-'}</dd>
+              <dd>{student.fatherName || "-"}</dd>
             </div>
             <div>
               <dt className="text-xs text-ink-muted">Class</dt>
               <dd>
                 {classLabel(student.classKey)}
-                {student.section ? ` - ${student.section}` : ''}
+                {student.section ? ` - ${student.section}` : ""}
               </dd>
             </div>
             <div>
               <dt className="text-xs text-ink-muted">Contact</dt>
-              <dd>{student.contactNo || '-'}</dd>
+              <dd>{student.contactNo || "-"}</dd>
             </div>
             <div className="sm:col-span-2">
               <dt className="text-xs text-ink-muted">Address</dt>
-              <dd>{student.address || '-'}</dd>
+              <dd>{student.address || "-"}</dd>
             </div>
-            {student.status !== 'active' && (
+            {student.status !== "active" && (
               <div className="sm:col-span-2">
                 <Badge tone="warning">This student is {student.status}</Badge>
               </div>
@@ -475,31 +575,34 @@ function GiveDialog({ onClose }) {
           }))}
         />
         <p className="-mt-2 text-xs text-ink-muted">
-          {ADJUST_HINT[REBATE_CATEGORIES[category].adjustOn ?? 'other']}
+          {ADJUST_HINT[REBATE_CATEGORIES[category].adjustOn ?? "other"]}
         </p>
 
-        {needs === 'sibling' && (
+        {needs === "sibling" && (
           <div>
             <Input
               label="Sibling's scholar number"
               value={sibNo}
               onChange={(e) => setSibNo(e.target.value)}
             />
-            {lookupNote(sib, 'Sibling')}
+            {lookupNote(sib, "Sibling")}
             {sib.student && (
               <p className="mt-1 text-sm">
                 {sib.student.id === student?.id ? (
-                  <span className="text-danger">The sibling must be a different student.</span>
+                  <span className="text-danger">
+                    The sibling must be a different student.
+                  </span>
                 ) : (
                   <>
-                    <b>{sib.student.name}</b> · {classLabel(sib.student.classKey)}
+                    <b>{sib.student.name}</b> ·{" "}
+                    {classLabel(sib.student.classKey)}
                   </>
                 )}
               </p>
             )}
           </div>
         )}
-        {needs === 'receipt' && (
+        {needs === "receipt" && (
           <Input
             label="Receipt number of the one time payment"
             placeholder="e.g. S-FY2026-27/2054 or 2054"
@@ -509,7 +612,9 @@ function GiveDialog({ onClose }) {
         )}
 
         <fieldset className="flex flex-col gap-2">
-          <legend className="mb-1 text-sm font-medium">Rebate on (tick one or more)</legend>
+          <legend className="mb-1 text-sm font-medium">
+            Rebate on (tick one or more)
+          </legend>
           {TYPES.map((t) => (
             <div key={t.value} className="flex flex-wrap items-center gap-3">
               <label className="flex min-w-40 items-center gap-2">
@@ -527,7 +632,9 @@ function GiveDialog({ onClose }) {
                     inputMode="decimal"
                     value={ticked[t.value]}
                     error={parseRupees(ticked[t.value]).error}
-                    onChange={(e) => setTicked((x) => ({ ...x, [t.value]: e.target.value }))}
+                    onChange={(e) =>
+                      setTicked((x) => ({ ...x, [t.value]: e.target.value }))
+                    }
                   />
                 </div>
               )}
@@ -535,7 +642,7 @@ function GiveDialog({ onClose }) {
           ))}
         </fieldset>
 
-        {category === 'other' && (
+        {category === "other" && (
           <Select
             label="Reduce which fee"
             options={ADJUST_OPTIONS}
@@ -549,9 +656,9 @@ function GiveDialog({ onClose }) {
           onChange={(e) => setReason(e.target.value)}
         />
         <p className="text-xs text-ink-muted">
-          A rebate can never be more than the fee of the months it covers that is still unpaid.
-          Admission rebate always lowers the admission fee. It is recorded with your reason and can
-          be reversed later.
+          A rebate can never be more than the fee of the months it covers that
+          is still unpaid. Admission rebate always lowers the admission fee. It
+          is recorded with your reason and can be reversed later.
         </p>
       </div>
     </Dialog>
@@ -566,32 +673,37 @@ function ImportPanel({ onDone }) {
   const [result, setResult] = useState(null);
   const send = useMutation({
     mutationFn: ({ commit }) =>
-      api(`/api/rebates/import?commit=${commit}`, { method: 'POST', file }),
+      api(`/api/rebates/import?commit=${commit}`, { method: "POST", file }),
     onSuccess: async (res) => {
       setResult(res);
       if (res.committed) {
         await onDone();
-        notify(`${res.created} rebates imported.`, 'success');
+        notify(`${res.created} rebates imported.`, "success");
       }
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
   return (
     <div className="flex max-w-4xl flex-col gap-4">
       <Card title="1. Get the template">
         <p className="text-sm text-ink-muted">
-          One row per rebate: SCH. ID, REBATE TYPE (school / transport / admission), AMOUNT (₹) and
-          REASON. Optional CATEGORY (BC, OTP, RTE, By Management, Scholarship, Other): BC needs
-          SIBLING SCH. ID, OTP needs RECEIPT NO. The category decides which months are lowered;
-          without a category the ADJUST ON column ("last", "all" or empty = oldest unpaid first) is
-          used. The same rebate (student, type, amount, reason) is never given twice, so importing a
-          file again is safe.
+          One row per rebate: SCH. ID, REBATE TYPE (school / transport /
+          admission), AMOUNT (₹) and REASON. Optional CATEGORY (BC, OTP, RTE, By
+          Management, Scholarship, Other): BC needs SIBLING SCH. ID, OTP needs
+          RECEIPT NO. The category decides which months are lowered; without a
+          category the ADJUST ON column ("last", "all" or empty = oldest unpaid
+          first) is used. The same rebate (student, type, amount, reason) is
+          never given twice, so importing a file again is safe.
         </p>
         <div className="mt-3">
           <Button
             variant="secondary"
             onClick={() =>
-              void download('/api/rebates/template', 'rebate-import-template.xlsx', notify)
+              void download(
+                "/api/rebates/template",
+                "rebate-import-template.xlsx",
+                notify,
+              )
             }
           >
             Download template (.xlsx)
@@ -613,23 +725,33 @@ function ImportPanel({ onDone }) {
             }}
           />
           <Button
-            loading={send.isPending && send.variables?.commit === 'false'}
+            loading={send.isPending && send.variables?.commit === "false"}
             disabled={!file || send.isPending}
-            onClick={() => send.mutate({ commit: 'false' })}
+            onClick={() => send.mutate({ commit: "false" })}
           >
             Check file
           </Button>
         </div>
       </Card>
       {result && (
-        <Card title={result.committed ? 'Import finished' : 'Check result (nothing saved yet)'}>
+        <Card
+          title={
+            result.committed
+              ? "Import finished"
+              : "Check result (nothing saved yet)"
+          }
+        >
           <div className="grid gap-3 sm:grid-cols-3">
             <StatCard label="Rows in file" value={result.rowsInFile} />
             <StatCard
-              label={result.committed ? 'Imported' : 'Ready to import'}
+              label={result.committed ? "Imported" : "Ready to import"}
               value={result.committed ? result.created : result.ready}
             />
-            <StatCard label="Skipped" value={result.skipped} caption="Problems or already given" />
+            <StatCard
+              label="Skipped"
+              value={result.skipped}
+              caption="Problems or already given"
+            />
           </div>
           {result.errors.length > 0 && (
             <div className="mt-4 overflow-x-auto rounded-card border border-line">
@@ -662,14 +784,16 @@ function ImportPanel({ onDone }) {
           {!result.committed && result.ready > 0 && (
             <div className="mt-4 flex items-center gap-3">
               <Button
-                loading={send.isPending && send.variables?.commit === 'true'}
+                loading={send.isPending && send.variables?.commit === "true"}
                 disabled={send.isPending}
-                onClick={() => send.mutate({ commit: 'true' })}
+                onClick={() => send.mutate({ commit: "true" })}
               >
                 Import {result.ready} rebates
               </Button>
               {result.skipped > 0 && (
-                <Badge tone="warning">{result.skipped} rows will be skipped</Badge>
+                <Badge tone="warning">
+                  {result.skipped} rows will be skipped
+                </Badge>
               )}
             </div>
           )}

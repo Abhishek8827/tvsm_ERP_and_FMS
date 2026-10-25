@@ -5,12 +5,12 @@
  * needs: extra detail the Admin must give for that category.
  */
 export const REBATE_CATEGORIES = {
-  bc: { label: 'BC (sibling)', adjustOn: 'last', needs: 'sibling' },
-  otp: { label: 'OTP (one time payment)', adjustOn: 'last', needs: 'receipt' },
-  rte: { label: 'RTE', adjustOn: 'all', needs: null },
-  management: { label: 'By Management', adjustOn: 'all', needs: null },
-  scholarship: { label: 'Scholarship', adjustOn: 'all', needs: null },
-  other: { label: 'Other', adjustOn: null, needs: null },
+  bc: { label: "BC (sibling)", adjustOn: "last", needs: "sibling" },
+  otp: { label: "OTP (one time payment)", adjustOn: "last", needs: "receipt" },
+  rte: { label: "RTE", adjustOn: "all", needs: null },
+  management: { label: "By Management", adjustOn: "all", needs: null },
+  scholarship: { label: "Scholarship", adjustOn: "all", needs: null },
+  other: { label: "Other", adjustOn: null, needs: null },
 };
 export const REBATE_CATEGORY_KEYS = Object.keys(REBATE_CATEGORIES);
-export const REBATE_ADJUST_KEYS = ['oldest', 'last', 'all'];
+export const REBATE_ADJUST_KEYS = ["oldest", "last", "all"];

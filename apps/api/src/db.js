@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { tenantScopePlugin } from './plugins/tenantScope.js';
+import mongoose from "mongoose";
+import { tenantScopePlugin } from "./plugins/tenantScope.js";
 let pluginRegistered = false;
 /**
  * Registers the tenant plugin ONCE and BEFORE any model is compiled (plugins added after
@@ -10,14 +10,18 @@ export function registerGlobalPlugins() {
   // tenantId belongs on the top-level document only. Without this, the plugin also added a
   // REQUIRED tenantId to every sub-document (e.g. a TC's snapshot), and saving failed with
   // "snapshot.tenantId: Path `tenantId` is required" (a 500) on a real database.
-  mongoose.set('applyPluginsToChildSchemas', false);
+  mongoose.set("applyPluginsToChildSchemas", false);
   mongoose.plugin(tenantScopePlugin);
   pluginRegistered = true;
 }
 export async function connectDb(uri, dbName) {
   registerGlobalPlugins();
-  mongoose.set('strictQuery', true);
-  return mongoose.connect(uri, { dbName, maxPoolSize: 20, serverSelectionTimeoutMS: 8000 });
+  mongoose.set("strictQuery", true);
+  return mongoose.connect(uri, {
+    dbName,
+    maxPoolSize: 20,
+    serverSelectionTimeoutMS: 8000,
+  });
 }
 export async function disconnectDb() {
   await mongoose.disconnect();
@@ -37,7 +41,9 @@ export async function ensureIndexes(model) {
     await model.init();
   } catch (err) {
     if (!INDEX_CONFLICT.includes(err?.code)) throw err;
-    const name = /existing index:.*?name: "([^"]+)"/.exec(String(err.message))?.[1];
+    const name = /existing index:.*?name: "([^"]+)"/.exec(
+      String(err.message),
+    )?.[1];
     if (!name) throw err;
     await model.collection.dropIndex(name);
     await model.createIndexes();

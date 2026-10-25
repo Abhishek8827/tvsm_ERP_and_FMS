@@ -1,5 +1,5 @@
-import mongoose from 'mongoose';
-import { registerGlobalPlugins } from '../db.js';
+import mongoose from "mongoose";
+import { registerGlobalPlugins } from "../db.js";
 
 registerGlobalPlugins();
 
@@ -14,21 +14,38 @@ const rebateSchema = new mongoose.Schema(
     studentId: { type: mongoose.Schema.Types.ObjectId, required: true },
     fy: { type: String, required: true },
     // 'late_fee' = a late-fee waiver (no lines; `periods` are the months whose late fee is waived)
-    kind: { type: String, enum: ['school', 'transport', 'late_fee'], required: true },
+    kind: {
+      type: String,
+      enum: ["school", "transport", "late_fee"],
+      required: true,
+    },
     periods: [String],
     // What the Admin chose in the Rebates screen: school | transport | admission. `kind` stays
     // the fee MODULE (admission belongs to the school module) so the fee engine is unchanged.
-    rebateType: { type: String, enum: ['school', 'transport', 'admission', null], default: null },
+    rebateType: {
+      type: String,
+      enum: ["school", "transport", "admission", null],
+      default: null,
+    },
     // 'oldest' = lowers the oldest unpaid fee first; 'last' = lowers the LAST month's fee first
     // (BC / OTP); 'all' = lowers every month of the year (RTE / Management / Scholarship).
-    adjustOn: { type: String, enum: ['oldest', 'last', 'all'], default: 'oldest' },
+    adjustOn: {
+      type: String,
+      enum: ["oldest", "last", "all"],
+      default: "oldest",
+    },
     // Why it was given (bc | otp | rte | management | scholarship | other). Older rows have none.
     category: {
       type: String,
-      enum: ['bc', 'otp', 'rte', 'management', 'scholarship', 'other', null],
+      enum: ["bc", "otp", "rte", "management", "scholarship", "other", null],
     },
     // BC: the sibling whose fee the rebate is for. OTP: the receipt of the one-time payment.
-    sibling: { _id: false, admissionNo: String, name: String, classKey: String },
+    sibling: {
+      _id: false,
+      admissionNo: String,
+      name: String,
+      classKey: String,
+    },
     receiptNo: { type: String },
     totalPaise: { type: Number, required: true },
     lines: [
@@ -41,7 +58,7 @@ const rebateSchema = new mongoose.Schema(
       },
     ],
     reason: { type: String, required: true },
-    status: { type: String, enum: ['active', 'reversed'], default: 'active' },
+    status: { type: String, enum: ["active", "reversed"], default: "active" },
     reversedReason: String,
     reversedAt: Date,
     reversedByName: String,
@@ -53,6 +70,7 @@ const rebateSchema = new mongoose.Schema(
 );
 rebateSchema.index({ tenantId: 1, studentId: 1, fy: 1, status: 1 });
 rebateSchema.index({ tenantId: 1, createdAt: -1 });
-rebateSchema.index({ tenantId: 1, 'student.admissionNo': 1, status: 1 });
+rebateSchema.index({ tenantId: 1, "student.admissionNo": 1, status: 1 });
 
-export const Rebate = mongoose.models.Rebate ?? mongoose.model('Rebate', rebateSchema);
+export const Rebate =
+  mongoose.models.Rebate ?? mongoose.model("Rebate", rebateSchema);

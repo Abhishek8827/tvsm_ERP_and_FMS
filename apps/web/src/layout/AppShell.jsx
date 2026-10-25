@@ -1,46 +1,60 @@
-import { useState } from 'react';
-import { Outlet, useLocation } from 'react-router-dom';
-import { navForRole } from '@erp/shared';
-import { useAuth } from '../auth/AuthContext';
-import { Button, NavItem } from '../components/ui';
-import { Clock } from './Clock';
-import { Footer } from './Footer';
+import { useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import { navForRole } from "@erp/shared";
+import { useAuth } from "../auth/AuthContext";
+import { Button, NavItem } from "../components/ui";
+import { Clock } from "./Clock";
+import { Footer } from "./Footer";
 
-const ROLE_LABEL = { admin: 'Admin', principal: 'Principal', cashier: 'Cashier' };
+const ROLE_LABEL = {
+  admin: "Admin",
+  principal: "Principal",
+  cashier: "Cashier",
+};
 // The centre of the top bar: the cashier works at the fee counter.
-const HEADER_LABEL = { admin: 'Admin', principal: 'Principal', cashier: 'Counter 1' };
+const HEADER_LABEL = {
+  admin: "Admin",
+  principal: "Principal",
+  cashier: "Counter 1",
+};
 /** Steps already built. Anything later is shown with a "Soon" tag, never as a dead link. */
 export const CURRENT_STEP = 8;
-const KEY = 'erp.sidebarCollapsed';
+const KEY = "erp.sidebarCollapsed";
 // Pages with wide tables: the sidebar shrinks to icons there and opens when the mouse is on it.
 const WIDE_PAGES = [
-  '/fees-database',
-  '/students',
-  '/rebates',
-  '/transport',
-  '/expenses',
-  '/receipts',
-  '/fees-receipts',
-  '/data-import',
+  "/fees-database",
+  "/students",
+  "/rebates",
+  "/transport",
+  "/expenses",
+  "/receipts",
+  "/fees-receipts",
+  "/data-import",
 ];
 
 // localStorage can throw (private window, blocked data), so the choice is a convenience only.
 const readCollapsed = () => {
   try {
-    return localStorage.getItem(KEY) === '1';
+    return localStorage.getItem(KEY) === "1";
   } catch {
     return false;
   }
 };
 
-function Hamburger({ className = '', ...props }) {
+function Hamburger({ className = "", ...props }) {
   return (
     <button
       type="button"
       className={`flex h-10 w-10 items-center justify-center rounded-lg text-ink hover:bg-app ${className}`}
       {...props}
     >
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <svg
+        width="22"
+        height="22"
+        viewBox="0 0 24 24"
+        fill="none"
+        aria-hidden="true"
+      >
         <path
           d="M4 7h16M4 12h16M4 17h16"
           stroke="currentColor"
@@ -63,12 +77,12 @@ export function AppShell() {
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const { pathname } = useLocation();
   if (!role) return null;
-  const rail = WIDE_PAGES.includes(pathname.replace(/\/$/, ''));
+  const rail = WIDE_PAGES.includes(pathname.replace(/\/$/, ""));
 
   function toggleDesktop() {
     setCollapsed((c) => {
       try {
-        localStorage.setItem(KEY, c ? '0' : '1');
+        localStorage.setItem(KEY, c ? "0" : "1");
       } catch {
         /* the choice just is not remembered */
       }
@@ -186,11 +200,15 @@ export function AppShell() {
             />
             <Hamburger
               className="hidden md:flex"
-              aria-label={collapsed ? 'Show sidebar' : 'Hide sidebar'}
+              aria-label={collapsed ? "Show sidebar" : "Hide sidebar"}
               aria-expanded={!collapsed}
               onClick={toggleDesktop}
             />
-            <img src="/logo.jpg" alt="" className="h-8 w-auto rounded md:hidden" />
+            <img
+              src="/logo.jpg"
+              alt=""
+              className="h-8 w-auto rounded md:hidden"
+            />
             <span className="hidden truncate text-sm font-semibold text-ink lg:block">
               TVSM School ERP
             </span>
@@ -208,7 +226,7 @@ export function AppShell() {
                 aria-hidden="true"
                 className="flex h-8 w-8 items-center justify-center rounded-full bg-app text-sm font-semibold text-ink"
               >
-                {(user.name ?? '?').trim().charAt(0).toUpperCase()}
+                {(user.name ?? "?").trim().charAt(0).toUpperCase()}
               </span>
               <div className="min-w-0 text-xs leading-tight">
                 <p className="truncate font-medium">{user.name}</p>

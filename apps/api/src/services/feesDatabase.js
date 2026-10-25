@@ -4,7 +4,7 @@ import {
   creditsFromReceipts,
   lateSettledFromReceipts,
   moduleDues,
-} from '@erp/shared';
+} from "@erp/shared";
 
 const emptyTotals = () => ({
   students: 0,
@@ -78,16 +78,28 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
     const byHead = {};
     for (const inst of all.instalments)
       for (const it of inst.items) {
-        const h = (byHead[it.head] ??= { billed: 0, paid: 0, rebate: 0, dueNow: 0 });
+        const h = (byHead[it.head] ??= {
+          billed: 0,
+          paid: 0,
+          rebate: 0,
+          dueNow: 0,
+        });
         h.billed += it.amount;
         h.paid += it.paid;
         h.rebate += it.concession;
         if (inst.isDue) h.dueNow += it.due;
       }
-    const sumHeads = (heads, field) => heads.reduce((n, k) => n + (byHead[k]?.[field] ?? 0), 0);
-    const school = moduleDues({ kind: 'school', charges, receipts: mine, asOf, config }).totals;
+    const sumHeads = (heads, field) =>
+      heads.reduce((n, k) => n + (byHead[k]?.[field] ?? 0), 0);
+    const school = moduleDues({
+      kind: "school",
+      charges,
+      receipts: mine,
+      asOf,
+      config,
+    }).totals;
     const transport = moduleDues({
-      kind: 'transport',
+      kind: "transport",
       charges,
       receipts: mine,
       asOf,
@@ -97,12 +109,12 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       id: key,
       admissionNo: s.admissionNo,
       name: s.name,
-      fatherName: s.fatherName ?? '',
-      address: s.address ?? '',
-      contactNo: s.contactNo ?? '',
+      fatherName: s.fatherName ?? "",
+      address: s.address ?? "",
+      contactNo: s.contactNo ?? "",
       classKey: s.classKey,
-      section: s.section ?? '',
-      village: s.village ?? '',
+      section: s.section ?? "",
+      village: s.village ?? "",
       usesTransport: !!s.usesTransport,
       isNewAdmission: !!s.isNewAdmission,
       isRTE: !!s.isRTE,
@@ -117,26 +129,32 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       lateFeePaise: all.totals.lateFee,
       // The columns of the school's own sheet. "Due" = due till the chosen day (never future months).
       cols: {
-        oldSchoolDue: sumHeads(['old_fees'], 'dueNow'),
-        oldBusDue: sumHeads(['transport_old'], 'dueNow'),
-        newSchoolReceivable: sumHeads(['tuition'], 'billed'),
-        newBusReceivable: sumHeads(['transport'], 'billed'),
-        admReceivable: sumHeads(['admission'], 'billed'),
-        formReceivable: sumHeads(['form'], 'billed'),
-        newSchoolPaid: sumHeads(['tuition'], 'paid'),
-        newBusPaid: sumHeads(['transport'], 'paid'),
-        admPaid: sumHeads(['admission'], 'paid'),
-        formPaid: sumHeads(['form'], 'paid'),
-        schoolRebate: sumHeads(['old_fees', 'tuition', 'form'], 'rebate'),
-        transportRebate: sumHeads(['transport_old', 'transport'], 'rebate'),
-        admissionRebate: sumHeads(['admission'], 'rebate'),
-        newSchoolDue: sumHeads(['tuition'], 'dueNow'),
-        newBusDue: sumHeads(['transport'], 'dueNow'),
-        admDue: sumHeads(['admission'], 'dueNow'),
-        formDue: sumHeads(['form'], 'dueNow'),
+        oldSchoolDue: sumHeads(["old_fees"], "dueNow"),
+        oldBusDue: sumHeads(["transport_old"], "dueNow"),
+        newSchoolReceivable: sumHeads(["tuition"], "billed"),
+        newBusReceivable: sumHeads(["transport"], "billed"),
+        admReceivable: sumHeads(["admission"], "billed"),
+        formReceivable: sumHeads(["form"], "billed"),
+        newSchoolPaid: sumHeads(["tuition"], "paid"),
+        newBusPaid: sumHeads(["transport"], "paid"),
+        admPaid: sumHeads(["admission"], "paid"),
+        formPaid: sumHeads(["form"], "paid"),
+        schoolRebate: sumHeads(["old_fees", "tuition", "form"], "rebate"),
+        transportRebate: sumHeads(["transport_old", "transport"], "rebate"),
+        admissionRebate: sumHeads(["admission"], "rebate"),
+        newSchoolDue: sumHeads(["tuition"], "dueNow"),
+        newBusDue: sumHeads(["transport"], "dueNow"),
+        admDue: sumHeads(["admission"], "dueNow"),
+        formDue: sumHeads(["form"], "dueNow"),
       },
-      school: { outstandingPaise: school.outstanding, dueNowPaise: school.dueNow },
-      transport: { outstandingPaise: transport.outstanding, dueNowPaise: transport.dueNow },
+      school: {
+        outstandingPaise: school.outstanding,
+        dueNowPaise: school.dueNow,
+      },
+      transport: {
+        outstandingPaise: transport.outstanding,
+        dueNowPaise: transport.dueNow,
+      },
     };
   });
 }
@@ -148,32 +166,39 @@ const FEE_STATUS = {
   clear: (r) => r.planPosted && r.dueNowPaise === 0,
   // The school's "school fee paid, bus fee still pending" list.
   school_paid_bus_pending: (r) =>
-    r.usesTransport && r.planPosted && r.school.dueNowPaise === 0 && r.transport.dueNowPaise > 0,
+    r.usesTransport &&
+    r.planPosted &&
+    r.school.dueNowPaise === 0 &&
+    r.transport.dueNowPaise > 0,
 };
 
 export function filterRows(rows, { feeStatus, minDuePaise, maxDuePaise }) {
   let out = rows;
-  if (feeStatus && FEE_STATUS[feeStatus]) out = out.filter(FEE_STATUS[feeStatus]);
-  if (minDuePaise !== undefined) out = out.filter((r) => r.dueNowPaise >= minDuePaise);
-  if (maxDuePaise !== undefined) out = out.filter((r) => r.dueNowPaise <= maxDuePaise);
+  if (feeStatus && FEE_STATUS[feeStatus])
+    out = out.filter(FEE_STATUS[feeStatus]);
+  if (minDuePaise !== undefined)
+    out = out.filter((r) => r.dueNowPaise >= minDuePaise);
+  if (maxDuePaise !== undefined)
+    out = out.filter((r) => r.dueNowPaise <= maxDuePaise);
   return out;
 }
 
 const SORTERS = {
-  admissionNo: (a, b) => a.admissionNo.localeCompare(b.admissionNo, 'en', { numeric: true }),
+  admissionNo: (a, b) =>
+    a.admissionNo.localeCompare(b.admissionNo, "en", { numeric: true }),
   name: (a, b) => a.name.localeCompare(b.name),
   class: (a, b) =>
     CLASS_KEYS.indexOf(a.classKey) - CLASS_KEYS.indexOf(b.classKey) ||
     a.section.localeCompare(b.section) ||
-    a.admissionNo.localeCompare(b.admissionNo, 'en', { numeric: true }),
+    a.admissionNo.localeCompare(b.admissionNo, "en", { numeric: true }),
   outstanding: (a, b) => a.outstandingPaise - b.outstandingPaise,
   dueNow: (a, b) => a.dueNowPaise - b.dueNowPaise,
   paid: (a, b) => a.paidPaise - b.paidPaise,
 };
 
-export function sortRows(rows, sort = 'admissionNo', dir = 'asc') {
+export function sortRows(rows, sort = "admissionNo", dir = "asc") {
   const cmp = SORTERS[sort] ?? SORTERS.admissionNo;
-  const way = dir === 'desc' ? -1 : 1;
+  const way = dir === "desc" ? -1 : 1;
   return [...rows].sort((a, b) => way * cmp(a, b) || SORTERS.admissionNo(a, b));
 }
 

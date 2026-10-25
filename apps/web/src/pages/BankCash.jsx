@@ -1,9 +1,14 @@
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
-import { formatINR } from '@erp/shared';
-import { api, newIdempotencyKey } from '../api/client';
-import { useAuth } from '../auth/AuthContext';
-import { accountLabel, errorText, parseRupees } from '../lib/rupees';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { formatINR } from "@erp/shared";
+import { api, newIdempotencyKey } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
+import { accountLabel, errorText, parseRupees } from "../lib/rupees";
 import {
   Badge,
   Button,
@@ -17,10 +22,10 @@ import {
   StatCard,
   Table,
   useToast,
-} from '../components/ui';
+} from "../components/ui";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
-const MODE_LABEL = { upi: 'UPI', qr: 'QR' };
+const MODE_LABEL = { upi: "UPI", qr: "QR" };
 
 /** Read-only balances: cash, petty cash and every bank account. */
 function Balances({ data }) {
@@ -31,8 +36,8 @@ function Balances({ data }) {
           role="alert"
           className="rounded-card border border-warning/40 bg-warning/10 p-4 text-sm text-ink"
         >
-          {money(data.unassignedReceiptsPaise)} of UPI / QR receipts have no bank account chosen, so
-          they are not counted in any bank balance.
+          {money(data.unassignedReceiptsPaise)} of UPI / QR receipts have no
+          bank account chosen, so they are not counted in any bank balance.
         </div>
       )}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -41,11 +46,11 @@ function Balances({ data }) {
         {data.banks.map((b) => (
           <StatCard
             key={b.id}
-            label={`${b.name}${b.last4 ? ` ••••${b.last4}` : ''}${b.active ? '' : ' (not in use)'}`}
+            label={`${b.name}${b.last4 ? ` ••••${b.last4}` : ""}${b.active ? "" : " (not in use)"}`}
             value={money(b.balancePaise)}
             caption={
               b.defaultForModes.length
-                ? `Default for ${b.defaultForModes.map((m) => MODE_LABEL[m]).join(' + ')}`
+                ? `Default for ${b.defaultForModes.map((m) => MODE_LABEL[m]).join(" + ")}`
                 : undefined
             }
           />
@@ -57,9 +62,9 @@ function Balances({ data }) {
 
 /** Cashier: all balances, only after the 4-digit PIN. Nothing is cached; it hides again after 2 minutes. */
 function CashierPinGate() {
-  const [pin, setPin] = useState('');
+  const [pin, setPin] = useState("");
   const [data, setData] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!data) return undefined;
@@ -69,13 +74,15 @@ function CashierPinGate() {
   async function unlock(e) {
     e.preventDefault();
     setBusy(true);
-    setError('');
+    setError("");
     try {
-      setData(await api('/api/money/cashier-view', { method: 'POST', body: { pin } }));
+      setData(
+        await api("/api/money/cashier-view", { method: "POST", body: { pin } }),
+      );
     } catch (err) {
       setError(err.message);
     } finally {
-      setPin('');
+      setPin("");
       setBusy(false);
     }
   }
@@ -83,7 +90,9 @@ function CashierPinGate() {
     return (
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <p className="text-sm text-ink-muted">Hides by itself after 2 minutes.</p>
+          <p className="text-sm text-ink-muted">
+            Hides by itself after 2 minutes.
+          </p>
           <Button variant="secondary" onClick={() => setData(null)}>
             Hide balances
           </Button>
@@ -105,7 +114,7 @@ function CashierPinGate() {
           maxLength={4}
           value={pin}
           error={error}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+          onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
         />
         <Button type="submit" loading={busy} disabled={pin.length !== 4}>
           Show balances
@@ -118,30 +127,36 @@ function CashierPinGate() {
 function BankDialog({ open, onClose }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const [f, setF] = useState({ name: '', last4: '', opening: '', upi: false, qr: false });
+  const [f, setF] = useState({
+    name: "",
+    last4: "",
+    opening: "",
+    upi: false,
+    qr: false,
+  });
   const [errors, setErrors] = useState({});
   const opening = parseRupees(f.opening);
   const save = useMutation({
     mutationFn: () =>
-      api('/api/banks', {
-        method: 'POST',
+      api("/api/banks", {
+        method: "POST",
         body: {
           name: f.name,
           last4: f.last4 || undefined,
           openingPaise: opening.paise || undefined,
-          defaultForModes: [...(f.upi ? ['upi'] : []), ...(f.qr ? ['qr'] : [])],
+          defaultForModes: [...(f.upi ? ["upi"] : []), ...(f.qr ? ["qr"] : [])],
         },
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['money'] });
-      await queryClient.invalidateQueries({ queryKey: ['banks'] });
-      notify('Bank account added.', 'success');
-      setF({ name: '', last4: '', opening: '', upi: false, qr: false });
+      await queryClient.invalidateQueries({ queryKey: ["money"] });
+      await queryClient.invalidateQueries({ queryKey: ["banks"] });
+      notify("Bank account added.", "success");
+      setF({ name: "", last4: "", opening: "", upi: false, qr: false });
       onClose();
     },
     onError: (e) => {
       setErrors(e.fields ?? {});
-      notify(errorText(e), 'error');
+      notify(errorText(e), "error");
     },
   });
   return (
@@ -151,7 +166,11 @@ function BankDialog({ open, onClose }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={save.isPending}
+          >
             Cancel
           </Button>
           <Button
@@ -177,7 +196,9 @@ function BankDialog({ open, onClose }) {
           inputMode="numeric"
           value={f.last4}
           error={errors.last4}
-          onChange={(e) => setF((p) => ({ ...p, last4: e.target.value.replace(/\D/g, '') }))}
+          onChange={(e) =>
+            setF((p) => ({ ...p, last4: e.target.value.replace(/\D/g, "") }))
+          }
         />
         <Input
           label="Opening balance (₹)"
@@ -192,7 +213,7 @@ function BankDialog({ open, onClose }) {
             type="checkbox"
             checked={f.upi}
             onChange={(e) => setF((p) => ({ ...p, upi: e.target.checked }))}
-          />{' '}
+          />{" "}
           Pre-select for UPI receipts
         </label>
         <label className="flex items-center gap-2 text-sm">
@@ -200,7 +221,7 @@ function BankDialog({ open, onClose }) {
             type="checkbox"
             checked={f.qr}
             onChange={(e) => setF((p) => ({ ...p, qr: e.target.checked }))}
-          />{' '}
+          />{" "}
           Pre-select for QR receipts
         </label>
       </div>
@@ -212,32 +233,32 @@ function OpeningDialog({ open, overview, onClose }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const options = [
-    { value: 'cash', label: 'Cash in hand', paise: overview.openingCashPaise },
-    { value: 'petty', label: 'Petty cash', paise: overview.openingPettyPaise },
+    { value: "cash", label: "Cash in hand", paise: overview.openingCashPaise },
+    { value: "petty", label: "Petty cash", paise: overview.openingPettyPaise },
     ...overview.banks.map((b) => ({
       value: `bank:${b.id}`,
       label: b.name,
       paise: b.openingPaise,
     })),
   ];
-  const [account, setAccount] = useState('cash');
+  const [account, setAccount] = useState("cash");
   const current = options.find((o) => o.value === account)?.paise ?? 0;
   const [text, setText] = useState(String(current / 100));
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const amount = parseRupees(text);
   const save = useMutation({
     mutationFn: () =>
-      api('/api/money/opening', {
-        method: 'PUT',
+      api("/api/money/opening", {
+        method: "PUT",
         body: { account, amountPaise: amount.paise, reason: reason.trim() },
       }),
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['money'] });
-      await queryClient.invalidateQueries({ queryKey: ['petty'] });
-      notify('Opening balance changed.', 'success');
+      await queryClient.invalidateQueries({ queryKey: ["money"] });
+      await queryClient.invalidateQueries({ queryKey: ["petty"] });
+      notify("Opening balance changed.", "success");
       onClose();
     },
-    onError: (e) => notify(errorText(e), 'error'),
+    onError: (e) => notify(errorText(e), "error"),
   });
   return (
     <Dialog
@@ -246,12 +267,20 @@ function OpeningDialog({ open, overview, onClose }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={save.isPending}
+          >
             Cancel
           </Button>
           <Button
             loading={save.isPending}
-            disabled={!!amount.error || amount.paise === current || reason.trim().length < 3}
+            disabled={
+              !!amount.error ||
+              amount.paise === current ||
+              reason.trim().length < 3
+            }
             onClick={() => save.mutate()}
           >
             Save
@@ -261,19 +290,26 @@ function OpeningDialog({ open, overview, onClose }) {
     >
       <div className="flex flex-col gap-3">
         <p className="text-ink-muted">
-          The balance moves by the difference. The old figure and your reason stay on record, and
-          the change is audited.
+          The balance moves by the difference. The old figure and your reason
+          stay on record, and the change is audited.
         </p>
         <Select
           label="Account"
           value={account}
           onChange={(e) => {
             setAccount(e.target.value);
-            setText(String((options.find((o) => o.value === e.target.value)?.paise ?? 0) / 100));
+            setText(
+              String(
+                (options.find((o) => o.value === e.target.value)?.paise ?? 0) /
+                  100,
+              ),
+            );
           }}
           options={options}
         />
-        <p className="text-xs text-ink-muted">Current opening: {formatINR(current)}</p>
+        <p className="text-xs text-ink-muted">
+          Current opening: {formatINR(current)}
+        </p>
         <Input
           label="New opening balance (₹)"
           inputMode="decimal"
@@ -297,33 +333,41 @@ function TransferDialog({ open, onClose, overview }) {
   const key = useRef(newIdempotencyKey());
   const banks = (overview?.banks ?? []).filter((b) => b.active);
   const accounts = [
-    { value: 'cash', label: 'Cash in hand' },
-    { value: 'petty', label: 'Petty cash' },
+    { value: "cash", label: "Cash in hand" },
+    { value: "petty", label: "Petty cash" },
     ...banks.map((b) => ({ value: `bank:${b.id}`, label: b.name })),
   ];
-  const [f, setF] = useState({ from: 'cash', to: '', amount: '', note: '' });
+  const [f, setF] = useState({ from: "cash", to: "", amount: "", note: "" });
   const [errors, setErrors] = useState({});
   const amount = parseRupees(f.amount);
   const save = useMutation({
     mutationFn: () =>
-      api('/api/transfers', {
-        method: 'POST',
+      api("/api/transfers", {
+        method: "POST",
         idempotencyKey: key.current,
-        body: { from: f.from, to: f.to, amountPaise: amount.paise, note: f.note || undefined },
+        body: {
+          from: f.from,
+          to: f.to,
+          amountPaise: amount.paise,
+          note: f.note || undefined,
+        },
       }),
     onSuccess: async () => {
       key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ['money'] });
-      await queryClient.invalidateQueries({ queryKey: ['petty'] });
-      notify('Transfer saved. It is not counted as income or expense.', 'success');
-      setF({ from: 'cash', to: '', amount: '', note: '' });
+      await queryClient.invalidateQueries({ queryKey: ["money"] });
+      await queryClient.invalidateQueries({ queryKey: ["petty"] });
+      notify(
+        "Transfer saved. It is not counted as income or expense.",
+        "success",
+      );
+      setF({ from: "cash", to: "", amount: "", note: "" });
       setErrors({});
       onClose();
     },
     onError: (e) => {
       setErrors(e.fields ?? {});
       if (e.status >= 400 && e.status < 500) key.current = newIdempotencyKey();
-      notify(errorText(e), 'error');
+      notify(errorText(e), "error");
     },
   });
   return (
@@ -333,7 +377,11 @@ function TransferDialog({ open, onClose, overview }) {
       onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
+          <Button
+            variant="secondary"
+            onClick={onClose}
+            disabled={save.isPending}
+          >
             Cancel
           </Button>
           <Button
@@ -359,7 +407,10 @@ function TransferDialog({ open, onClose, overview }) {
           value={f.to}
           error={errors.to}
           onChange={(e) => setF((p) => ({ ...p, to: e.target.value }))}
-          options={[{ value: '', label: 'Choose' }, ...accounts.filter((a) => a.value !== f.from)]}
+          options={[
+            { value: "", label: "Choose" },
+            ...accounts.filter((a) => a.value !== f.from),
+          ]}
         />
         <Input
           label="Amount (₹)"
@@ -380,16 +431,22 @@ function TransferDialog({ open, onClose, overview }) {
 
 function PinCard() {
   const { notify } = useToast();
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState('');
-  const status = useQuery({ queryKey: ['cashier-pin'], queryFn: () => api('/api/cashier-pin') });
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+  const status = useQuery({
+    queryKey: ["cashier-pin"],
+    queryFn: () => api("/api/cashier-pin"),
+  });
   const set = useMutation({
-    mutationFn: () => api('/api/cashier-pin', { method: 'PUT', body: { pin } }),
+    mutationFn: () => api("/api/cashier-pin", { method: "PUT", body: { pin } }),
     onSuccess: async () => {
-      setPin('');
-      setError('');
+      setPin("");
+      setError("");
       await status.refetch();
-      notify('Cashier PIN saved. If it was locked, it is open again.', 'success');
+      notify(
+        "Cashier PIN saved. If it was locked, it is open again.",
+        "success",
+      );
     },
     onError: (e) => setError(e.fields?.pin ?? e.message),
   });
@@ -402,7 +459,10 @@ function PinCard() {
         {status.isPending ? (
           <Spinner />
         ) : status.isError ? (
-          <ErrorState message={status.error.message} onRetry={() => void status.refetch()} />
+          <ErrorState
+            message={status.error.message}
+            onRetry={() => void status.refetch()}
+          />
         ) : (
           <p className="text-sm">
             {status.data.isSet ? (
@@ -424,17 +484,21 @@ function PinCard() {
           }}
         >
           <Input
-            label={status.data?.isSet ? 'New PIN' : 'PIN'}
+            label={status.data?.isSet ? "New PIN" : "PIN"}
             type="password"
             inputMode="numeric"
             autoComplete="new-password"
             maxLength={4}
             value={pin}
             error={error}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
           />
-          <Button type="submit" loading={set.isPending} disabled={pin.length !== 4}>
-            {status.data?.isSet ? 'Reset PIN' : 'Set PIN'}
+          <Button
+            type="submit"
+            loading={set.isPending}
+            disabled={pin.length !== 4}
+          >
+            {status.data?.isSet ? "Reset PIN" : "Set PIN"}
           </Button>
         </form>
       </div>
@@ -446,47 +510,63 @@ function BankSettings({ overview }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const toggle = useMutation({
-    mutationFn: (b) => api(`/api/banks/${b.id}`, { method: 'PATCH', body: { active: !b.active } }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['money'] }),
-    onError: (e) => notify(errorText(e), 'error'),
+    mutationFn: (b) =>
+      api(`/api/banks/${b.id}`, {
+        method: "PATCH",
+        body: { active: !b.active },
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["money"] }),
+    onError: (e) => notify(errorText(e), "error"),
   });
   const modes = useMutation({
     mutationFn: ({ bank, mode }) =>
       api(`/api/banks/${bank.id}`, {
-        method: 'PATCH',
+        method: "PATCH",
         body: {
           defaultForModes: bank.defaultForModes.includes(mode)
             ? bank.defaultForModes.filter((m) => m !== mode)
             : [...bank.defaultForModes, mode],
         },
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['money'] }),
-    onError: (e) => notify(errorText(e), 'error'),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["money"] }),
+    onError: (e) => notify(errorText(e), "error"),
   });
   const columns = [
-    { key: 'name', header: 'Bank', render: (b) => `${b.name}${b.last4 ? ` ••••${b.last4}` : ''}` },
-    { key: 'bal', header: 'Balance', align: 'right', render: (b) => money(b.balancePaise) },
     {
-      key: 'def',
-      header: 'Default for receipts',
+      key: "name",
+      header: "Bank",
+      render: (b) => `${b.name}${b.last4 ? ` ••••${b.last4}` : ""}`,
+    },
+    {
+      key: "bal",
+      header: "Balance",
+      align: "right",
+      render: (b) => money(b.balancePaise),
+    },
+    {
+      key: "def",
+      header: "Default for receipts",
       render: (b) =>
-        ['upi', 'qr'].map((m) => (
-          <label key={m} className="mr-3 inline-flex items-center gap-1 text-sm">
+        ["upi", "qr"].map((m) => (
+          <label
+            key={m}
+            className="mr-3 inline-flex items-center gap-1 text-sm"
+          >
             <input
               type="checkbox"
               checked={b.defaultForModes.includes(m)}
               onChange={() => modes.mutate({ bank: b, mode: m })}
-            />{' '}
+            />{" "}
             {MODE_LABEL[m]}
           </label>
         )),
     },
     {
-      key: 'st',
-      header: '',
+      key: "st",
+      header: "",
       render: (b) => (
         <Button variant="secondary" onClick={() => toggle.mutate(b)}>
-          {b.active ? 'Stop using' : 'Use again'}
+          {b.active ? "Stop using" : "Use again"}
         </Button>
       ),
     },
@@ -506,17 +586,22 @@ function TransfersTable({ banks }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const q = useQuery({
-    queryKey: ['money', 'transfers', page, pageSize],
+    queryKey: ["money", "transfers", page, pageSize],
     queryFn: () => api(`/api/transfers?page=${page}&pageSize=${pageSize}`),
     placeholderData: keepPreviousData,
   });
   const columns = [
-    { key: 'date', header: 'Date', render: (t) => t.date },
-    { key: 'from', header: 'From', render: (t) => accountLabel(t.from, banks) },
-    { key: 'to', header: 'To', render: (t) => accountLabel(t.to, banks) },
-    { key: 'amt', header: 'Amount', align: 'right', render: (t) => money(t.amountPaise) },
-    { key: 'note', header: 'Note', render: (t) => t.note || '-' },
-    { key: 'by', header: 'By', render: (t) => t.byName ?? '-' },
+    { key: "date", header: "Date", render: (t) => t.date },
+    { key: "from", header: "From", render: (t) => accountLabel(t.from, banks) },
+    { key: "to", header: "To", render: (t) => accountLabel(t.to, banks) },
+    {
+      key: "amt",
+      header: "Amount",
+      align: "right",
+      render: (t) => money(t.amountPaise),
+    },
+    { key: "note", header: "Note", render: (t) => t.note || "-" },
+    { key: "by", header: "By", render: (t) => t.byName ?? "-" },
   ];
   return (
     <div className="flex flex-col gap-3">
@@ -549,22 +634,26 @@ function TransfersTable({ banks }) {
 function StaffView({ isAdmin }) {
   const [dialog, setDialog] = useState(null);
   const q = useQuery({
-    queryKey: ['money', 'overview'],
-    queryFn: () => api('/api/money/overview'),
-    refetchInterval: (query) => (query.state.status === 'error' ? false : 60_000),
+    queryKey: ["money", "overview"],
+    queryFn: () => api("/api/money/overview"),
+    refetchInterval: (query) =>
+      query.state.status === "error" ? false : 60_000,
   });
   if (q.isPending) return <Spinner label="Loading balances" />;
-  if (q.isError) return <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />;
+  if (q.isError)
+    return (
+      <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />
+    );
   return (
     <div className="flex flex-col gap-4">
       <Balances data={q.data} />
       {isAdmin && (
         <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setDialog('transfer')}>Transfer money</Button>
-          <Button variant="secondary" onClick={() => setDialog('bank')}>
+          <Button onClick={() => setDialog("transfer")}>Transfer money</Button>
+          <Button variant="secondary" onClick={() => setDialog("bank")}>
             Add bank account
           </Button>
-          <Button variant="secondary" onClick={() => setDialog('opening')}>
+          <Button variant="secondary" onClick={() => setDialog("opening")}>
             Edit opening balances
           </Button>
         </div>
@@ -581,12 +670,18 @@ function StaffView({ isAdmin }) {
         <TransfersTable banks={q.data.banks} />
       </Card>
       {isAdmin && <PinCard />}
-      {isAdmin && dialog === 'bank' && <BankDialog open onClose={() => setDialog(null)} />}
-      {isAdmin && dialog === 'opening' && (
+      {isAdmin && dialog === "bank" && (
+        <BankDialog open onClose={() => setDialog(null)} />
+      )}
+      {isAdmin && dialog === "opening" && (
         <OpeningDialog open overview={q.data} onClose={() => setDialog(null)} />
       )}
-      {isAdmin && dialog === 'transfer' && (
-        <TransferDialog open overview={q.data} onClose={() => setDialog(null)} />
+      {isAdmin && dialog === "transfer" && (
+        <TransferDialog
+          open
+          overview={q.data}
+          onClose={() => setDialog(null)}
+        />
       )}
     </div>
   );
@@ -598,9 +693,15 @@ export function BankCash() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Bank & Cash</h1>
-        <p className="text-sm text-ink-muted">Cash in hand, petty cash and every bank account.</p>
+        <p className="text-sm text-ink-muted">
+          Cash in hand, petty cash and every bank account.
+        </p>
       </div>
-      {role === 'cashier' ? <CashierPinGate /> : <StaffView isAdmin={role === 'admin'} />}
+      {role === "cashier" ? (
+        <CashierPinGate />
+      ) : (
+        <StaffView isAdmin={role === "admin"} />
+      )}
     </div>
   );
 }

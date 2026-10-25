@@ -1,16 +1,18 @@
-import { Router } from 'express';
-import { z } from 'zod';
-import { requireRole } from '../middleware/requireRole.js';
-import { recordAudit } from '../services/audit.js';
-import { AppError } from '../utils/errors.js';
+import { Router } from "express";
+import { z } from "zod";
+import { requireRole } from "../middleware/requireRole.js";
+import { recordAudit } from "../services/audit.js";
+import { AppError } from "../utils/errors.js";
 
-const objectId = z.string().regex(/^[a-f\d]{24}$/i, 'Bad id');
+const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Bad id");
 const listQuery = z.object({
-  status: z.enum(['requested', 'cancelled', 'rejected']).optional(),
+  status: z.enum(["requested", "cancelled", "rejected"]).optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(25),
 });
-const rejectBody = z.object({ reason: z.string().trim().min(3, 'Write the reason').max(300) });
+const rejectBody = z.object({
+  reason: z.string().trim().min(3, "Write the reason").max(300),
+});
 
 const shape = (c) => ({
   id: String(c._id),
@@ -50,20 +52,29 @@ export function cancellationsRouter(deps, authenticate) {
   };
 
   router.get(
-    '/receipt-cancellations',
+    "/receipt-cancellations",
     authenticate,
-    requireRole('admin', 'principal'),
+    requireRole("admin", "principal"),
     wrap(async (req, res) => {
       const f = listQuery.parse(req.query);
-      const out = await deps.receiptStore.listCancellations({ tenantId: req.user.tenantId, ...f });
-      res.json({ page: f.page, pageSize: f.pageSize, total: out.total, rows: out.rows.map(shape) });
+      const out = await deps.receiptStore.listCancellations({
+        tenantId: req.user.tenantId,
+        ...f,
+      });
+      res.json({
+        page: f.page,
+        pageSize: f.pageSize,
+        total: out.total,
+        rows: out.rows.map(shape),
+      });
     }),
   );
 
   const decide = (decision) =>
     wrap(async (req, res) => {
       const id = objectId.parse(req.params.id);
-      const note = decision === 'reject' ? rejectBody.parse(req.body).reason : undefined;
+      const note =
+        decision === "reject" ? rejectBody.parse(req.body).reason : undefined;
       const saved = await deps.receiptStore.decideCancellation({
         tenantId: req.user.tenantId,
         id,
@@ -75,8 +86,8 @@ export function cancellationsRouter(deps, authenticate) {
             deps,
             req,
             {
-              action: decision === 'approve' ? 'cancel' : 'update',
-              entity: 'receipt_cancellation',
+              action: decision === "approve" ? "cancel" : "update",
+              entity: "receipt_cancellation",
               entityId: String(c._id),
               reason: note,
               newValue: { receipt: c.receiptNumber, status: c.status },
@@ -85,21 +96,25 @@ export function cancellationsRouter(deps, authenticate) {
           ),
       });
       if (!saved)
-        throw new AppError('NOT_FOUND', 404, 'This request is not waiting for a decision.');
+        throw new AppError(
+          "NOT_FOUND",
+          404,
+          "This request is not waiting for a decision.",
+        );
       res.json(shape(saved));
     });
 
   router.post(
-    '/receipt-cancellations/:id/approve',
+    "/receipt-cancellations/:id/approve",
     authenticate,
-    requireRole('principal'),
-    decide('approve'),
+    requireRole("principal"),
+    decide("approve"),
   );
   router.post(
-    '/receipt-cancellations/:id/reject',
+    "/receipt-cancellations/:id/reject",
     authenticate,
-    requireRole('principal'),
-    decide('reject'),
+    requireRole("principal"),
+    decide("reject"),
   );
   return router;
 }

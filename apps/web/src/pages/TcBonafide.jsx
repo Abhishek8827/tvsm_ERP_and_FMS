@@ -27,6 +27,7 @@ import {
 } from "../components/ui";
 import { CERT_CSS, bonafideHtml, tcHtml } from "../lib/certificateHtml";
 import { printHtml } from "../lib/printHtml";
+import { WhatsappStatus } from "../components/WhatsappStatus";
 import { errorText, todayInput } from "../lib/rupees";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
@@ -791,6 +792,13 @@ function TcIssued({ isAdmin, initialQ = "" }) {
         extra={
           view?.status === "cancelled" ? (
             <Badge tone="danger">Cancelled: {view.cancelReason}</Badge>
+          ) : view?.status === "issued" ? (
+            <WhatsappStatus
+              kind="tc"
+              refId={view.id}
+              canRetry={isAdmin}
+              waitingText="WhatsApp: the parent is told when the original is printed."
+            />
           ) : null
         }
       />

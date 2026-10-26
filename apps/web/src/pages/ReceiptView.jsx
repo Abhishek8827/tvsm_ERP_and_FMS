@@ -6,6 +6,7 @@ import { classLabel, formatINR, rupeesInWords } from "@erp/shared";
 import { LETTERHEAD_CSS, letterheadLines } from "../lib/letterhead";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { WhatsappStatus } from "../components/WhatsappStatus";
 import { printHtml } from "../lib/printHtml";
 import {
   Badge,
@@ -382,6 +383,7 @@ export function ReceiptView() {
           </p>
         </div>
       )}
+      <WhatsappStatus kind="receipt" refId={r.id} canRetry={canReprint} />
       {r.status === "cancel_requested" && (
         <div className="no-print flex items-center gap-2">
           <Badge tone="warning">Cancellation requested</Badge>

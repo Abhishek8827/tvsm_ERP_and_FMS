@@ -488,6 +488,20 @@ async function cancelledReceiptIds(tenantId, extra = {}, session = null) {
   return rows.map((r) => r.receiptId);
 }
 
+/** The latest REJECTED cancellation request per receipt (what the Cashier must be able to see). */
+async function latestRejections(tenantId, receiptIds) {
+  if (receiptIds.length === 0) return new Map();
+  const rows = await ReceiptCancellation.find({
+    tenantId,
+    receiptId: { $in: receiptIds },
+    status: "rejected",
+  })
+    .sort({ decidedAt: 1 })
+    .lean();
+  // Sorted oldest first, so the last one written into the map is the newest.
+  return new Map(rows.map((r) => [String(r.receiptId), r]));
+}
+
 const isDuplicateKey = (err) => err?.code === 11000;
 const isRetryable = (err) =>
   isDuplicateKey(err) || err?.hasErrorLabel?.("TransientTransactionError");
@@ -612,7 +626,11 @@ export function makeReceiptStore() {
         receiptId: id,
         status: { $in: ["requested", "cancelled"] },
       }).lean();
-      return { ...receipt, cancellation: c ?? null };
+      const rejection = c
+        ? null
+        : ((await latestRejections(tenantId, [receipt._id])).get(String(id)) ??
+          null);
+      return { ...receipt, cancellation: c ?? null, rejection };
     },
     // Only receipts that still count (cancelled ones are left out), used for dues and ledgers.
     async listForStudent(tenantId, studentId, fy) {
@@ -687,9 +705,19 @@ export function makeReceiptStore() {
       ]);
       const cancelledSet = new Set(cancelled.map(String));
       const pendingSet = new Set(pendingRows.map((r) => String(r.receiptId)));
+      const rejections = await latestRejections(
+        tenantId,
+        rows
+          .map((r) => r._id)
+          .filter(
+            (id) =>
+              !cancelledSet.has(String(id)) && !pendingSet.has(String(id)),
+          ),
+      );
       return {
         rows: rows.map((r) => ({
           ...r,
+          rejection: rejections.get(String(r._id)) ?? null,
           status: cancelledSet.has(String(r._id))
             ? "cancelled"
             : pendingSet.has(String(r._id))

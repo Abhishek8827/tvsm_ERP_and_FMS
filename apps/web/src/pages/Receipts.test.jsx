@@ -32,6 +32,7 @@ const list = {
       mode: "upi",
       totalPaise: 150000,
       status: "valid",
+      rejection: { reason: "Amount is correct" },
     },
     {
       id: "r2",
@@ -75,6 +76,10 @@ describe("Receipts list", () => {
     const row = screen.getByText("Diya Verma").closest("tr");
     expect(within(row).getByText("Cancelled")).toBeInTheDocument();
     expect(screen.getByText("1 receipts")).toBeInTheDocument();
+    // A request the Principal refused shows why, right in the list.
+    expect(
+      screen.getByText("Cancel rejected: Amount is correct"),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: /export/i }),
     ).not.toBeInTheDocument();

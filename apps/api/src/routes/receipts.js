@@ -107,6 +107,17 @@ const shapeReceipt = (r, extra = {}) => ({
         decidedByName: r.cancellation.decidedByName ?? null,
       }
     : null,
+  // A request the Principal refused: the Cashier sees who, when and why. Only while the receipt
+  // has no open or approved request (a new request replaces it).
+  rejection:
+    r.rejection && !r.cancellation
+      ? {
+          reason: r.rejection.decisionNote ?? null,
+          requestedReason: r.rejection.reason,
+          decidedByName: r.rejection.decidedByName ?? null,
+          decidedAt: r.rejection.decidedAt ?? null,
+        }
+      : null,
   ...extra,
 });
 

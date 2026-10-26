@@ -186,4 +186,45 @@ describe.skipIf(!haveDb)("receipt store on a real database", () => {
       true,
     );
   });
+
+  it("a refused request is returned to the Cashier with the Principal note, and a new request replaces it", async () => {
+    const sid = new mongoose.Types.ObjectId();
+    const { receipt } = await issue(sid, "school", "k-reject");
+    const user = { id: "u1", name: "Cashier" };
+    const asked = await store.requestCancel({
+      tenantId: T,
+      receipt,
+      reason: "Wrong student",
+      user,
+    });
+    const refused = await store.decideCancellation({
+      tenantId: T,
+      id: asked._id,
+      decision: "reject",
+      note: "Amount is correct",
+      user: { id: "p1", name: "Principal" },
+    });
+    expect(refused.status).toBe("rejected");
+    const one = await store.findById(T, receipt._id);
+    expect(one.cancellation).toBeNull();
+    expect(one.rejection).toMatchObject({
+      decisionNote: "Amount is correct",
+      decidedByName: "Principal",
+    });
+    const listed = await store.list({
+      tenantId: T,
+      status: "valid",
+      page: 1,
+      pageSize: 100,
+    });
+    expect(
+      listed.rows.find((r) => String(r._id) === String(receipt._id)).rejection
+        .decisionNote,
+    ).toBe("Amount is correct");
+    // Asking again is allowed and hides the old refusal.
+    await store.requestCancel({ tenantId: T, receipt, reason: "Again", user });
+    const again = await store.findById(T, receipt._id);
+    expect(again.cancellation.status).toBe("requested");
+    expect(again.rejection).toBeNull();
+  });
 });

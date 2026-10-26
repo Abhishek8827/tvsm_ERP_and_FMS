@@ -118,13 +118,21 @@ function build({ withOld = false, dayClosed = false } = {}) {
       },
       findById: async (_t, id) => {
         const r = receipts.find((x) => x._id === id);
-        return r
-          ? {
-              ...r,
-              cancellation:
-                cancellations.find((c) => c.receiptId === id) ?? null,
-            }
-          : null;
+        if (!r) return null;
+        // Same as the real store: an open / approved request shows as `cancellation`; a refused
+        // one shows as `rejection` only while there is no open or approved request.
+        const live = cancellations.find(
+          (c) =>
+            c.receiptId === id && ["requested", "cancelled"].includes(c.status),
+        );
+        const rejected = cancellations.filter(
+          (c) => c.receiptId === id && c.status === "rejected",
+        );
+        return {
+          ...r,
+          cancellation: live ?? null,
+          rejection: live ? null : (rejected.at(-1) ?? null),
+        };
       },
       list: async ({ kind, page, pageSize }) => {
         const rows = receipts
@@ -189,7 +197,12 @@ function build({ withOld = false, dayClosed = false } = {}) {
         receipts.filter((r) => String(r.studentId) === id),
     },
   };
-  return { app: createApp(env, createLogger("silent"), auth), audit, receipts };
+  return {
+    app: createApp(env, createLogger("silent"), auth),
+    audit,
+    receipts,
+    cancellations,
+  };
 }
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 let n = 0;
@@ -530,6 +543,34 @@ describe("collecting fees", () => {
           e.reason === "Wrong student",
       ),
     ).toBe(true);
+  });
+
+  it("after the Principal rejects a request, the Cashier sees who refused it and why", async () => {
+    const { app, cancellations } = build();
+    const id = (await collect(app, { input: { newPaise: rs(1000) } })).body.id;
+    cancellations.push({
+      _id: 'q9', receiptId: id, status: 'rejected', reason: 'Wrong student',
+      decisionNote: 'Student is correct, amount is right', decidedByName: 'Principal', decidedAt: new Date(),
+    }); // prettier-ignore
+    const r = await request(app).get(`/api/receipts/${id}`).set(as("cashier"));
+    expect(r.body.status).toBe("valid");
+    expect(r.body.rejection).toMatchObject({
+      reason: "Student is correct, amount is right",
+      requestedReason: "Wrong student",
+      decidedByName: "Principal",
+    });
+    // A new request replaces the old refusal.
+    cancellations.push({
+      _id: "q10",
+      receiptId: id,
+      status: "requested",
+      reason: "Again",
+    });
+    const again = await request(app)
+      .get(`/api/receipts/${id}`)
+      .set(as("cashier"));
+    expect(again.body.rejection).toBeNull();
+    expect(again.body.status).toBe("cancel_requested");
   });
 
   it("only the Admin can export; it is audited", async () => {

@@ -73,7 +73,15 @@ describe("Receipt view", () => {
     expect(screen.getByText("STUDENT COPY")).toBeInTheDocument();
     expect(screen.getByText("OFFICE COPY")).toBeInTheDocument();
     expect(screen.getAllByText("S-FY2026-27/2054")).toHaveLength(2);
-    expect(screen.getAllByText(/Affiliation No. 572078/)).toHaveLength(2);
+    // The school's own letterhead (both copies): name, registration, DISE code, e-mail, mobiles.
+    expect(
+      screen.getAllByText("THAKUR VIRENDRA SINGH MEMORIAL SCHOOL"),
+    ).toHaveLength(2);
+    expect(screen.getAllByText("Reg. N0. 03/04/02/22332/20")).toHaveLength(2);
+    expect(screen.getAllByText("DISE CODE - 23480513302")).toHaveLength(2);
+    expect(screen.getAllByText("M.No. - 9575926900/ 9644995511")).toHaveLength(
+      2,
+    );
     expect(screen.getAllByText("Month: June")).toHaveLength(2);
     expect(screen.queryByText("DUPLICATE")).toBeNull();
   });
@@ -157,6 +165,32 @@ describe("Receipt view", () => {
         }),
       ),
     );
+  });
+
+  it("a refused cancellation request shows the Principal and the reason to the Cashier", async () => {
+    role = "cashier";
+    api.mockResolvedValue({
+      ...receipt,
+      rejection: {
+        reason: "Amount is correct",
+        requestedReason: "Wrong amount",
+        decidedByName: "Principal",
+      },
+    });
+    show();
+    expect(
+      await screen.findByText("Cancellation rejected"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Principal: Amount is correct"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Your request was: Wrong amount"),
+    ).toBeInTheDocument();
+    // The Cashier can ask again.
+    expect(
+      screen.getByRole("button", { name: "Request cancellation" }),
+    ).toBeInTheDocument();
   });
 
   it("a cancelled receipt shows the CANCELLED stamp and no cancel button", async () => {

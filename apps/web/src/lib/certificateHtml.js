@@ -1,4 +1,5 @@
 import { SCHOOL, classLabel, dMonY, dmy } from "@erp/shared";
+import { LETTERHEAD_CSS, letterheadHtml } from "./letterhead.js";
 
 const esc = (s) =>
   String(s ?? "").replace(
@@ -11,12 +12,8 @@ export const CERT_CSS = `
 @page { size: A4; margin: 12mm; }
 * { box-sizing: border-box; }
 body { font: 12px/1.35 Arial, sans-serif; color: #111; margin: 0; }
+${LETTERHEAD_CSS}
 .page { position: relative; padding: 4mm 2mm; }
-.head { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid #111; padding-bottom: 8px; }
-.head img { width: 64px; height: 64px; object-fit: contain; }
-.head .t { flex: 1; text-align: center; }
-.head strong { font-size: 18px; letter-spacing: .3px; }
-.head div { font-size: 12px; }
 .title { text-align: center; font-size: 20px; font-weight: bold; letter-spacing: 2px; margin: 10px 0 2px; }
 .note { text-align: center; font-size: 11px; color: #444; margin-bottom: 10px; }
 .mark { text-align: center; margin: 4px 0 8px; }
@@ -35,7 +32,8 @@ tr { break-inside: avoid; }
 `;
 
 function letterhead() {
-  return `<div class="head"><img src="/logo.jpg" alt=""><div class="t"><strong>${esc(SCHOOL.name)}</strong><div>${esc(SCHOOL.addressLine)}</div><div>Affiliation No. ${esc(SCHOOL.affiliationNo)}${SCHOOL.schoolCode ? ` · School Code ${esc(SCHOOL.schoolCode)}` : ""}</div></div></div>`;
+  // The affiliation number is part of a TC / Bonafide, so it sits just under the letterhead.
+  return `${letterheadHtml()}<div class="note" style="margin:0 0 6px">Affiliation No. ${esc(SCHOOL.affiliationNo)}</div>`;
 }
 
 // DUPLICATE COPY n for a reprint; PENDING APPROVAL for a request the Principal has not approved yet.

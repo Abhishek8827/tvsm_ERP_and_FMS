@@ -1,3 +1,5 @@
+import { LETTERHEAD_CSS, letterheadHtml } from "./letterhead.js";
+
 const esc = (s) =>
   String(s ?? "").replace(
     /[&<>"]/g,
@@ -5,6 +7,7 @@ const esc = (s) =>
   );
 
 export const REPORT_CSS = `
+${LETTERHEAD_CSS}
 @page { size: A4; margin: 12mm; }
 * { box-sizing: border-box; }
 body { font: 12px/1.4 Arial, sans-serif; color: #111; margin: 0; }
@@ -31,5 +34,5 @@ export function reportHtml({ title, subtitle, sections, notes = [] }) {
       : `<tr><td colspan="${s.head.length}">Nothing to show</td></tr>`;
     return `${s.title ? `<h2>${esc(s.title)}</h2>` : ""}<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody>${s.foot ? `<tfoot>${tr(s.foot)}</tfoot>` : ""}</table>`;
   };
-  return `<h1>${esc(title)}</h1><div class="sub">${esc(subtitle)}</div>${sections.map(part).join("")}${notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}`;
+  return `${letterheadHtml()}<h1>${esc(title)}</h1><div class="sub">${esc(subtitle)}</div>${sections.map(part).join("")}${notes.map((n) => `<p class="note">${esc(n)}</p>`).join("")}`;
 }

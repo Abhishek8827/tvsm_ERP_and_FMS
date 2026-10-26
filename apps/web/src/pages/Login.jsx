@@ -1,56 +1,44 @@
-import { useState } from "react";
-import Alert from "@mui/material/Alert";
-import Box from "@mui/material/Box";
-import Button from "@mui/material/Button";
-import CircularProgress from "@mui/material/CircularProgress";
-import InputAdornment from "@mui/material/InputAdornment";
-import IconButton from "@mui/material/IconButton";
-import Paper from "@mui/material/Paper";
-import Stack from "@mui/material/Stack";
-import TextField from "@mui/material/TextField";
-import Typography from "@mui/material/Typography";
-import { createTheme, ThemeProvider } from "@mui/material/styles";
+import { useId, useState } from "react";
 import { SOFTWARE } from "@erp/shared";
 import { useAuth } from "../auth/AuthContext";
 
-const loginTheme = createTheme({
-  palette: {
-    primary: { main: "#2457C5", dark: "#193F98", light: "#EAF0FF" },
-    background: { default: "#EAF0FF", paper: "#FFFFFF" },
-    text: { primary: "#172554", secondary: "#5B6785" },
-  },
-  shape: { borderRadius: 14 },
-  typography: {
-    fontFamily: "Roboto, Arial, sans-serif",
-    button: { fontWeight: 700, textTransform: "none" },
-  },
-});
+const BG =
+  "radial-gradient(ellipse at 8% 18%, rgba(59,130,246,0.24), transparent 32%), radial-gradient(ellipse at 88% 78%, rgba(139,92,246,0.20), transparent 34%), radial-gradient(ellipse at 72% 8%, rgba(34,211,238,0.15), transparent 28%), linear-gradient(130deg, #E5EEFF 0%, #F4F1FF 52%, #E6F7FF 100%)";
 
-const fieldSx = {
-  "& .MuiInputBase-input:focus-visible": {
-    outline: "none",
-    boxShadow: "none",
-  },
-  "& .MuiOutlinedInput-root": {
-    borderRadius: 2,
-    backgroundColor: "#FFFFFF",
-    transition: "border-color 160ms ease, box-shadow 160ms ease",
-    "& .MuiOutlinedInput-notchedOutline": {
-      borderColor: "#C7D2E2",
-      borderWidth: 1,
-    },
-    "&:hover .MuiOutlinedInput-notchedOutline": { borderColor: "#8EA5C5" },
-    "&.Mui-focused": { boxShadow: "0 0 0 3px rgba(36,87,197,0.10)" },
-    "&.Mui-focused .MuiOutlinedInput-notchedOutline": {
-      borderColor: "#2457C5",
-      borderWidth: 1.5,
-    },
-    "&.Mui-error .MuiOutlinedInput-notchedOutline": { borderColor: "#D32F2F" },
-  },
-  "& .MuiInputLabel-root.Mui-focused": { color: "#2457C5" },
-  "& .MuiFormHelperText-root": { minHeight: "1.15em", mx: 0.25 },
-};
+/** One labelled field with its own error line (the line keeps its height, so the card never jumps). */
+function Field({ label, error, trailing, ...input }) {
+  const id = useId();
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="mb-1 block text-sm font-medium text-[#172554]"
+      >
+        {label}
+      </label>
+      <div className="relative">
+        <input
+          id={id}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${id}-err` : undefined}
+          className={`min-h-12 w-full rounded-xl border bg-white px-3.5 text-base text-ink outline-none transition-shadow focus:border-[#2457C5] focus:ring-4 focus:ring-[#2457C5]/10 ${
+            error ? "border-danger" : "border-[#C7D2E2] hover:border-[#8EA5C5]"
+          } ${trailing ? "pr-16" : ""}`}
+          {...input}
+        />
+        {trailing}
+      </div>
+      <p id={`${id}-err`} className="mt-1 min-h-5 text-sm text-danger">
+        {error || ""}
+      </p>
+    </div>
+  );
+}
 
+/**
+ * Login screen: school name, crest and a sign-in card. Field errors and the server / Firebase
+ * message are shown in plain words. Built with Tailwind like every other screen.
+ */
 export function Login() {
   const { signIn, notice } = useAuth();
   const [email, setEmail] = useState("");
@@ -69,313 +57,145 @@ export function Login() {
     if (!password) next.password = "Enter your password.";
     setErrors(next);
     setFormError("");
-    if (Object.keys(next).length) return;
+    if (Object.keys(next).length > 0) return;
     setBusy(true);
     try {
       await signIn(email.trim(), password);
-    } catch (error) {
-      setFormError(error.message);
+    } catch (err) {
+      setFormError(err.message);
       setBusy(false);
     }
   }
 
-  function updateEmail(value) {
-    setEmail(value);
-    if (errors.email)
-      setErrors((current) => ({ ...current, email: undefined }));
-    if (formError) setFormError("");
-  }
-
-  function updatePassword(value) {
-    setPassword(value);
-    if (errors.password)
-      setErrors((current) => ({ ...current, password: undefined }));
-    if (formError) setFormError("");
-  }
-
   return (
-    <ThemeProvider theme={loginTheme}>
-      <Box
-        component="main"
-        sx={{
-          minHeight: "100dvh",
-          boxSizing: "border-box",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          px: { xs: 2, sm: 4, lg: 7 },
-          py: { xs: 4, md: 6 },
-          overflow: "hidden",
-          backgroundColor: "#EDF3FF",
-          backgroundImage:
-            "radial-gradient(ellipse at 8% 18%, rgba(59,130,246,0.24), transparent 32%), radial-gradient(ellipse at 88% 78%, rgba(139,92,246,0.20), transparent 34%), radial-gradient(ellipse at 72% 8%, rgba(34,211,238,0.15), transparent 28%), linear-gradient(130deg, #E5EEFF 0%, #F4F1FF 52%, #E6F7FF 100%)",
-        }}
-      >
-        <Box
-          sx={{
-            width: "100%",
-            maxWidth: 1240,
-            display: "grid",
-            gridTemplateColumns: {
-              xs: "1fr",
-              md: "minmax(220px, 0.8fr) minmax(400px, 1.2fr)",
-            },
-            gridTemplateAreas: {
-              xs: '"school" "login" "emblem"',
-              md: '"school school" "emblem login"',
-            },
-            alignItems: "center",
-            rowGap: { xs: 3, md: 4 },
-            columnGap: { md: 7, lg: 10 },
-          }}
-        >
-          <Box
-            sx={{
-              gridArea: "school",
-              textAlign: "center",
-              px: { xs: 1, sm: 2 },
-            }}
-          >
-            <Typography
-              component="h1"
-              sx={{
-                color: "#19345F",
-                fontWeight: 800,
-                fontSize: { xs: "1.25rem", sm: "1.55rem", md: "2.5rem" },
-                lineHeight: 1.25,
-                letterSpacing: "-0.025em",
-                textWrap: "balance",
-              }}
-            >
-              TH. VIRENDRA SINGH MEMORIAL HIGHER SECONDARY SCHOOL
-            </Typography>
-            <Typography
-              sx={{
-                color: "#4E6387",
-                fontSize: { xs: "0.95rem", sm: "1.5rem" },
-                mt: 1.5,
-              }}
-            >
-              NEPANAGAR
-            </Typography>
-          </Box>
+    <main
+      className="flex min-h-full items-center justify-center overflow-hidden px-4 py-8 sm:px-8 md:py-12 lg:px-14"
+      style={{ backgroundColor: "#EDF3FF", backgroundImage: BG }}
+    >
+      <div className="grid w-full max-w-[1240px] items-center gap-x-10 gap-y-6 [grid-template-areas:'school'_'login'_'emblem'] md:grid-cols-[minmax(220px,0.8fr)_minmax(400px,1.2fr)] md:gap-y-8 md:[grid-template-areas:'school_school'_'emblem_login'] lg:gap-x-20">
+        <div className="text-center [grid-area:school]">
+          <h1 className="text-balance text-xl font-extrabold leading-tight tracking-tight text-[#19345F] sm:text-2xl md:text-4xl">
+            TH. VIRENDRA SINGH MEMORIAL HIGHER SECONDARY SCHOOL
+          </h1>
+          <p className="mt-3 text-base text-[#4E6387] sm:text-2xl">NEPANAGAR</p>
+        </div>
 
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gridArea: "emblem",
-              minWidth: 0,
-            }}
-          >
-            <Box
-              component="img"
-              src="/logo.jpg"
-              alt="Th. Virendra Singh Memorial School emblem"
-              sx={{
-                display: "block",
-                width: { xs: 112, sm: 144, md: 220, lg: 280 },
-                height: { xs: 112, sm: 144, md: 220, lg: 280 },
-                objectFit: "contain",
-                filter: "drop-shadow(0 16px 28px rgba(35,65,120,0.12))",
-                backgroundColor: "transparent",
-              }}
-            />
-          </Box>
+        <div className="flex items-center justify-center [grid-area:emblem]">
+          <img
+            src="/logo.jpg"
+            alt="Th. Virendra Singh Memorial School emblem"
+            className="h-28 w-28 object-contain mix-blend-multiply drop-shadow-[0_16px_28px_rgba(35,65,120,0.12)] sm:h-36 sm:w-36 md:h-56 md:w-56 lg:h-72 lg:w-72"
+          />
+        </div>
 
-          <Stack
-            spacing={2}
-            sx={{
-              width: "100%",
-              maxWidth: 540,
-              mx: "auto",
-              gridArea: "login",
-              minWidth: 0,
-            }}
+        <div className="mx-auto flex w-full max-w-[540px] flex-col gap-4 [grid-area:login]">
+          <div className="text-center">
+            <span className="inline-flex items-center rounded-full border border-white/90 bg-white/60 px-4 py-1.5 text-[0.82rem] font-bold uppercase tracking-[0.08em] text-[#244E9A]">
+              School ERP System
+            </span>
+          </div>
+
+          <form
+            onSubmit={onSubmit}
+            noValidate
+            className="flex flex-col gap-5 rounded-3xl border border-white/95 bg-white/95 p-6 shadow-[0_28px_80px_rgba(45,67,130,0.16),0_6px_20px_rgba(45,67,130,0.06)] backdrop-blur sm:p-8 md:p-10"
           >
-            <Box sx={{ textAlign: "center" }}>
-              <Box
-                sx={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  px: 2,
-                  py: 0.65,
-                  borderRadius: 99,
-                  color: "#244E9A",
-                  backgroundColor: "rgba(255,255,255,0.62)",
-                  border: "1px solid rgba(255,255,255,0.9)",
-                  fontWeight: 700,
-                  fontSize: "0.82rem",
-                  letterSpacing: "0.08em",
-                  textTransform: "uppercase",
-                }}
+            <div className="text-center">
+              <h2 className="text-3xl font-extrabold tracking-tight text-[#172554]">
+                Sign in
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+                Use your school account to continue.
+              </p>
+            </div>
+
+            {notice && (
+              <p
+                role="status"
+                className="rounded-xl bg-info/10 px-3 py-2 text-sm text-info"
               >
-                School ERP System
-              </Box>
-            </Box>
+                {notice}
+              </p>
+            )}
 
-            <Paper
-              component="form"
-              onSubmit={onSubmit}
-              noValidate
-              elevation={0}
-              sx={{
-                display: "flex",
-                flexDirection: "column",
-                gap: 2.5,
-                p: { xs: 2.75, sm: 4, md: 4.5 },
-                border: "1px solid rgba(255,255,255,0.95)",
-                borderRadius: { xs: 3, sm: 4 },
-                backgroundColor: "rgba(255,255,255,0.97)",
-                boxShadow:
-                  "0 28px 80px rgba(45,67,130,0.16), 0 6px 20px rgba(45,67,130,0.06)",
-                backdropFilter: "blur(12px)",
-              }}
-            >
-              <Box sx={{ textAlign: "center", px: { xs: 0, sm: 1 }, mb: 0.5 }}>
-                <Typography
-                  component="h1"
-                  sx={{
-                    fontWeight: 800,
-                    letterSpacing: "-0.04em",
-                    fontSize: { xs: "1.8rem", sm: "2rem" },
-                    color: "#172554",
-                  }}
-                >
-                  Sign in
-                </Typography>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{ mt: 1, lineHeight: 1.7 }}
-                >
-                  Use your school account to continue.
-                </Typography>
-              </Box>
-
-              {notice && (
-                <Alert severity="info" role="status" sx={{ borderRadius: 2 }}>
-                  {notice}
-                </Alert>
-              )}
-
-              <Stack spacing={1.75}>
-                <TextField
-                  label="Email"
-                  type="email"
-                  name="email"
-                  autoComplete="username"
-                  autoFocus
-                  fullWidth
-                  value={email}
-                  error={Boolean(errors.email)}
-                  helperText={errors.email || " "}
-                  onChange={(e) => updateEmail(e.target.value)}
-                  slotProps={{
-                    htmlInput: {
-                      autoCapitalize: "none",
-                      autoCorrect: "off",
-                      spellCheck: false,
-                    },
-                  }}
-                  sx={fieldSx}
-                />
-                <TextField
-                  label="Password"
-                  type={showPassword ? "text" : "password"}
-                  name="password"
-                  autoComplete="current-password"
-                  fullWidth
-                  value={password}
-                  error={Boolean(errors.password)}
-                  helperText={errors.password || " "}
-                  onChange={(e) => updatePassword(e.target.value)}
-                  sx={fieldSx}
-                  slotProps={{
-                    input: {
-                      endAdornment: (
-                        <InputAdornment position="end">
-                          <IconButton
-                            type="button"
-                            edge="end"
-                            onClick={() =>
-                              setShowPassword((visible) => !visible)
-                            }
-                            aria-label={
-                              showPassword ? "Hide password" : "Show password"
-                            }
-                            aria-pressed={showPassword}
-                            size="small"
-                          >
-                            <Typography
-                              variant="caption"
-                              sx={{
-                                fontWeight: 700,
-                                color: "primary.main",
-                                minWidth: 34,
-                                textAlign: "center",
-                              }}
-                            >
-                              {showPassword ? "Hide" : "Show"}
-                            </Typography>
-                          </IconButton>
-                        </InputAdornment>
-                      ),
-                    },
-                  }}
-                />
-              </Stack>
-
-              {formError && (
-                <Alert severity="error" role="alert" sx={{ borderRadius: 2 }}>
-                  {formError}
-                </Alert>
-              )}
-
-              <Button
-                type="submit"
-                variant="contained"
-                size="large"
-                fullWidth
-                disabled={busy}
-                aria-busy={busy || undefined}
-                startIcon={
-                  busy ? <CircularProgress size={18} color="inherit" /> : null
+            <div className="flex flex-col gap-1">
+              <Field
+                label="Email"
+                type="email"
+                name="email"
+                autoComplete="username"
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                value={email}
+                error={errors.email}
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  if (errors.email)
+                    setErrors((c) => ({ ...c, email: undefined }));
+                  if (formError) setFormError("");
+                }}
+              />
+              <Field
+                label="Password"
+                type={showPassword ? "text" : "password"}
+                name="password"
+                autoComplete="current-password"
+                value={password}
+                error={errors.password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (errors.password)
+                    setErrors((c) => ({ ...c, password: undefined }));
+                  if (formError) setFormError("");
+                }}
+                trailing={
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
+                    aria-pressed={showPassword}
+                    className="absolute inset-y-0 right-1 my-auto h-9 rounded-lg px-3 text-xs font-bold text-[#2457C5] hover:bg-[#2457C5]/10"
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
                 }
-                sx={{
-                  minHeight: 52,
-                  mt: 0.25,
-                  borderRadius: 2.5,
-                  background:
-                    "linear-gradient(100deg, #2457C5 0%, #3568D4 55%, #5B5BD6 100%)",
-                  boxShadow: "0 10px 24px rgba(36,87,197,0.24)",
-                  "&:hover": {
-                    background:
-                      "linear-gradient(100deg, #1D49AD 0%, #2B59C0 55%, #4F4FC2 100%)",
-                    boxShadow: "0 12px 28px rgba(36,87,197,0.3)",
-                  },
-                  "&:focus-visible": {
-                    outline: "3px solid rgba(36,87,197,0.35)",
-                    outlineOffset: 3,
-                  },
-                }}
-              >
-                {busy ? "Signing in…" : "Sign in"}
-              </Button>
-            </Paper>
+              />
+            </div>
 
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              align="center"
-              sx={{ px: 1, lineHeight: 1.6 }}
+            {formError && (
+              <p
+                role="alert"
+                className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger"
+              >
+                {formError}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy}
+              aria-busy={busy || undefined}
+              className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#2457C5] via-[#3568D4] to-[#5B5BD6] text-base font-bold text-white shadow-[0_10px_24px_rgba(36,87,197,0.24)] transition hover:shadow-[0_12px_28px_rgba(36,87,197,0.3)] hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
             >
-              © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved.
-            </Typography>
-          </Stack>
-        </Box>
-      </Box>
-    </ThemeProvider>
+              {busy && (
+                <span
+                  aria-hidden
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                />
+              )}
+              {busy ? "Signing in…" : "Sign in"}
+            </button>
+          </form>
+
+          <p className="px-2 text-center text-xs leading-relaxed text-ink-muted">
+            © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved.
+          </p>
+        </div>
+      </div>
+    </main>
   );
 }

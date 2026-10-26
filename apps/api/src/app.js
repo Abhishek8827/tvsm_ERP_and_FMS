@@ -25,6 +25,7 @@ import { rebatesRouter } from "./routes/rebates.js";
 import { auditLogRouter } from "./routes/auditLog.js";
 import { cashbookRouter } from "./routes/cashbook.js";
 import { reportsRouter } from "./routes/reports.js";
+import { whatsappRouter } from "./routes/whatsapp.js";
 import { certificatesRouter } from "./routes/certificates.js";
 import { transportRouter } from "./routes/transport.js";
 import { receiptsRouter } from "./routes/receipts.js";
@@ -95,6 +96,7 @@ export function createApp(env, logger, auth) {
     app.use("/api", moneyRouter(deps, authenticate));
     app.use("/api", reportsRouter(deps, authenticate));
     app.use("/api", auditLogRouter(deps, authenticate));
+    app.use("/api", whatsappRouter(deps, authenticate));
   } else {
     app.use(
       [
@@ -121,6 +123,7 @@ export function createApp(env, logger, auth) {
         "/api/transfers",
         "/api/cashier-pin",
         "/api/reports",
+        "/api/whatsapp",
         "/api/audit-log",
       ],
       (req, res) => {

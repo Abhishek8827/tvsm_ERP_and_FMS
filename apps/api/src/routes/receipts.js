@@ -367,6 +367,12 @@ export function receiptsRouter(deps, authenticate) {
               );
           },
         });
+        // WhatsApp notice for a NEW receipt, in the background: the cashier never waits for it and
+        // a WhatsApp problem can never fail the receipt (the service does not throw).
+        if (!replay && deps.whatsapp)
+          void deps.whatsapp
+            .sendReceipt(tenantId, receipt, req.user)
+            .catch(() => {});
         res.status(replay ? 200 : 201).json(shapeReceipt(receipt, { replay }));
       } catch (err) {
         next(err);

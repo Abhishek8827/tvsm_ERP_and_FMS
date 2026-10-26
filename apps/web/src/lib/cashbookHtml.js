@@ -1,4 +1,5 @@
 import { classLabel, formatINR } from "@erp/shared";
+import { LETTERHEAD_CSS, letterheadHtml } from "./letterhead.js";
 
 const esc = (s) =>
   String(s ?? "").replace(
@@ -13,6 +14,7 @@ const classOf = (r) =>
     : "";
 
 export const CASHBOOK_CSS = `
+${LETTERHEAD_CSS}
 @page { size: A4; margin: 10mm; }
 * { box-sizing: border-box; }
 body { font: 11px/1.35 Arial, sans-serif; color: #111; margin: 0; }
@@ -60,7 +62,7 @@ export function cashbookHtml(c) {
 <tr><td>Income: online</td>${cell(money(t.incomeOnlinePaise), true)}</tr>
 <tr><td>Less: expense</td>${cell(money(t.expensePaise), true)}</tr></tbody>
 <tfoot><tr><td>Closing balance</td>${cell(money(t.closingPaise), true)}</tr></tfoot></table>`;
-  return `<h1>TVSM School - Cashbook<span class="tag">${c.closed ? "Day closed" : "Day open"}</span></h1>
+  return `${letterheadHtml()}<h1>TVSM School - Cashbook<span class="tag">${c.closed ? "Day closed" : "Day open"}</span></h1>
 <div class="sub">Date: ${esc(c.date)}</div>
 ${receipts("1. School fees receipts", c.school)}
 ${receipts("2. Bus fees receipts", c.bus)}

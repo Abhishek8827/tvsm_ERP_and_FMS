@@ -167,6 +167,13 @@ export function Receipts() {
           <Badge tone="danger">Cancelled</Badge>
         ) : r.status === "cancel_requested" ? (
           <Badge tone="warning">Cancel requested</Badge>
+        ) : r.rejection ? (
+          <span>
+            <Badge tone="success">Valid</Badge>
+            <span className="mt-1 block text-xs text-danger">
+              Cancel rejected: {r.rejection.reason || "no reason written"}
+            </span>
+          </span>
         ) : (
           <Badge tone="success">Valid</Badge>
         ),

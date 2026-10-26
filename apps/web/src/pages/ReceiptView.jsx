@@ -2,7 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useLocation, useParams } from "react-router-dom";
-import { SCHOOL, classLabel, formatINR, rupeesInWords } from "@erp/shared";
+import { classLabel, formatINR, rupeesInWords } from "@erp/shared";
+import { LETTERHEAD_CSS, letterheadLines } from "../lib/letterhead";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { printHtml } from "../lib/printHtml";
@@ -56,18 +57,26 @@ function Copy({ r, copyName, duplicate, cancelled }) {
   };
   const otherLabel = r.lines.find((l) => l.head === "other")?.label;
   const s = r.student;
+  const lh = letterheadLines();
   return (
     <div className="copy">
-      <div className="head">
-        <img src="/logo.jpg" alt="" />
-        <div style={{ textAlign: "center" }}>
-          <strong>{SCHOOL.name}</strong>
-          <div>{SCHOOL.addressLine}</div>
-          <div>
-            Affiliation No. {SCHOOL.affiliationNo}
-            {SCHOOL.schoolCode ? ` · School Code ${SCHOOL.schoolCode}` : ""}
+      <div className="lh sm">
+        <div className="lh-top">
+          <img src="/logo.jpg" alt="" />
+          <div className="lh-t">
+            <span className="lh-name">{lh.name}</span>
+            <div className="lh-s">{lh.society}</div>
+            <div className="lh-s">{lh.reg}</div>
+            <div className="lh-s a">{lh.address}</div>
           </div>
         </div>
+        <div className="lh-rule" />
+        <div className="lh-info">
+          {lh.info.map((t) => (
+            <span key={t}>{t}</span>
+          ))}
+        </div>
+        <div className="lh-rule" />
       </div>
       <div className="title">{TITLE[r.kind]}</div>
       <div className="tags">
@@ -170,12 +179,10 @@ function Copy({ r, copyName, duplicate, cancelled }) {
 
 // Layout of the receipt, used on screen AND inside the clean print page.
 const SHEET_CSS = `
+${LETTERHEAD_CSS}
 .sheet{display:flex;width:210mm;height:148.5mm;background:#fff;color:#000;font-size:8.5pt;line-height:1.25}
 .copy{width:105mm;height:148.5mm;padding:5mm;box-sizing:border-box;border-right:1px dashed #666;display:flex;flex-direction:column;gap:1.4mm}
 .copy:last-child{border-right:0}
-.head{display:flex;gap:2mm;align-items:center;justify-content:center;font-size:7.5pt;text-align:center}
-.head img{height:11mm;width:auto}
-.head strong{font-size:9pt}
 .title{text-align:center;font-weight:700;font-size:10pt;border:1px solid #000;padding:1mm 0;letter-spacing:.3px}
 .tags{display:flex;justify-content:space-between;font-size:7.5pt;font-weight:700}
 .dup{border:1.5px solid #b00;color:#b00;padding:0 2mm;transform:rotate(-4deg)}
@@ -358,6 +365,21 @@ export function ReceiptView() {
               ? ` (by ${r.cancellation.decidedByName})`
               : ""}
           </span>
+        </div>
+      )}
+      {r.status === "valid" && r.rejection && (
+        <div
+          role="status"
+          className="no-print rounded-card border border-line bg-surface p-3 text-sm"
+        >
+          <Badge tone="danger">Cancellation rejected</Badge>
+          <p className="mt-2 text-ink">
+            {r.rejection.decidedByName ? `${r.rejection.decidedByName}: ` : ""}
+            {r.rejection.reason || "No reason was written."}
+          </p>
+          <p className="text-ink-muted">
+            Your request was: {r.rejection.requestedReason}
+          </p>
         </div>
       )}
       {r.status === "cancel_requested" && (

@@ -124,12 +124,17 @@ describe("Audit log routes", () => {
   it("has no way to change or delete an entry", async () => {
     const { app } = build();
 
-    //prettier-ignore
     for (const m of ["post", "put", "patch", "delete"]) {
-      const r = await request(app)[m]("/api/audit-log").set(as("admin")).send({});
+      // Extract the dynamic method handler first
+      const apiMethod = request(app)[m];
+
+      // The formatter can safely wrap this line without breaking JS syntax
+      const r = await apiMethod("/api/audit-log").set(as("admin")).send({});
+
       expect([404, 405]).toContain(r.status);
     }
   });
+
   it("CSV export is quoted, formula-safe, and the export itself is logged", async () => {
     const { app, audit } = build();
     const r = await request(app)

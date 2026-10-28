@@ -29,7 +29,7 @@
   },
   "pnpm": {
     "overrides": {
-      "body-parser": ">=2.4.0"
+      "body-parser": "2.2.0"
     }
   }
 }

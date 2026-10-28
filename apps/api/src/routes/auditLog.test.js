@@ -123,10 +123,10 @@ describe("Audit log routes", () => {
   });
   it("has no way to change or delete an entry", async () => {
     const { app } = build();
+
+    //prettier-ignore
     for (const m of ["post", "put", "patch", "delete"]) {
-      const r = await request(app)
-        [m]("/api/audit-log")
-        .set(as("admin"))
+      const r = await request(app)[m];("/api/audit-log").set(as("admin"))
         .send({});
       expect([404, 405]).toContain(r.status);
     }

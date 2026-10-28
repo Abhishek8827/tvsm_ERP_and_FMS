@@ -13,7 +13,7 @@ describe("letterhead", () => {
       "Reg. N0. 03/04/02/22332/20",
       "RAILWAY STATION ROAD, NEPANAGAR, DIST. BURHANPUR (M.P.)",
       "DISE CODE - 23480513302",
-      "E-mail ID - tvsmnepa@gmail.com",
+      "E-mail ID - tvsmschoolnepanagar@gmail.com",
       "M.No. - 9575926900/ 9644995511",
     ])
       expect(html).toContain(t);

@@ -126,8 +126,7 @@ describe("Audit log routes", () => {
 
     //prettier-ignore
     for (const m of ["post", "put", "patch", "delete"]) {
-      const r = await request(app)[m];("/api/audit-log").set(as("admin"))
-        .send({});
+      const r = await request(app)[m]("/api/audit-log").set(as("admin")).send({});
       expect([404, 405]).toContain(r.status);
     }
   });

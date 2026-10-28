@@ -840,6 +840,34 @@ export function certificatesRouter(deps, authenticate) {
     }),
   );
   router.post(
+    "/bonafide/:id/cancel",
+    ...adminOnly,
+    wrap(async (req, res) => {
+      const { reason } = cancelBody.parse(req.body);
+      const b = await store.cancelBonafide({
+        tenantId: req.user.tenantId,
+        id: objectId.parse(req.params.id),
+        reason,
+        user: req.user,
+        audit: (made, session) =>
+          recordAudit(
+            deps,
+            req,
+            {
+              action: "cancel",
+              entity: "bonafide_certificate",
+              entityId: String(made._id),
+              newValue: { number: made.number },
+              reason,
+            },
+            { critical: true, session },
+          ),
+      });
+      if (!b) throw notFound("Issued Bonafide certificate");
+      res.json(shapeBonafide(b));
+    }),
+  );
+  router.post(
     "/bonafide/:id/print",
     ...adminOnly,
     wrap(async (req, res) => {

@@ -937,6 +937,8 @@ function BonafideIssued({ isAdmin, initialQ = "" }) {
   const [q, setQ] = useState(initialQ);
   const [view, setView] = useState(null);
   const [printing, setPrinting] = useState(false);
+  const [cancelFor, setCancelFor] = useState(null);
+  const [cancelReason, setCancelReason] = useState("");
   const list = useQuery({
     queryKey: ["bonafide-list", page, pageSize, q],
     queryFn: () =>
@@ -968,6 +970,25 @@ function BonafideIssued({ isAdmin, initialQ = "" }) {
     onError: (e) => notify(errorText(e), "error"),
   });
 
+  const cancel = useMutation({
+    mutationFn: () =>
+      api(`/api/bonafide/${cancelFor.id}/cancel`, {
+        method: "POST",
+        body: { reason: cancelReason.trim() },
+      }),
+    onSuccess: async () => {
+      notify(
+        "Bonafide certificate cancelled. Its number stays used.",
+        "success",
+      );
+      setCancelFor(null);
+      setCancelReason("");
+      setView(null);
+      await refresh();
+    },
+    onError: (e) => notify(errorText(e), "error"),
+  });
+
   const columns = [
     { key: "no", header: "Number", render: (r) => <b>{r.number}</b> },
     {
@@ -989,7 +1010,10 @@ function BonafideIssued({ isAdmin, initialQ = "" }) {
       header: "Status",
       render: (r) => (
         <span className="flex flex-wrap gap-1">
-          {!r.originalPrinted && <Badge tone="info">Not printed yet</Badge>}
+          {r.status === "cancelled" && <Badge tone="danger">Cancelled</Badge>}
+          {r.status === "issued" && !r.originalPrinted && (
+            <Badge tone="info">Not printed yet</Badge>
+          )}
           {r.duplicateCount > 0 && (
             <Badge>{r.duplicateCount} duplicate(s)</Badge>
           )}
@@ -1004,14 +1028,19 @@ function BonafideIssued({ isAdmin, initialQ = "" }) {
           <Button variant="secondary" onClick={() => setView(r)}>
             View
           </Button>
-          {isAdmin && (
-            <Button
-              variant={r.originalPrinted ? "secondary" : "primary"}
-              loading={print.isPending && print.variables === r.id}
-              onClick={() => print.mutate(r.id)}
-            >
-              {r.originalPrinted ? "Print duplicate" : "Print original"}
-            </Button>
+          {isAdmin && r.status === "issued" && (
+            <>
+              <Button
+                variant={r.originalPrinted ? "secondary" : "primary"}
+                loading={print.isPending && print.variables === r.id}
+                onClick={() => print.mutate(r.id)}
+              >
+                {r.originalPrinted ? "Print duplicate" : "Print original"}
+              </Button>
+              <Button variant="danger" onClick={() => setCancelFor(r)}>
+                Cancel
+              </Button>
+            </>
           )}
         </div>
       ),
@@ -1056,10 +1085,27 @@ function BonafideIssued({ isAdmin, initialQ = "" }) {
         open={Boolean(view)}
         title={view ? `Bonafide ${view.number}` : ""}
         html={view ? bonafideHtml(view) : ""}
-        canPrint={isAdmin}
+        canPrint={isAdmin && view?.status === "issued"}
         printing={printing || print.isPending}
         onPrint={() => print.mutate(view.id)}
         onClose={() => setView(null)}
+        extra={
+          view?.status === "cancelled" ? (
+            <Badge tone="danger">Cancelled: {view.cancelReason}</Badge>
+          ) : null
+        }
+      />
+      <ConfirmDialog
+        open={Boolean(cancelFor)}
+        title={cancelFor ? `Cancel Bonafide ${cancelFor.number}?` : ""}
+        description="The number stays used (it is never given again). A cancelled Bonafide cannot be printed."
+        confirmLabel="Cancel this Bonafide"
+        tone="danger"
+        requireReason
+        onReasonChange={setCancelReason}
+        loading={cancel.isPending}
+        onConfirm={() => cancel.mutate()}
+        onCancel={() => setCancelFor(null)}
       />
     </div>
   );

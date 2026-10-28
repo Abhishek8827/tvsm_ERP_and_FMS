@@ -26,7 +26,7 @@ const users = {
 };
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 
-function build(expectedCashPaise = 500000) {
+function build(expectedCashPaise = 500000, { stale = false } = {}) {
   const audit = [];
   const days = new Map();
   const dayCloseStore = {
@@ -42,7 +42,9 @@ function build(expectedCashPaise = 500000) {
     }),
     get: async (_t, d) => days.get(d) ?? null,
     list: async () => ({ rows: [...days.values()], total: days.size }),
-    close: async ({ date, figures, user }) => {
+    close: async ({ date, figures, user, totals }) => {
+      if (stale) return { stale: true };
+      expect(totals).toMatchObject({ expectedCashPaise }); // the route hands the figures it worked out
       const cur = days.get(date);
       if (cur?.status === "closed") return null;
       const doc = {
@@ -118,6 +120,14 @@ describe("Day Close API", () => {
       qrPaise: 50000,
     });
     expect(audit.some((a) => a.entity === "day_close")).toBe(true);
+  });
+
+  it("if receipts changed while closing, answers 409 DAY_CHANGED and saves nothing", async () => {
+    const { app, audit } = build(500000, { stale: true });
+    const r = await post(app, "cashier", { countedCashPaise: 500000 });
+    expect(r.status).toBe(409);
+    expect(r.body.error.code).toBe("DAY_CHANGED");
+    expect(audit.some((a) => a.entity === "day_close")).toBe(false);
   });
 
   it("a difference needs a reason, and is recorded with it", async () => {

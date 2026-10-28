@@ -416,6 +416,53 @@ describe("TC & Bonafide screen: Admin", () => {
     expect(printHtml.mock.calls[0][0].html).toContain("BON/FY2026-27/001");
   });
 
+  it("Bonafide Issued: Admin cancels with a reason; a cancelled one has no print or cancel", async () => {
+    const user = userEvent.setup();
+    const bon = {
+      id: 'b1', number: 'BON/FY2026-27/001', studentId: 's1', originalPrinted: true,
+      snapshot: { admissionNo: '412', name: 'Aarav Sharma', fatherName: 'Rajesh', gender: 'MALE', classKey: '7', section: 'A', dob: '2014-03-14' },
+      academicYear: '2026-27', purpose: 'Passport', dateOfIssue: '2026-10-13', status: 'issued', duplicateCount: 0,
+    }; // prettier-ignore
+    const sent = [];
+    route({
+      "/api/certificate-requests?": reqList(),
+      "/api/bonafide?": {
+        rows: [
+          bon,
+          {
+            ...bon,
+            id: "b2",
+            number: "BON/FY2026-27/002",
+            status: "cancelled",
+            cancelReason: "Wrong name",
+          },
+        ],
+        total: 2,
+      },
+      "/api/bonafide/b1/cancel": (url, opts) => {
+        sent.push(opts.body);
+        return { ...bon, status: "cancelled", cancelReason: opts.body.reason };
+      },
+    });
+    show();
+    await user.click(screen.getByRole("tab", { name: "Bonafide" }));
+    await openIssued(user);
+    const rows = await screen.findAllByRole("row", { name: /Aarav/ });
+    expect(within(rows[1]).getByText("Cancelled")).toBeInTheDocument();
+    expect(
+      within(rows[1]).queryByRole("button", { name: /print|cancel/i }),
+    ).toBeNull();
+    await user.click(within(rows[0]).getByRole("button", { name: "Cancel" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.type(within(dialog).getByRole("textbox"), "Name was wrong");
+    await user.click(
+      within(dialog).getByRole("button", { name: "Cancel this Bonafide" }),
+    );
+    await vi.waitFor(() =>
+      expect(sent).toEqual([{ reason: "Name was wrong" }]),
+    );
+  });
+
   it("Settings: the start Sl. No. is locked once a TC exists", async () => {
     const user = userEvent.setup();
     route({

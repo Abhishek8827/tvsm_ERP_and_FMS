@@ -127,6 +127,13 @@ function build({ charges = [] } = {}) {
       bons.push(b);
       return { bonafide: b, replay: false };
     },
+    async cancelBonafide({ id, reason, audit: au }) {
+      const b = bons.find((x) => x._id === id && x.status === 'issued');
+      if (!b) return null;
+      Object.assign(b, { status: 'cancelled', cancelReason: reason });
+      await au(b);
+      return b;
+    },
     listBonafide: async () => ({ rows: bons, total: bons.length }),
     getBonafide: async (_t, id) => bons.find((t) => t._id === id),
     printBonafide: async (_t, id) => {
@@ -691,6 +698,49 @@ describe("Bonafide request and approval", () => {
       (await request(app).post(`/api/bonafide/${b.id}/print`).set(as("admin")))
         .body.copyNo,
     ).toBe(1);
+  });
+  it("only the Admin cancels a Bonafide, with a reason; it cannot be printed or cancelled again", async () => {
+    const { app, audit } = build();
+    const r = await askBon(app, "admin", "key-12345678", {
+      studentId: A,
+      purpose: "Passport",
+    });
+    const b = (await approve(app, r.body.id)).body.certificate;
+    const url = `/api/bonafide/${b.id}/cancel`;
+    for (const who of ["principal", "cashier"])
+      expect(
+        (
+          await request(app)
+            .post(url)
+            .set(as(who))
+            .send({ reason: "Wrong name" })
+        ).status,
+      ).toBe(403);
+    expect(
+      (await request(app).post(url).set(as("admin")).send({ reason: "x" }))
+        .status,
+    ).toBe(400);
+    const c = await request(app)
+      .post(url)
+      .set(as("admin"))
+      .send({ reason: "Wrong name" });
+    expect(c.body).toMatchObject({
+      status: "cancelled",
+      cancelReason: "Wrong name",
+    });
+    expect(
+      audit.some(
+        (a) => a.action === "cancel" && a.entity === "bonafide_certificate",
+      ),
+    ).toBe(true);
+    expect(
+      (await request(app).post(url).set(as("admin")).send({ reason: "Again" }))
+        .status,
+    ).toBe(404);
+    expect(
+      (await request(app).post(`/api/bonafide/${b.id}/print`).set(as("admin")))
+        .status,
+    ).toBe(404);
   });
 });
 

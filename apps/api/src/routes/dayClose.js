@@ -122,6 +122,7 @@ export function dayCloseRouter(deps, authenticate) {
         tenantId,
         date,
         user: req.user,
+        totals,
         figures: {
           expectedCashPaise: totals.expectedCashPaise,
           countedCashPaise: body.countedCashPaise,
@@ -132,6 +133,12 @@ export function dayCloseRouter(deps, authenticate) {
           receiptCount: totals.receiptCount,
         },
       });
+      if (saved?.stale)
+        throw new AppError(
+          "DAY_CHANGED",
+          409,
+          "A receipt or cancellation was recorded while you were closing. Check the figures and count again.",
+        );
       if (!saved)
         throw new AppError(
           "ALREADY_CLOSED",

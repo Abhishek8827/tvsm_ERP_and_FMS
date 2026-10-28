@@ -235,6 +235,30 @@ export function makeCertificateStore() {
       );
     },
 
+    /** Cancels an issued Bonafide. The number stays used. Returns null if it is not 'issued'. */
+    async cancelBonafide({ tenantId, id, reason, user, audit }) {
+      return inTxn(
+        async (session) => {
+          const b = await BonafideCertificate.findOneAndUpdate(
+            { tenantId, _id: id, status: "issued" },
+            {
+              $set: {
+                status: "cancelled",
+                cancelReason: reason,
+                cancelledAt: new Date(),
+                cancelledByName: user.name,
+              },
+            },
+            { new: true, session },
+          ).lean();
+          if (!b) return null;
+          if (audit) await audit(b, session);
+          return b;
+        },
+        async () => null,
+      );
+    },
+
     async issueBonafide({
       tenantId,
       studentId,

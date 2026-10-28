@@ -4,16 +4,20 @@ import {
   addDaysToDateString,
   istStartOfDay,
   receiptNumber,
+  todayIst,
 } from "@erp/shared";
 import { AuditLog } from "../models/AuditLog.js";
 import { Charge } from "../models/Charge.js";
 import { Counter } from "../models/Counter.js";
+import { DayClose } from "../models/DayClose.js";
 import { FeeStructure } from "../models/FeeStructure.js";
 import { Rebate } from "../models/Rebate.js";
 import { Receipt } from "../models/Receipt.js";
 import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
 import { Student } from "../models/Student.js";
 import { User } from "../models/User.js";
+import { AppError } from "../utils/errors.js";
+import { lockDay } from "./dayCloseStore.js";
 
 /**
  * Thin data-access layer. Routes and middleware depend on these small objects (not on Mongoose
@@ -163,6 +167,15 @@ function addTextSearch(base, q) {
   });
 }
 
+/** Mongo condition for "on the bus now" (true) or "not on the bus" (false). */
+export function onBusFilter(onBus) {
+  const on = {
+    usesTransport: true,
+    transportFrom: { $exists: true, $ne: null },
+  };
+  return onBus ? on : { $nor: [on] };
+}
+
 export function makeStudentStore() {
   return {
     // Search: exact admission number, or name starting with the text (uses the nameLower index).
@@ -268,10 +281,13 @@ export function makeStudentStore() {
         "status",
       ])
         if (f[k]) base[k] = f[k];
-      if (f.transport !== undefined) base.usesTransport = f.transport;
       if (f.newAdmission !== undefined) base.isNewAdmission = f.newAdmission;
       if (f.rte !== undefined) base.isRTE = f.rte;
       addTextSearch(base, f.q);
+      // "Uses transport" = on the bus NOW, the same meaning as the Transport module: entered there
+      // (has a start month) and not stopped. The old Excel flag alone does not count.
+      if (f.transport !== undefined)
+        base.$and = [...(base.$and ?? []), onBusFilter(f.transport)];
       return Student.find(base)
         .select(
           "admissionNo name fatherName classKey section contactNo address village usesTransport isNewAdmission isRTE status category gender",
@@ -548,6 +564,23 @@ export function makeReceiptStore() {
               { $inc: { seq: 1 } },
               { upsert: true, session },
             );
+            // The day's lock: a Day Close running at this moment queues with us, and a day that is
+            // already closed takes no receipt. (The early check in the route is only a friendly
+            // first answer; this is the one that cannot be raced.)
+            const today = todayIst();
+            await lockDay(tenantId, today, session);
+            if (
+              await DayClose.exists({
+                tenantId,
+                date: today,
+                status: "closed",
+              }).session(session)
+            )
+              throw new AppError(
+                "DAY_CLOSED",
+                409,
+                "Today's Day Close is done, so fees cannot be collected. Ask the Admin to reopen the day.",
+              );
             // WHY cancelled ones are left out: a cancelled receipt's money was never kept, so it
             // must not count as paid when the next receipt is checked.
             const gone = await cancelledReceiptIds(

@@ -30,6 +30,7 @@ function build() {
   const db = [];
   let lastList = {};
   const removedCharges = [];
+  const withRecords = new Map(); // studentId -> record names, filled by a test
   const studentStore = {
     list: async ({ page, pageSize, sort, dir }) => {
       lastList = { sort, dir };
@@ -43,6 +44,12 @@ function build() {
     findById: async (_t, id) => db.find((s) => String(s._id) === id) ?? null,
     findManyByIds: async (_t, ids) =>
       db.filter((s) => ids.includes(String(s._id))),
+    recordsBlockingDelete: async (_t, ids) =>
+      new Map(
+        ids
+          .filter((id) => withRecords.has(String(id)))
+          .map((id) => [String(id), withRecords.get(String(id))]),
+      ),
     deleteMany: async (_t, ids) => {
       let n = 0;
       for (let i = db.length - 1; i >= 0; i -= 1)
@@ -86,6 +93,7 @@ function build() {
     audit,
     db,
     removedCharges,
+    withRecords,
     lastList: () => lastList,
   };
 }
@@ -246,6 +254,38 @@ describe("students API", () => {
       .set(as("admin"))
       .send({ ids: ["x"], reason: "duplicate entry" });
     expect(badId.status).toBe(400);
+  });
+
+  it("bulk delete refuses everything when any student has receipts or certificates, and says who", async () => {
+    const { app, audit, db, removedCharges, withRecords } = build();
+    await request(app).post("/api/students").set(as("admin")).send(valid);
+    await request(app)
+      .post("/api/students")
+      .set(as("admin"))
+      .send({ ...valid, admissionNo: "1054", name: "Bhumi" });
+    db[0]._id = "a".repeat(24);
+    db[1]._id = "b".repeat(24);
+    withRecords.set(db[0]._id, ["receipt", "Transfer Certificate"]);
+    const res = await request(app)
+      .post("/api/students/bulk-delete")
+      .set(as("admin"))
+      .send({ ids: [db[0]._id, db[1]._id], reason: "cleanup" });
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe("STUDENT_HAS_RECORDS");
+    expect(res.body.error.message).toContain(
+      "Aarav Sharma (Sch. 1053): receipt, Transfer Certificate",
+    );
+    expect(res.body.error.message).not.toContain("Bhumi");
+    // nothing was deleted, no charge was removed, nothing was audited as a delete
+    expect(db).toHaveLength(2);
+    expect(removedCharges).toEqual([]);
+    expect(audit.some((a) => a.action === "delete")).toBe(false);
+    // the student without records can still be deleted on their own
+    const ok = await request(app)
+      .post("/api/students/bulk-delete")
+      .set(as("admin"))
+      .send({ ids: [db[1]._id], reason: "cleanup" });
+    expect(ok.body).toEqual({ deleted: 1, requested: 1 });
   });
 
   it("bulk delete removes the students for good, frees the scholar number, audits each one first, and is safe to repeat", async () => {

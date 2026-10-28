@@ -11,7 +11,10 @@ import { Charge } from "../models/Charge.js";
 import { Counter } from "../models/Counter.js";
 import { DayClose } from "../models/DayClose.js";
 import { FeeStructure } from "../models/FeeStructure.js";
+import { BonafideCertificate } from "../models/BonafideCertificate.js";
+import { CertificateRequest } from "../models/CertificateRequest.js";
 import { Rebate } from "../models/Rebate.js";
+import { TransferCertificate } from "../models/TransferCertificate.js";
 import { Receipt } from "../models/Receipt.js";
 import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
 import { Student } from "../models/Student.js";
@@ -257,6 +260,32 @@ export function makeStudentStore() {
       Student.find({ tenantId, _id: { $in: ids } })
         .select("admissionNo name classKey")
         .lean(),
+    /**
+     * Which of these students already have money or certificate records. Those records are
+     * immutable, so such a student can never be deleted (only made inactive).
+     * Returns a Map: studentId -> list of plain-English record names.
+     */
+    async recordsBlockingDelete(tenantId, ids) {
+      const where = { tenantId, studentId: { $in: ids } };
+      const kinds = [
+        ["receipt", Receipt],
+        ["rebate", Rebate],
+        ["Transfer Certificate", TransferCertificate],
+        ["Bonafide certificate", BonafideCertificate],
+        ["certificate request", CertificateRequest],
+      ];
+      const found = await Promise.all(
+        kinds.map(([, model]) => model.distinct("studentId", where)),
+      );
+      const out = new Map();
+      kinds.forEach(([name], i) => {
+        for (const id of found[i]) {
+          const key = String(id);
+          out.set(key, [...(out.get(key) ?? []), name]);
+        }
+      });
+      return out;
+    },
     // Permanent delete (Admin decision): the row is removed and its scholar number is free again.
     // The audit log keeps who deleted it, when, why, and the student's number and name.
     async deleteMany(tenantId, ids) {

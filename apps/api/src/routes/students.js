@@ -168,6 +168,28 @@ export function studentsRouter(deps, authenticate) {
       const tenantId = req.user.tenantId;
       const found = await deps.studentStore.findManyByIds(tenantId, ids);
       if (found.length === 0) throw notFound("Students");
+      // A student with receipts, rebates or certificates can never be deleted: those records are
+      // immutable and would point to nobody. Nothing is deleted at all when any one is blocked,
+      // so the Admin sees exactly who to un-tick (or make inactive instead).
+      const blocked = await deps.studentStore.recordsBlockingDelete(
+        tenantId,
+        found.map((s) => s._id),
+      );
+      if (blocked.size > 0) {
+        const lines = found
+          .filter((s) => blocked.has(String(s._id)))
+          .map(
+            (s) =>
+              `${s.name} (Sch. ${s.admissionNo}): ${blocked.get(String(s._id)).join(", ")}`,
+          );
+        const shown = lines.slice(0, 5).join("; ");
+        const more = lines.length > 5 ? ` and ${lines.length - 5} more` : "";
+        throw new AppError(
+          "STUDENT_HAS_RECORDS",
+          409,
+          `Nothing was deleted. ${lines.length} student(s) already have records that cannot be erased: ${shown}${more}. Un-tick them, or make them inactive instead.`,
+        );
+      }
       for (const s of found) {
         await recordAudit(
           deps,

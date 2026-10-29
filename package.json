@@ -17,7 +17,8 @@
     "money:demo": "pnpm --filter @erp/api money:demo",
     "students:demo": "pnpm --filter @erp/api students:demo",
     "fees:seed": "pnpm --filter @erp/api fees:seed",
-    "users:seed": "pnpm --filter @erp/api users:seed"
+    "users:seed": "pnpm --filter @erp/api users:seed",
+    "data:reset": "pnpm --filter @erp/api data:reset"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

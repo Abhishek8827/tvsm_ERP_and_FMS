@@ -1,26 +1,26 @@
-import mongoose from "mongoose";
+import mongoose from 'mongoose';
 import {
   CLASS_KEYS,
   addDaysToDateString,
   istStartOfDay,
   receiptNumber,
   todayIst,
-} from "@erp/shared";
-import { AuditLog } from "../models/AuditLog.js";
-import { Charge } from "../models/Charge.js";
-import { Counter } from "../models/Counter.js";
-import { DayClose } from "../models/DayClose.js";
-import { FeeStructure } from "../models/FeeStructure.js";
-import { BonafideCertificate } from "../models/BonafideCertificate.js";
-import { CertificateRequest } from "../models/CertificateRequest.js";
-import { Rebate } from "../models/Rebate.js";
-import { TransferCertificate } from "../models/TransferCertificate.js";
-import { Receipt } from "../models/Receipt.js";
-import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
-import { Student } from "../models/Student.js";
-import { User } from "../models/User.js";
-import { AppError } from "../utils/errors.js";
-import { lockDay } from "./dayCloseStore.js";
+} from '@erp/shared';
+import { AuditLog } from '../models/AuditLog.js';
+import { Charge } from '../models/Charge.js';
+import { Counter } from '../models/Counter.js';
+import { DayClose } from '../models/DayClose.js';
+import { FeeStructure } from '../models/FeeStructure.js';
+import { BonafideCertificate } from '../models/BonafideCertificate.js';
+import { CertificateRequest } from '../models/CertificateRequest.js';
+import { Rebate } from '../models/Rebate.js';
+import { TransferCertificate } from '../models/TransferCertificate.js';
+import { Receipt } from '../models/Receipt.js';
+import { ReceiptCancellation } from '../models/ReceiptCancellation.js';
+import { Student } from '../models/Student.js';
+import { User } from '../models/User.js';
+import { AppError } from '../utils/errors.js';
+import { lockDay } from './dayCloseStore.js';
 
 /**
  * Thin data-access layer. Routes and middleware depend on these small objects (not on Mongoose
@@ -28,13 +28,9 @@ import { lockDay } from "./dayCloseStore.js";
  */
 export function makeUserStore() {
   return {
-    findByFirebaseUid: (tenantId, firebaseUid) =>
-      User.findOne({ tenantId, firebaseUid }).lean(),
+    findByFirebaseUid: (tenantId, firebaseUid) => User.findOne({ tenantId, firebaseUid }).lean(),
     touchLogin: (tenantId, id) =>
-      User.updateOne(
-        { tenantId, _id: id },
-        { $set: { lastLoginAt: new Date() } },
-      ),
+      User.updateOne({ tenantId, _id: id }, { $set: { lastLoginAt: new Date() } }),
     findById: (tenantId, id) => User.findOne({ tenantId, _id: id }).lean(),
     findByEmail: (tenantId, email) => User.findOne({ tenantId, email }).lean(),
     async create(tenantId, data) {
@@ -42,13 +38,9 @@ export function makeUserStore() {
       return doc.toObject();
     },
     update: (tenantId, id, data) =>
-      User.findOneAndUpdate(
-        { tenantId, _id: id },
-        { $set: data },
-        { new: true },
-      ).lean(),
+      User.findOneAndUpdate({ tenantId, _id: id }, { $set: data }, { new: true }).lean(),
     countActiveAdmins: (tenantId) =>
-      User.countDocuments({ tenantId, role: "admin", isActive: true }),
+      User.countDocuments({ tenantId, role: 'admin', isActive: true }),
     async list({ tenantId, page, pageSize }) {
       const filter = { tenantId };
       const [rows, total] = await Promise.all([
@@ -78,11 +70,10 @@ export function makeAuditStore() {
       if (filters.from || filters.to) {
         match.at = {};
         if (filters.from) match.at.$gte = istStartOfDay(filters.from);
-        if (filters.to)
-          match.at.$lt = istStartOfDay(addDaysToDateString(filters.to, 1));
+        if (filters.to) match.at.$lt = istStartOfDay(addDaysToDateString(filters.to, 1));
       }
       if (filters.q) {
-        const rx = { $regex: escapeRegex(filters.q), $options: "i" };
+        const rx = { $regex: escapeRegex(filters.q), $options: 'i' };
         match.$or = [{ reason: rx }, { entityId: rx }];
       }
       const [rows, total] = await Promise.all([
@@ -103,7 +94,7 @@ export function makeAuditStore() {
       ];
       const users = ids.length
         ? await User.find({ tenantId, _id: { $in: ids } })
-            .select("name")
+            .select('name')
             .lean()
         : [];
       const nameOf = new Map(users.map((u) => [String(u._id), u.name]));
@@ -118,8 +109,8 @@ export function makeAuditStore() {
     /** What the filter drop-downs offer: people and record types that really appear in the log. */
     async options(tenantId) {
       const [userIds, entities] = await Promise.all([
-        AuditLog.distinct("userId", { tenantId }),
-        AuditLog.distinct("entity", { tenantId }),
+        AuditLog.distinct('userId', { tenantId }),
+        AuditLog.distinct('entity', { tenantId }),
       ]);
       const ids = (userIds ?? [])
         .filter(Boolean)
@@ -129,7 +120,7 @@ export function makeAuditStore() {
         tenantId,
         _id: { $in: ids },
       })
-        .select("name role")
+        .select('name role')
         .sort({ name: 1 })
         .lean();
       return {
@@ -144,9 +135,9 @@ export function makeAuditStore() {
   };
 }
 
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // "2" before "10": compare scholar numbers as numbers, not as text.
-const NUMERIC = { locale: "en", numericOrdering: true };
+const NUMERIC = { locale: 'en', numericOrdering: true };
 
 // Every word typed must match somewhere (AND), and a word can match ANY part of the name,
 // father's name, mother's name, admission number, mobile number, address or village (so "sha",
@@ -155,7 +146,7 @@ function addTextSearch(base, q) {
   if (!q || !q.trim()) return;
   const words = q.trim().toLowerCase().split(/\s+/).slice(0, 5);
   base.$and = words.map((w) => {
-    const rx = { $regex: escapeRegex(w), $options: "i" };
+    const rx = { $regex: escapeRegex(w), $options: 'i' };
     return {
       $or: [
         { nameLower: { $regex: escapeRegex(w) } },
@@ -172,33 +163,20 @@ function addTextSearch(base, q) {
 
 /** Mongo condition for "on the bus now" (true) or "not on the bus" (false). */
 export function onBusFilter(onBus) {
-  const on = {
-    usesTransport: true,
-    transportFrom: { $exists: true, $ne: null },
-  };
+  const on = { usesTransport: true, transportFrom: { $exists: true, $ne: null } };
   return onBus ? on : { $nor: [on] };
 }
 
 export function makeStudentStore() {
   return {
     // Search: exact admission number, or name starting with the text (uses the nameLower index).
-    async list({
-      tenantId,
-      page,
-      pageSize,
-      q,
-      classKey,
-      section,
-      status,
-      sort,
-      dir,
-    }) {
+    async list({ tenantId, page, pageSize, q, classKey, section, status, sort, dir }) {
       const base = { tenantId };
       if (classKey) base.classKey = classKey;
       if (section) base.section = section;
       addTextSearch(base, q);
       const filter = status ? { ...base, status } : base;
-      const way = dir === "desc" ? -1 : 1;
+      const way = dir === 'desc' ? -1 : 1;
       // Every sort ends with the scholar number so the order is stable between pages.
       const SORTS = {
         admissionNo: { admissionNo: way },
@@ -208,14 +186,14 @@ export function makeStudentStore() {
         status: { status: way, admissionNo: 1 },
       };
       let rowsPromise;
-      if (sort === "class") {
+      if (sort === 'class') {
         // Class order is the school order (PG, Nursery, LKG ... 12th), not alphabetical, so we
         // rank each row by its position in CLASS_KEYS before sorting.
         rowsPromise = Student.aggregate([
           { $match: filter },
           {
             $addFields: {
-              classRank: { $indexOfArray: [CLASS_KEYS, "$classKey"] },
+              classRank: { $indexOfArray: [CLASS_KEYS, '$classKey'] },
             },
           },
           { $sort: { classRank: way, section: 1, admissionNo: 1 } },
@@ -234,9 +212,9 @@ export function makeStudentStore() {
         rowsPromise,
         Student.countDocuments(filter),
         // Totals ignore the Status filter, so the cards always show active + inactive = total.
-        Student.countDocuments({ ...base, status: "active" }),
-        Student.countDocuments({ ...base, status: "inactive" }),
-        Student.distinct("section", {
+        Student.countDocuments({ ...base, status: 'active' }),
+        Student.countDocuments({ ...base, status: 'inactive' }),
+        Student.distinct('section', {
           tenantId,
           ...(classKey ? { classKey } : {}),
         }),
@@ -251,14 +229,14 @@ export function makeStudentStore() {
     // admission number -> student id, for importing old fees against existing students
     async idsByAdmissionNo(tenantId, nos) {
       const rows = await Student.find({ tenantId, admissionNo: { $in: nos } })
-        .select("admissionNo")
+        .select('admissionNo')
         .lean();
       return new Map(rows.map((r) => [r.admissionNo, r._id]));
     },
     findById: (tenantId, id) => Student.findOne({ tenantId, _id: id }).lean(),
     findManyByIds: (tenantId, ids) =>
       Student.find({ tenantId, _id: { $in: ids } })
-        .select("admissionNo name classKey")
+        .select('admissionNo name classKey')
         .lean(),
     /**
      * Which of these students already have money or certificate records. Those records are
@@ -268,15 +246,13 @@ export function makeStudentStore() {
     async recordsBlockingDelete(tenantId, ids) {
       const where = { tenantId, studentId: { $in: ids } };
       const kinds = [
-        ["receipt", Receipt],
-        ["rebate", Rebate],
-        ["Transfer Certificate", TransferCertificate],
-        ["Bonafide certificate", BonafideCertificate],
-        ["certificate request", CertificateRequest],
+        ['receipt', Receipt],
+        ['rebate', Rebate],
+        ['Transfer Certificate', TransferCertificate],
+        ['Bonafide certificate', BonafideCertificate],
+        ['certificate request', CertificateRequest],
       ];
-      const found = await Promise.all(
-        kinds.map(([, model]) => model.distinct("studentId", where)),
-      );
+      const found = await Promise.all(kinds.map(([, model]) => model.distinct('studentId', where)));
       const out = new Map();
       kinds.forEach(([name], i) => {
         for (const id of found[i]) {
@@ -294,32 +270,24 @@ export function makeStudentStore() {
     },
     async existingAdmissionNos(tenantId, list) {
       const found = await Student.find({ tenantId, admissionNo: { $in: list } })
-        .select("admissionNo")
+        .select('admissionNo')
         .lean();
       return new Set(found.map((s) => s.admissionNo));
     },
     // Students for the Fees Database (filters narrow the set before fees are worked out).
     async forFees(tenantId, f = {}) {
       const base = { tenantId };
-      for (const k of [
-        "classKey",
-        "section",
-        "village",
-        "category",
-        "gender",
-        "status",
-      ])
+      for (const k of ['classKey', 'section', 'village', 'category', 'gender', 'status'])
         if (f[k]) base[k] = f[k];
       if (f.newAdmission !== undefined) base.isNewAdmission = f.newAdmission;
       if (f.rte !== undefined) base.isRTE = f.rte;
       addTextSearch(base, f.q);
       // "Uses transport" = on the bus NOW, the same meaning as the Transport module: entered there
       // (has a start month) and not stopped. The old Excel flag alone does not count.
-      if (f.transport !== undefined)
-        base.$and = [...(base.$and ?? []), onBusFilter(f.transport)];
+      if (f.transport !== undefined) base.$and = [...(base.$and ?? []), onBusFilter(f.transport)];
       return Student.find(base)
         .select(
-          "admissionNo name fatherName classKey section contactNo address village usesTransport isNewAdmission isRTE status category gender",
+          'admissionNo name fatherName classKey section contactNo address village usesTransport isNewAdmission isRTE status category gender',
         )
         .collation(NUMERIC)
         .sort({ admissionNo: 1 })
@@ -329,7 +297,7 @@ export function makeStudentStore() {
     activeForPlan: (tenantId, { classKey, ids } = {}) =>
       Student.find({
         tenantId,
-        status: "active",
+        status: 'active',
         ...(classKey ? { classKey } : {}),
         ...(ids ? { _id: { $in: ids } } : {}),
       }).lean(),
@@ -340,11 +308,8 @@ export function makeStudentStore() {
      * 'pending' (flagged as bus student in the old Excel but not entered in the module yet),
      * or none = all three. Numbers sort as numbers.
      */
-    async listTransport(
-      tenantId,
-      { q, state, page = 1, pageSize = 25, all = false } = {},
-    ) {
-      const f = { tenantId, status: "active" };
+    async listTransport(tenantId, { q, state, page = 1, pageSize = 25, all = false } = {}) {
+      const f = { tenantId, status: 'active' };
       const states = {
         on: {
           usesTransport: true,
@@ -366,23 +331,17 @@ export function makeStudentStore() {
         f.$and = [
           ...(f.$and ?? []),
           {
-            $or: [
-              { usesTransport: true },
-              { transportFrom: { $exists: true, $ne: null } },
-            ],
+            $or: [{ usesTransport: true }, { transportFrom: { $exists: true, $ne: null } }],
           },
         ];
       const cursor = Student.find(f)
         .select(
-          "admissionNo name fatherName classKey section contactNo address village usesTransport transportFrom transportUntil",
+          'admissionNo name fatherName classKey section contactNo address village usesTransport transportFrom transportUntil',
         )
         .collation(NUMERIC)
         .sort({ admissionNo: 1 });
       if (!all) cursor.skip((page - 1) * pageSize).limit(pageSize);
-      const [rows, total] = await Promise.all([
-        cursor.lean(),
-        Student.countDocuments(f),
-      ]);
+      const [rows, total] = await Promise.all([cursor.lean(), Student.countDocuments(f)]);
       return { rows, total };
     },
     async createMany(tenantId, docs) {
@@ -442,15 +401,14 @@ export function makeChargeStore() {
         tenantId,
         fy,
         studentId: { $in: studentIds },
-        head: { $in: ["old_fees", "transport_old"] },
+        head: { $in: ['old_fees', 'transport_old'] },
       })
-        .select("studentId head")
+        .select('studentId head')
         .lean();
       return new Set(rows.map((r) => `${r.studentId}|${r.head}`));
     },
     // Used when a student leaves the bus: unpaid, unreferenced transport months are removed.
-    deleteByIds: (tenantId, ids) =>
-      Charge.deleteMany({ tenantId, _id: { $in: ids } }),
+    deleteByIds: (tenantId, ids) => Charge.deleteMany({ tenantId, _id: { $in: ids } }),
     // Adds many single charges at once; existing ones (same student/head/period) are left alone.
     async postBatch(tenantId, fy, items) {
       if (items.length === 0) return 0;
@@ -478,7 +436,7 @@ export function makeChargeStore() {
     },
     listForStudents: (tenantId, studentIds, fy) =>
       Charge.find({ tenantId, fy, studentId: { $in: studentIds } })
-        .select("studentId head period dueDate amountPaise")
+        .select('studentId head period dueDate amountPaise')
         .lean(),
     listForStudent: (tenantId, studentId, fy) =>
       Charge.find({ tenantId, studentId, fy }).sort({ dueDate: 1 }).lean(),
@@ -509,7 +467,7 @@ export function makeChargeStore() {
 // reads `receipts`; a rebate lowers what a charge asks for but is not a payment, so it has no
 // receipt `lines` (no money) - only `concessionLines`.
 async function rebateCredits(tenantId, studentId, fy, session = null) {
-  const rows = await Rebate.find({ tenantId, studentId, fy, status: "active" })
+  const rows = await Rebate.find({ tenantId, studentId, fy, status: 'active' })
     .session(session)
     .lean();
   const concessionLines = rows.flatMap((r) => r.lines);
@@ -524,10 +482,10 @@ async function rebateCredits(tenantId, studentId, fy, session = null) {
 async function cancelledReceiptIds(tenantId, extra = {}, session = null) {
   const rows = await ReceiptCancellation.find({
     tenantId,
-    status: "cancelled",
+    status: 'cancelled',
     ...extra,
   })
-    .select("receiptId")
+    .select('receiptId')
     .session(session)
     .lean();
   return rows.map((r) => r.receiptId);
@@ -539,7 +497,7 @@ async function latestRejections(tenantId, receiptIds) {
   const rows = await ReceiptCancellation.find({
     tenantId,
     receiptId: { $in: receiptIds },
-    status: "rejected",
+    status: 'rejected',
   })
     .sort({ decidedAt: 1 })
     .lean();
@@ -549,7 +507,7 @@ async function latestRejections(tenantId, receiptIds) {
 
 const isDuplicateKey = (err) => err?.code === 11000;
 const isRetryable = (err) =>
-  isDuplicateKey(err) || err?.hasErrorLabel?.("TransientTransactionError");
+  isDuplicateKey(err) || err?.hasErrorLabel?.('TransientTransactionError');
 
 /**
  * Receipts. `issue` is the ONE place a receipt is created, and it does everything in a single
@@ -564,15 +522,7 @@ const isRetryable = (err) =>
  */
 export function makeReceiptStore() {
   return {
-    async issue({
-      tenantId,
-      studentId,
-      fy,
-      kind,
-      idempotencyKey,
-      build,
-      audit,
-    }) {
+    async issue({ tenantId, studentId, fy, kind, idempotencyKey, build, audit }) {
       const find = (session) =>
         Receipt.findOne({ tenantId, idempotencyKey })
           .session(session ?? null)
@@ -598,25 +548,15 @@ export function makeReceiptStore() {
             // first answer; this is the one that cannot be raced.)
             const today = todayIst();
             await lockDay(tenantId, today, session);
-            if (
-              await DayClose.exists({
-                tenantId,
-                date: today,
-                status: "closed",
-              }).session(session)
-            )
+            if (await DayClose.exists({ tenantId, date: today, status: 'closed' }).session(session))
               throw new AppError(
-                "DAY_CLOSED",
+                'DAY_CLOSED',
                 409,
                 "Today's Day Close is done, so fees cannot be collected. Ask the Admin to reopen the day.",
               );
             // WHY cancelled ones are left out: a cancelled receipt's money was never kept, so it
             // must not count as paid when the next receipt is checked.
-            const gone = await cancelledReceiptIds(
-              tenantId,
-              { studentId },
-              session,
-            );
+            const gone = await cancelledReceiptIds(tenantId, { studentId }, session);
             const prior = [
               ...(await Receipt.find({
                 tenantId,
@@ -632,7 +572,7 @@ export function makeReceiptStore() {
             const counter = await Counter.findOneAndUpdate(
               { tenantId, key: `receipt:${kind}:${fy}` },
               { $inc: { seq: 1 } },
-              { upsert: true, returnDocument: "after", session },
+              { upsert: true, returnDocument: 'after', session },
             ).lean();
             const [created] = await Receipt.create(
               [
@@ -675,9 +615,7 @@ export function makeReceiptStore() {
       const or = [{ number: t }];
       if (/^\d{1,9}$/.test(t)) or.push({ seq: Number(t) });
       const rows = await Receipt.find({ tenantId, studentId, $or: or }).lean();
-      const gone = new Set(
-        (await cancelledReceiptIds(tenantId, { studentId })).map(String),
-      );
+      const gone = new Set((await cancelledReceiptIds(tenantId, { studentId })).map(String));
       return rows.find((r) => !gone.has(String(r._id))) ?? null;
     },
     async findById(tenantId, id) {
@@ -686,12 +624,11 @@ export function makeReceiptStore() {
       const c = await ReceiptCancellation.findOne({
         tenantId,
         receiptId: id,
-        status: { $in: ["requested", "cancelled"] },
+        status: { $in: ['requested', 'cancelled'] },
       }).lean();
       const rejection = c
         ? null
-        : ((await latestRejections(tenantId, [receipt._id])).get(String(id)) ??
-          null);
+        : ((await latestRejections(tenantId, [receipt._id])).get(String(id)) ?? null);
       return { ...receipt, cancellation: c ?? null, rejection };
     },
     // Only receipts that still count (cancelled ones are left out), used for dues and ledgers.
@@ -716,7 +653,7 @@ export function makeReceiptStore() {
         studentId: { $in: studentIds },
         _id: { $nin: gone },
       })
-        .select("studentId kind lines lateFee.periods issuedAt")
+        .select('studentId kind lines lateFee.periods issuedAt')
         .lean();
     },
     /** Filtered, paginated list for the Receipts screens, plus totals of the receipts that count. */
@@ -730,23 +667,19 @@ export function makeReceiptStore() {
       if (kind) match.kind = kind;
       if (mode) match.mode = mode;
       if (q?.trim()) {
-        const rx = { $regex: escapeRegex(q.trim()), $options: "i" };
-        match.$or = [
-          { number: rx },
-          { "student.name": rx },
-          { "student.admissionNo": rx },
-        ];
+        const rx = { $regex: escapeRegex(q.trim()), $options: 'i' };
+        match.$or = [{ number: rx }, { 'student.name': rx }, { 'student.admissionNo': rx }];
       }
       const cancelled = await cancelledReceiptIds(tenantId);
       const pendingRows = await ReceiptCancellation.find({
         tenantId,
-        status: "requested",
+        status: 'requested',
       })
-        .select("receiptId")
+        .select('receiptId')
         .lean();
       const rowMatch = { ...match };
-      if (status === "cancelled") rowMatch._id = { $in: cancelled };
-      else if (status === "valid") rowMatch._id = { $nin: cancelled };
+      if (status === 'cancelled') rowMatch._id = { $in: cancelled };
+      else if (status === 'valid') rowMatch._id = { $nin: cancelled };
       const [rows, total, groups] = await Promise.all([
         Receipt.find(rowMatch)
           .sort({ issuedAt: -1, seq: -1 })
@@ -758,8 +691,8 @@ export function makeReceiptStore() {
           { $match: { ...match, _id: { $nin: cancelled } } },
           {
             $group: {
-              _id: { kind: "$kind", mode: "$mode" },
-              paise: { $sum: "$totalPaise" },
+              _id: { kind: '$kind', mode: '$mode' },
+              paise: { $sum: '$totalPaise' },
               count: { $sum: 1 },
             },
           },
@@ -771,20 +704,17 @@ export function makeReceiptStore() {
         tenantId,
         rows
           .map((r) => r._id)
-          .filter(
-            (id) =>
-              !cancelledSet.has(String(id)) && !pendingSet.has(String(id)),
-          ),
+          .filter((id) => !cancelledSet.has(String(id)) && !pendingSet.has(String(id))),
       );
       return {
         rows: rows.map((r) => ({
           ...r,
           rejection: rejections.get(String(r._id)) ?? null,
           status: cancelledSet.has(String(r._id))
-            ? "cancelled"
+            ? 'cancelled'
             : pendingSet.has(String(r._id))
-              ? "cancel_requested"
-              : "valid",
+              ? 'cancel_requested'
+              : 'valid',
         })),
         total,
         groups: groups.map((g) => ({
@@ -821,7 +751,7 @@ export function makeReceiptStore() {
           const live = await ReceiptCancellation.findOne({
             tenantId,
             receiptId: receipt._id,
-            status: { $in: ["requested", "cancelled"] },
+            status: { $in: ['requested', 'cancelled'] },
           })
             .session(session)
             .lean();
@@ -836,7 +766,7 @@ export function makeReceiptStore() {
                 receiptId: receipt._id,
                 studentId: receipt.studentId,
                 receiptNumber: receipt.number,
-                status: "requested",
+                status: 'requested',
                 reason,
                 requestedBy: user.id,
                 requestedByName: user.name,
@@ -869,7 +799,7 @@ export function makeReceiptStore() {
             tenantId,
             _id: { $in: rows.map((r) => r.receiptId) },
           })
-            .select("number kind mode totalPaise issuedAt student cashierName")
+            .select('number kind mode totalPaise issuedAt student cashierName')
             .lean()
         : [];
       const byId = new Map(receipts.map((r) => [String(r._id), r]));
@@ -882,7 +812,7 @@ export function makeReceiptStore() {
       };
     },
     countPendingCancellations: (tenantId) =>
-      ReceiptCancellation.countDocuments({ tenantId, status: "requested" }),
+      ReceiptCancellation.countDocuments({ tenantId, status: 'requested' }),
     /**
      * The Principal decides a request. Only a still-"requested" record can be decided, so a
      * double click or two tabs cannot decide it twice (returns null then).
@@ -893,17 +823,17 @@ export function makeReceiptStore() {
         let result = null;
         await session.withTransaction(async () => {
           const saved = await ReceiptCancellation.findOneAndUpdate(
-            { tenantId, _id: id, status: "requested" },
+            { tenantId, _id: id, status: 'requested' },
             {
               $set: {
-                status: decision === "approve" ? "cancelled" : "rejected",
+                status: decision === 'approve' ? 'cancelled' : 'rejected',
                 decidedBy: String(user.id),
                 decidedByName: user.name,
                 decidedAt: new Date(),
                 ...(note ? { decisionNote: note } : {}),
               },
             },
-            { returnDocument: "after", session },
+            { returnDocument: 'after', session },
           ).lean();
           if (!saved) return;
           if (audit) await audit(saved, session);
@@ -926,16 +856,16 @@ export function makeReceiptStore() {
           const live = await ReceiptCancellation.findOne({
             tenantId,
             receiptId: receipt._id,
-            status: { $in: ["requested", "cancelled"] },
+            status: { $in: ['requested', 'cancelled'] },
           })
             .session(session)
             .lean();
-          if (live?.status === "cancelled") {
+          if (live?.status === 'cancelled') {
             result = null;
             return;
           }
           const decided = {
-            status: "cancelled",
+            status: 'cancelled',
             decidedBy: user.id,
             decidedByName: user.name,
             decidedAt: new Date(),
@@ -945,7 +875,7 @@ export function makeReceiptStore() {
             saved = await ReceiptCancellation.findOneAndUpdate(
               { tenantId, _id: live._id },
               { $set: { ...decided, decisionNote: reason } },
-              { returnDocument: "after", session },
+              { returnDocument: 'after', session },
             ).lean();
           } else {
             const [created] = await ReceiptCancellation.create(

@@ -11,7 +11,9 @@
     "fees:seed": "node --env-file-if-exists=.env src/scripts/seedFeeStructure.js",
     "students:demo": "node --env-file-if-exists=.env src/scripts/seedDemoStudents.js",
     "money:demo": "node --env-file-if-exists=.env src/scripts/seedDemoMoney.js",
-    "users:seed": "node --env-file-if-exists=.env src/scripts/seedUsers.js"
+    "users:seed": "node --env-file-if-exists=.env src/scripts/seedUsers.js",
+    "loadtest": "node src/scripts/loadTest.js",
+    "data:reset": "node --env-file-if-exists=.env src/scripts/resetData.js"
   },
   "dependencies": {
     "@erp/shared": "workspace:*",
@@ -23,7 +25,6 @@
     "mongoose": "^9.11.2",
     "pino": "^10.4.0",
     "pino-http": "^11.0.0",
-    "qs": "^6.17.0",
     "read-excel-file": "^9.3.12",
     "write-excel-file": "^4.1.1",
     "zod": "^4.6.7"

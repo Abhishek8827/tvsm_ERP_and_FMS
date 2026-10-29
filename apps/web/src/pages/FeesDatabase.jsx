@@ -4,7 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CLASSES, classLabel, formatINR, getFinancialYear } from "@erp/shared";
 import { api } from "../api/client";
@@ -481,23 +481,26 @@ export function FeesDatabase() {
     }
   }
 
-  function onSort(field) {
-    setDir(sort === field && dir === "asc" ? "desc" : "asc");
-    setSort(field);
-    setPage(1);
-  }
-  const head = (label, field) => (
-    <button
-      type="button"
-      className="inline-flex items-center gap-1 font-medium uppercase hover:text-ink"
-      aria-label={`Sort by ${label}`}
-      onClick={() => onSort(field)}
-    >
-      {label}
-      <span aria-hidden>
-        {sort === field ? (dir === "asc" ? "▲" : "▼") : "↕"}
-      </span>
-    </button>
+  // useCallback so the column list below is rebuilt only when the sort really changes.
+  const head = useCallback(
+    (label, field) => (
+      <button
+        type="button"
+        className="inline-flex items-center gap-1 font-medium uppercase hover:text-ink"
+        aria-label={`Sort by ${label}`}
+        onClick={() => {
+          setDir(sort === field && dir === "asc" ? "desc" : "asc");
+          setSort(field);
+          setPage(1);
+        }}
+      >
+        {label}
+        <span aria-hidden>
+          {sort === field ? (dir === "asc" ? "▲" : "▼") : "↕"}
+        </span>
+      </button>
+    ),
+    [sort, dir],
   );
 
   const uptoLabel = filters.upto
@@ -507,8 +510,8 @@ export function FeesDatabase() {
     : "today";
   const defs = useMemo(
     () => buildColumnDefs({ head, uptoLabel }),
-    [sort, dir, uptoLabel],
-  ); // eslint-disable-line react-hooks/exhaustive-deps
+    [head, uptoLabel],
+  );
   const shown = new Set(
     visible ?? defs.filter((d) => d.show).map((d) => d.key),
   );

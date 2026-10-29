@@ -30,6 +30,7 @@ import { certificatesRouter } from "./routes/certificates.js";
 import { transportRouter } from "./routes/transport.js";
 import { receiptsRouter } from "./routes/receipts.js";
 import { usersRouter } from "./routes/users.js";
+import { AppError } from "./utils/errors.js";
 /**
  * `auth` = { verifyToken, userStore, auditStore } . When it is missing (Firebase not configured)
  * protected routes answer 503 AUTH_NOT_CONFIGURED instead of pretending to work.
@@ -47,7 +48,13 @@ export function createApp(env, logger, auth) {
       origin: (origin, cb) => {
         // No Origin header = server-to-server or same-origin tooling; browsers always send one.
         if (!origin || env.CORS_ORIGIN.includes(origin)) return cb(null, true);
-        cb(new Error("Origin not allowed"));
+        cb(
+          new AppError(
+            "ORIGIN_NOT_ALLOWED",
+            403,
+            "This web address is not allowed to use the school system.",
+          ),
+        );
       },
       credentials: false,
       allowedHeaders: [

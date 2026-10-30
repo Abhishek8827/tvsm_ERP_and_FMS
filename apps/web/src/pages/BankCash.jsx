@@ -4,13 +4,12 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { formatINR } from "@erp/shared";
 import { api, newIdempotencyKey } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { accountLabel, errorText, parseRupees } from "../lib/rupees";
 import {
-  Badge,
   Button,
   Card,
   Dialog,
@@ -25,7 +24,7 @@ import {
 } from "../components/ui";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
-const MODE_LABEL = { upi: "UPI", qr: "QR" };
+const MODE_LABEL = { upi: "UPI / QR" };
 
 /** Read-only balances: cash, petty cash and every bank account. */
 function Balances({ data }) {
@@ -60,80 +59,10 @@ function Balances({ data }) {
   );
 }
 
-/** Cashier: all balances, only after the 4-digit PIN. Nothing is cached; it hides again after 2 minutes. */
-function CashierPinGate() {
-  const [pin, setPin] = useState("");
-  const [data, setData] = useState(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    if (!data) return undefined;
-    const t = window.setTimeout(() => setData(null), 120_000);
-    return () => window.clearTimeout(t);
-  }, [data]);
-  async function unlock(e) {
-    e.preventDefault();
-    setBusy(true);
-    setError("");
-    try {
-      setData(
-        await api("/api/money/cashier-view", { method: "POST", body: { pin } }),
-      );
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setPin("");
-      setBusy(false);
-    }
-  }
-  if (data)
-    return (
-      <div className="flex flex-col gap-4">
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-ink-muted">
-            Hides by itself after 2 minutes.
-          </p>
-          <Button variant="secondary" onClick={() => setData(null)}>
-            Hide balances
-          </Button>
-        </div>
-        <Balances data={data} />
-      </div>
-    );
-  return (
-    <Card
-      title="Enter PIN"
-      subtitle="The balances are protected by a 4-digit PIN. The Admin sets it."
-    >
-      <form onSubmit={unlock} className="flex max-w-xs flex-col gap-3">
-        <Input
-          label="PIN"
-          type="password"
-          inputMode="numeric"
-          autoComplete="off"
-          maxLength={4}
-          value={pin}
-          error={error}
-          onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-        />
-        <Button type="submit" loading={busy} disabled={pin.length !== 4}>
-          Show balances
-        </Button>
-      </form>
-    </Card>
-  );
-}
-
 function BankDialog({ open, onClose }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
-  const [f, setF] = useState({
-    name: "",
-    last4: "",
-    opening: "",
-    upi: false,
-    qr: false,
-  });
+  const [f, setF] = useState({ name: "", last4: "", opening: "", upi: false });
   const [errors, setErrors] = useState({});
   const opening = parseRupees(f.opening);
   const save = useMutation({
@@ -144,14 +73,14 @@ function BankDialog({ open, onClose }) {
           name: f.name,
           last4: f.last4 || undefined,
           openingPaise: opening.paise || undefined,
-          defaultForModes: [...(f.upi ? ["upi"] : []), ...(f.qr ? ["qr"] : [])],
+          defaultForModes: f.upi ? ["upi"] : [],
         },
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["money"] });
       await queryClient.invalidateQueries({ queryKey: ["banks"] });
       notify("Bank account added.", "success");
-      setF({ name: "", last4: "", opening: "", upi: false, qr: false });
+      setF({ name: "", last4: "", opening: "", upi: false });
       onClose();
     },
     onError: (e) => {
@@ -214,15 +143,7 @@ function BankDialog({ open, onClose }) {
             checked={f.upi}
             onChange={(e) => setF((p) => ({ ...p, upi: e.target.checked }))}
           />{" "}
-          Pre-select for UPI receipts
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={f.qr}
-            onChange={(e) => setF((p) => ({ ...p, qr: e.target.checked }))}
-          />{" "}
-          Pre-select for QR receipts
+          Pre-select for UPI / QR receipts
         </label>
       </div>
     </Dialog>
@@ -429,83 +350,6 @@ function TransferDialog({ open, onClose, overview }) {
   );
 }
 
-function PinCard() {
-  const { notify } = useToast();
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState("");
-  const status = useQuery({
-    queryKey: ["cashier-pin"],
-    queryFn: () => api("/api/cashier-pin"),
-  });
-  const set = useMutation({
-    mutationFn: () => api("/api/cashier-pin", { method: "PUT", body: { pin } }),
-    onSuccess: async () => {
-      setPin("");
-      setError("");
-      await status.refetch();
-      notify(
-        "Cashier PIN saved. If it was locked, it is open again.",
-        "success",
-      );
-    },
-    onError: (e) => setError(e.fields?.pin ?? e.message),
-  });
-  return (
-    <Card
-      title="Cashier PIN"
-      subtitle="The Cashier needs this 4-digit PIN to see all balances. 5 wrong tries lock it."
-    >
-      <div className="flex flex-col gap-3">
-        {status.isPending ? (
-          <Spinner />
-        ) : status.isError ? (
-          <ErrorState
-            message={status.error.message}
-            onRetry={() => void status.refetch()}
-          />
-        ) : (
-          <p className="text-sm">
-            {status.data.isSet ? (
-              status.data.locked ? (
-                <Badge tone="danger">Locked. Set a new PIN to open it.</Badge>
-              ) : (
-                <Badge tone="success">PIN is set</Badge>
-              )
-            ) : (
-              <Badge tone="warning">PIN not set yet</Badge>
-            )}
-          </p>
-        )}
-        <form
-          className="flex flex-wrap items-end gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (pin.length === 4) set.mutate();
-          }}
-        >
-          <Input
-            label={status.data?.isSet ? "New PIN" : "PIN"}
-            type="password"
-            inputMode="numeric"
-            autoComplete="new-password"
-            maxLength={4}
-            value={pin}
-            error={error}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
-          />
-          <Button
-            type="submit"
-            loading={set.isPending}
-            disabled={pin.length !== 4}
-          >
-            {status.data?.isSet ? "Reset PIN" : "Set PIN"}
-          </Button>
-        </form>
-      </div>
-    </Card>
-  );
-}
-
 function BankSettings({ overview }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -547,7 +391,7 @@ function BankSettings({ overview }) {
       key: "def",
       header: "Default for receipts",
       render: (b) =>
-        ["upi", "qr"].map((m) => (
+        ["upi"].map((m) => (
           <label
             key={m}
             className="mr-3 inline-flex items-center gap-1 text-sm"
@@ -636,8 +480,7 @@ function StaffView({ isAdmin }) {
   const q = useQuery({
     queryKey: ["money", "overview"],
     queryFn: () => api("/api/money/overview"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 60_000,
+    refetchInterval: 60_000,
   });
   if (q.isPending) return <Spinner label="Loading balances" />;
   if (q.isError)
@@ -669,7 +512,6 @@ function StaffView({ isAdmin }) {
       >
         <TransfersTable banks={q.data.banks} />
       </Card>
-      {isAdmin && <PinCard />}
       {isAdmin && dialog === "bank" && (
         <BankDialog open onClose={() => setDialog(null)} />
       )}
@@ -697,11 +539,7 @@ export function BankCash() {
           Cash in hand, petty cash and every bank account.
         </p>
       </div>
-      {role === "cashier" ? (
-        <CashierPinGate />
-      ) : (
-        <StaffView isAdmin={role === "admin"} />
-      )}
+      <StaffView isAdmin={role === "admin"} />
     </div>
   );
 }

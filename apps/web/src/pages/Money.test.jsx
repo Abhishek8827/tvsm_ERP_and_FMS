@@ -350,18 +350,6 @@ describe("Petty cash", () => {
     ],
   };
 
-  it("Cashier sees only the balance and the last entries, with no way to add or reverse", async () => {
-    role = "cashier";
-    route({ "/api/petty/summary": summary });
-    show(<PettyCash />);
-    expect(await screen.findByText("₹4,200")).toBeInTheDocument();
-    expect(screen.getByText("Raju")).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /New entry|Top up|Reverse/ }),
-    ).not.toBeInTheDocument();
-    expect(api.mock.calls.map((c) => c[0])).toEqual(["/api/petty/summary"]);
-  });
-
   it("Admin can add an entry (idempotent) and top up from cash; entries show serial numbers", async () => {
     route({
       "/api/petty/summary": summary,
@@ -415,74 +403,20 @@ describe("Bank & Cash", () => {
     ],
   };
 
-  it("Cashier sees NO balance until the right PIN is entered", async () => {
-    role = "cashier";
-    api.mockRejectedValueOnce(
-      new ApiError("PIN_WRONG", 422, "Wrong PIN. 4 tries left."),
-    );
-    show(<BankCash />);
-    expect(screen.queryByText("₹10,000")).not.toBeInTheDocument();
-    const pin = screen.getByLabelText("PIN");
-    expect(
-      screen.getByRole("button", { name: "Show balances" }),
-    ).toBeDisabled();
-    await userEvent.type(pin, "1111");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Show balances" }),
-    );
-    expect(await screen.findByText(/Wrong PIN/)).toBeInTheDocument();
-    expect(screen.queryByText("₹10,000")).not.toBeInTheDocument();
-    api.mockResolvedValueOnce(overview);
-    await userEvent.type(screen.getByLabelText("PIN"), "1234");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Show balances" }),
-    );
-    expect(await screen.findByText("₹10,000")).toBeInTheDocument();
-    expect(screen.getByText("₹50,000")).toBeInTheDocument();
-    expect(api).toHaveBeenLastCalledWith("/api/money/cashier-view", {
-      method: "POST",
-      body: { pin: "1234" },
-    });
-    await userEvent.click(
-      screen.getByRole("button", { name: "Hide balances" }),
-    );
-    expect(screen.queryByText("₹10,000")).not.toBeInTheDocument();
-  });
-
-  it("a locked PIN message is shown to the Cashier", async () => {
-    role = "cashier";
-    api.mockRejectedValueOnce(
-      new ApiError(
-        "PIN_LOCKED",
-        423,
-        "The PIN is locked. Ask the Admin to set a new PIN.",
-      ),
-    );
-    show(<BankCash />);
-    await userEvent.type(screen.getByLabelText("PIN"), "1234");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Show balances" }),
-    );
-    expect(await screen.findByText(/locked/)).toBeInTheDocument();
-  });
-
-  it("Admin sees balances, bank settings, transfers and the PIN card", async () => {
+  it("Admin sees balances, bank settings, and transfers", async () => {
     route({
       "/api/money/overview": overview,
       "/api/transfers": { rows: [], total: 0 },
-      "/api/cashier-pin": { isSet: false, locked: false },
     });
     show(<BankCash />);
     expect((await screen.findAllByText("₹50,000")).length).toBeGreaterThan(0);
     expect(
       screen.getByRole("button", { name: "Transfer money" }),
     ).toBeInTheDocument();
-    expect(
-      await screen.findByRole("button", { name: "Set PIN" }),
-    ).toBeInTheDocument();
+    expect(screen.queryByText("Cashier PIN")).not.toBeInTheDocument();
   });
 
-  it("Principal has no transfer, bank or PIN controls", async () => {
+  it("Principal has no transfer or bank controls", async () => {
     role = "principal";
     route({
       "/api/money/overview": overview,

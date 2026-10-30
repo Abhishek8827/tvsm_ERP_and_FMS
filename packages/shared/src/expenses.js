@@ -14,7 +14,6 @@ import { assertPaise } from "./money.js";
 export const PETTY_LIMIT_PAISE = 500 * 100; // petty entries must be STRICTLY below this
 export const AUTHORISERS = ["President", "Vice President"];
 export const PAY_MODES = ["cash", "bank"];
-export const PIN_MAX_ATTEMPTS = 5;
 
 export class ExpenseRuleError extends Error {
   constructor(code, message, field) {
@@ -185,9 +184,6 @@ export function checkTransfer({ from, to, amountPaise, balances }) {
 export function checkReason(reason, message = "A reason is required.") {
   needText(reason, "reason", message);
 }
-
-export const isValidPin = (pin) =>
-  typeof pin === "string" && /^\d{4}$/.test(pin);
 
 /** Voucher number: EXP-FY2026-27/0001 */
 export const voucherNumber = (fy, seq) =>

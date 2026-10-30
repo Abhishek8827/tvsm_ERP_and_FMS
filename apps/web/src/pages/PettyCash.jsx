@@ -12,14 +12,11 @@ import { errorText, parseRupees, todayInput } from "../lib/rupees";
 import {
   Badge,
   Button,
-  Card,
   ConfirmDialog,
   Dialog,
-  ErrorState,
   Input,
   Pagination,
   Select,
-  Spinner,
   StatCard,
   Table,
   useToast,
@@ -226,55 +223,6 @@ function TopUpDialog({ open, onClose, cashPaise }) {
   );
 }
 
-/** Cashier: only the remaining balance and the last 5 entries. */
-function CashierView() {
-  const q = useQuery({
-    queryKey: ["petty", "summary"],
-    queryFn: () => api("/api/petty/summary"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 60_000,
-  });
-  if (q.isPending) return <Spinner label="Loading petty cash" />;
-  if (q.isError)
-    return (
-      <ErrorState message={q.error.message} onRetry={() => void q.refetch()} />
-    );
-  const columns = [
-    { key: "no", header: "Serial no.", render: (e) => e.seq },
-    { key: "date", header: "Date", render: (e) => e.date },
-    { key: "payee", header: "Payee", render: (e) => e.payeeName },
-    { key: "part", header: "Particulars", render: (e) => e.particulars },
-    {
-      key: "amt",
-      header: "Amount",
-      align: "right",
-      render: (e) => money(e.amountPaise),
-    },
-    {
-      key: "st",
-      header: "",
-      render: (e) =>
-        e.status === "reversed" ? <Badge tone="danger">Reversed</Badge> : null,
-    },
-  ];
-  return (
-    <div className="flex flex-col gap-4">
-      <StatCard
-        label="Petty cash remaining"
-        value={money(q.data.balancePaise)}
-      />
-      <Card title="Last 5 entries" subtitle="Entries are made by the Admin.">
-        <Table
-          columns={columns}
-          rows={q.data.last}
-          rowKey={(e) => e.id}
-          emptyTitle="No petty cash entry yet"
-        />
-      </Card>
-    </div>
-  );
-}
-
 function RegisterView({ isAdmin }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -456,11 +404,7 @@ export function PettyCash() {
           number.
         </p>
       </div>
-      {role === "cashier" ? (
-        <CashierView />
-      ) : (
-        <RegisterView isAdmin={role === "admin"} />
-      )}
+      <RegisterView isAdmin={role === "admin"} />
     </div>
   );
 }

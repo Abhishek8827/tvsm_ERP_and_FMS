@@ -52,7 +52,7 @@ const clean = (v) => {
 };
 const rupees = (paise) =>
   formatINR(paise ?? 0, { hideZeroPaise: true }).replace("₹", "Rs ");
-const MODE = { cash: "Cash", upi: "UPI", qr: "QR" };
+const MODE = { cash: "Cash", upi: "UPI / QR" };
 const istDate = (d) =>
   dMonY(new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }));
 

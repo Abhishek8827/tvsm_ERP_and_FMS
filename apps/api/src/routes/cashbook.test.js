@@ -36,7 +36,7 @@ const day = {
     rec({ number: 'S-1', totalPaise: 150000, dueAfterPaise: 50000 }),
     rec({ number: 'S-2', mode: 'upi', bankId: 'hdfc', totalPaise: 200000 }),
     rec({ number: 'T-1', kind: 'transport', totalPaise: 60000 }),
-    rec({ number: 'T-2', kind: 'transport', mode: 'qr', bankId: 'kotak', totalPaise: 40000 }),
+    rec({ number: 'T-2', kind: 'transport', mode: 'upi', bankId: 'kotak', totalPaise: 40000 }),
     rec({ number: 'S-3', mode: 'upi', totalPaise: 5000 }), // no bank chosen (old receipt)
   ],
   ledgerDay: [

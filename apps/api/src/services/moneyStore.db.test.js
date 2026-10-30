@@ -8,7 +8,7 @@ import { makeReceiptStore } from "./stores.js";
 
 /**
  * Real-database tests of the money code: balances, vouchers, part payments, petty cash, transfers,
- * reversals, the PIN lock. They need an in-memory MongoDB replica set (transactions). Where no
+ * reversals. They need an in-memory MongoDB replica set (transactions). Where no
  * mongod can be downloaded they are skipped, loudly, like the receipt tests.
  */
 let repl;
@@ -209,11 +209,7 @@ describe.skipIf(!haveDb)("money store on a real database", () => {
     await store.addAdjustment({
       tenantId: T,
       id: v._id,
-      input: {
-        amountPaise: rs(500),
-        reason: "Discount",
-        remark: "Agreed with vendor",
-      },
+      input: { amountPaise: rs(500), reason: "Discount", remark: "ok" },
       user,
     });
     const o = await store.overview(T);
@@ -500,30 +496,5 @@ describe.skipIf(!haveDb)("money store on a real database", () => {
     ).rejects.toThrow("audit down");
     expect((await store.overview(T)).cashPaise).toBe(rs(5000));
     expect((await store.getVoucher(T, v._id)).payments).toHaveLength(0);
-  });
-
-  it("the PIN is stored hashed, locks after 5 wrong tries, and only a new PIN unlocks it", async () => {
-    const T = fresh();
-    expect((await store.verifyPin({ tenantId: T, pin: "1234" })).reason).toBe(
-      "NOT_SET",
-    );
-    await store.setPin({ tenantId: T, pin: "1234", user });
-    const raw = await mongoose.connection.db
-      .collection("cashierpins")
-      .findOne({ tenantId: T });
-    expect(JSON.stringify(raw)).not.toContain("1234");
-    expect((await store.verifyPin({ tenantId: T, pin: "1234" })).ok).toBe(true);
-    for (let i = 0; i < 4; i += 1)
-      expect((await store.verifyPin({ tenantId: T, pin: "0000" })).reason).toBe(
-        "WRONG",
-      );
-    expect((await store.verifyPin({ tenantId: T, pin: "0000" })).reason).toBe(
-      "LOCKED",
-    );
-    expect((await store.verifyPin({ tenantId: T, pin: "1234" })).reason).toBe(
-      "LOCKED",
-    ); // even the right PIN
-    await store.setPin({ tenantId: T, pin: "4321", user });
-    expect((await store.verifyPin({ tenantId: T, pin: "4321" })).ok).toBe(true);
   });
 });

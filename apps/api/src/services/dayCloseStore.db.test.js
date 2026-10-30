@@ -47,7 +47,6 @@ const figuresOf = (t) => ({
   countedCashPaise: t.expectedCashPaise,
   differencePaise: 0,
   upiPaise: t.upiPaise,
-  qrPaise: t.qrPaise,
   receiptCount: t.receiptCount,
 });
 

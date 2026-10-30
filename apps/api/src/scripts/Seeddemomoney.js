@@ -25,7 +25,7 @@ const rs = (n) => n * 100;
 
 for (const [name, last4, opening, modes] of [
   ["IDFC (DEMO)", "0001", rs(250000), ["upi"]],
-  ["Kotak (DEMO)", "0002", rs(100000), ["qr"]],
+  ["Kotak (DEMO)", "0002", rs(100000), []],
 ]) {
   if (await BankAccount.exists({ tenantId, nameLower: name.toLowerCase() }))
     continue;

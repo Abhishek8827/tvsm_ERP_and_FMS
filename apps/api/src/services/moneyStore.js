@@ -1,8 +1,6 @@
-import crypto from "node:crypto";
 import mongoose from "mongoose";
 import {
   ExpenseRuleError,
-  PIN_MAX_ATTEMPTS,
   accountKey,
   balancesFrom,
   checkAdjustment,
@@ -16,7 +14,6 @@ import {
   voucherNumber,
 } from "@erp/shared";
 import { BankAccount } from "../models/BankAccount.js";
-import { CashierPin } from "../models/CashierPin.js";
 import { Counter } from "../models/Counter.js";
 import { ExpenseHead } from "../models/ExpenseHead.js";
 import { ExpensePayment } from "../models/ExpensePayment.js";
@@ -1048,57 +1045,6 @@ export function makeMoneyStore() {
           byName: o.createdByName,
         })),
         total,
-      };
-    },
-
-    // ---------- cashier PIN ----------
-    async setPin({ tenantId, pin, user, audit }) {
-      const salt = crypto.randomBytes(16).toString("hex");
-      const hash = crypto.scryptSync(pin, salt, 32).toString("hex");
-      await CashierPin.updateOne(
-        { tenantId },
-        {
-          $set: {
-            hash,
-            salt,
-            failed: 0,
-            locked: false,
-            setBy: String(user.id),
-            setAt: new Date(),
-          },
-        },
-        { upsert: true },
-      );
-      if (audit) await audit({ set: true });
-    },
-    async pinStatus(tenantId) {
-      const p = await CashierPin.findOne({ tenantId }).lean();
-      return { isSet: !!p, locked: !!p?.locked, setAt: p?.setAt ?? null };
-    },
-    /** Returns { ok } or { ok:false, reason: 'NOT_SET' | 'LOCKED' | 'WRONG', attemptsLeft }. */
-    async verifyPin({ tenantId, pin }) {
-      const p = await CashierPin.findOne({ tenantId }).lean();
-      if (!p) return { ok: false, reason: "NOT_SET" };
-      if (p.locked || p.failed >= PIN_MAX_ATTEMPTS)
-        return { ok: false, reason: "LOCKED" };
-      const given = crypto.scryptSync(pin, p.salt, 32);
-      if (crypto.timingSafeEqual(given, Buffer.from(p.hash, "hex"))) {
-        if (p.failed > 0)
-          await CashierPin.updateOne({ tenantId }, { $set: { failed: 0 } });
-        return { ok: true };
-      }
-      // Atomic count so parallel guesses cannot all slip under the limit.
-      const after = await CashierPin.findOneAndUpdate(
-        { tenantId },
-        { $inc: { failed: 1 } },
-        { returnDocument: "after" },
-      ).lean();
-      if (after.failed >= PIN_MAX_ATTEMPTS)
-        await CashierPin.updateOne({ tenantId }, { $set: { locked: true } });
-      return {
-        ok: false,
-        reason: after.failed >= PIN_MAX_ATTEMPTS ? "LOCKED" : "WRONG",
-        attemptsLeft: Math.max(0, PIN_MAX_ATTEMPTS - after.failed),
       };
     },
   };

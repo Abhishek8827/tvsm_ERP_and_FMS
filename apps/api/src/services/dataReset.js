@@ -2,7 +2,6 @@ import { AuditLog } from "../models/AuditLog.js";
 import { BankAccount } from "../models/BankAccount.js";
 import { BonafideCertificate } from "../models/BonafideCertificate.js";
 import { CashbookSettings } from "../models/CashbookSettings.js";
-import { CashierPin } from "../models/CashierPin.js";
 import { CertificateRequest } from "../models/CertificateRequest.js";
 import { CertificateSettings } from "../models/CertificateSettings.js";
 import { Charge } from "../models/Charge.js";
@@ -66,13 +65,6 @@ export const PLAN = [
     action: "reset",
     set: { fixedAssetsPaise: 0, capitalPaise: 0, history: [] },
     why: "fixed assets and capital back to zero",
-  },
-  {
-    name: "CashierPin",
-    model: CashierPin,
-    action: "reset",
-    set: { failed: 0, locked: false },
-    why: "PIN stays, wrong-try lock is cleared",
   },
   // --- wiped
   {

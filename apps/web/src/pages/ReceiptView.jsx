@@ -38,7 +38,7 @@ const ROWS = {
     ["late", "Late Fees", ["late"]],
   ],
 };
-const MODE_LABEL = { cash: "Cash", upi: "UPI", qr: "QR" };
+const MODE_LABEL = { cash: "Cash", upi: "UPI / QR" };
 const when = (iso) =>
   new Date(iso).toLocaleString("en-IN", {
     timeZone: "Asia/Kolkata",

@@ -9,31 +9,65 @@ import {
 } from "./middleware/errorHandler.js";
 import { requestId } from "./middleware/requestId.js";
 import { createAuthenticate } from "./middleware/authenticate.js";
-import { authRouter } from "./routes/auth.js";
-import { feeStructureRouter } from "./routes/feeStructure.js";
-import { healthRouter } from "./routes/health.js";
-import { studentImportRouter } from "./routes/studentImport.js";
-import { studentsRouter } from "./routes/students.js";
+import { AppError } from "./utils/errors.js";
 import { adminDashboardRouter } from "./routes/adminDashboard.js";
+import { auditLogRouter } from "./routes/auditLog.js";
+import { authRouter } from "./routes/auth.js";
 import { cancellationsRouter } from "./routes/cancellations.js";
+import { cashbookRouter } from "./routes/cashbook.js";
+import { certificatesRouter } from "./routes/certificates.js";
 import { dayCloseRouter } from "./routes/dayClose.js";
+import { feeStructureRouter } from "./routes/feeStructure.js";
 import { feesDatabaseRouter } from "./routes/feesDatabase.js";
+import { healthRouter } from "./routes/health.js";
 import { ledgerRouter } from "./routes/ledger.js";
 import { moneyRouter } from "./routes/money.js";
 import { oldDuesImportRouter } from "./routes/oldDuesImport.js";
 import { rebatesRouter } from "./routes/rebates.js";
-import { auditLogRouter } from "./routes/auditLog.js";
-import { cashbookRouter } from "./routes/cashbook.js";
-import { reportsRouter } from "./routes/reports.js";
-import { whatsappRouter } from "./routes/whatsapp.js";
-import { certificatesRouter } from "./routes/certificates.js";
-import { transportRouter } from "./routes/transport.js";
 import { receiptsRouter } from "./routes/receipts.js";
+import { reportsRouter } from "./routes/reports.js";
+import { studentImportRouter } from "./routes/studentImport.js";
+import { studentsRouter } from "./routes/students.js";
+import { transportRouter } from "./routes/transport.js";
 import { usersRouter } from "./routes/users.js";
-import { AppError } from "./utils/errors.js";
+import { whatsappRouter } from "./routes/whatsapp.js";
+
+// Every protected area. Used for the 503 answer when sign-in is not configured.
+const PROTECTED_PREFIXES = [
+  "/api/audit-log",
+  "/api/auth",
+  "/api/banks",
+  "/api/bonafide",
+  "/api/cashbook",
+  "/api/certificate-requests",
+  "/api/certificates",
+  "/api/dashboard",
+  "/api/day-close",
+  "/api/expense-heads",
+  "/api/expense-payments",
+  "/api/expense-reversals",
+  "/api/fee-plan",
+  "/api/fee-structure",
+  "/api/fees-database",
+  "/api/money",
+  "/api/old-dues",
+  "/api/petty",
+  "/api/rebates",
+  "/api/receipt-cancellations",
+  "/api/receipts",
+  "/api/reports",
+  "/api/students",
+  "/api/tc",
+  "/api/transfers",
+  "/api/transport",
+  "/api/users",
+  "/api/vouchers",
+  "/api/whatsapp",
+];
+
 /**
- * `auth` = { verifyToken, userStore, auditStore } . When it is missing (Firebase not configured)
- * protected routes answer 503 AUTH_NOT_CONFIGURED instead of pretending to work.
+ * `auth` = { verifyToken, userStore, auditStore, ...stores }. When it is missing (Firebase not
+ * configured) protected routes answer 503 AUTH_NOT_CONFIGURED instead of pretending to work.
  */
 export function createApp(env, logger, auth) {
   const app = express();
@@ -65,10 +99,9 @@ export function createApp(env, logger, auth) {
       ],
     }),
   );
-  // Rule 15: request size limits. Razorpay/WhatsApp webhooks (raw body) are mounted before
-  // this in the steps that add them.
+  // Request size limit (Rule 15).
   app.use(express.json({ limit: "100kb" }));
-  // Generous default; strict limiters for login, payment and verify routes are added with those routes.
+  // Generous default; strict limiters for login and money routes live with those routes.
   app.use(
     "/api",
     rateLimit({
@@ -83,66 +116,39 @@ export function createApp(env, logger, auth) {
   if (auth) {
     const deps = { ...auth, logger, tenantId: env.DEFAULT_TENANT_ID };
     const authenticate = createAuthenticate(deps);
-    app.use("/api", authRouter(deps, authenticate));
-    app.use("/api", usersRouter(deps, authenticate));
-    // Import must be mounted first: /students/import-template would otherwise match /students/:id.
-    app.use("/api", studentImportRouter(deps, authenticate));
-    app.use("/api", studentsRouter(deps, authenticate));
-    app.use("/api", feeStructureRouter(deps, authenticate));
-    app.use("/api", ledgerRouter(deps, authenticate));
-    app.use("/api", feesDatabaseRouter(deps, authenticate));
-    app.use("/api", rebatesRouter(deps, authenticate));
-    app.use("/api", transportRouter(deps, authenticate));
-    app.use("/api", cashbookRouter(deps, authenticate));
-    app.use("/api", certificatesRouter(deps, authenticate));
-    app.use("/api", adminDashboardRouter(deps, authenticate));
-    app.use("/api", dayCloseRouter(deps, authenticate));
-    app.use("/api", cancellationsRouter(deps, authenticate));
-    app.use("/api", oldDuesImportRouter(deps, authenticate));
-    app.use("/api", receiptsRouter(deps, authenticate));
-    app.use("/api", moneyRouter(deps, authenticate));
-    app.use("/api", reportsRouter(deps, authenticate));
-    app.use("/api", auditLogRouter(deps, authenticate));
-    app.use("/api", whatsappRouter(deps, authenticate));
+    const routers = [
+      authRouter,
+      usersRouter,
+      studentImportRouter, // before studentsRouter: /students/import-template must not match /students/:id
+      studentsRouter,
+      feeStructureRouter,
+      transportRouter,
+      ledgerRouter,
+      receiptsRouter,
+      cancellationsRouter,
+      rebatesRouter,
+      oldDuesImportRouter,
+      feesDatabaseRouter,
+      certificatesRouter,
+      dayCloseRouter,
+      cashbookRouter,
+      adminDashboardRouter,
+      moneyRouter,
+      reportsRouter,
+      auditLogRouter,
+      whatsappRouter,
+    ];
+    for (const make of routers) app.use("/api", make(deps, authenticate));
   } else {
-    app.use(
-      [
-        "/api/auth",
-        "/api/users",
-        "/api/students",
-        "/api/fee-structure",
-        "/api/rebates",
-        "/api/transport",
-        "/api/cashbook",
-        "/api/tc",
-        "/api/bonafide",
-        "/api/certificate-requests",
-        "/api/certificates",
-        "/api/receipts",
-        "/api/old-dues",
-        "/api/money",
-        "/api/banks",
-        "/api/expense-heads",
-        "/api/vouchers",
-        "/api/expense-payments",
-        "/api/expense-reversals",
-        "/api/petty",
-        "/api/transfers",
-        "/api/cashier-pin",
-        "/api/reports",
-        "/api/whatsapp",
-        "/api/audit-log",
-      ],
-      (req, res) => {
-        res.status(503).json({
-          error: {
-            code: "AUTH_NOT_CONFIGURED",
-            message: "Sign-in is not configured on the server yet.",
-            requestId: req.id,
-          },
-        });
-      },
-    );
+    app.use(PROTECTED_PREFIXES, (req, res) => {
+      res.status(503).json({
+        error: {
+          code: "AUTH_NOT_CONFIGURED",
+          message: "Sign-in is not configured on the server yet.",
+          requestId: req.id,
+        },
+      });
+    });
   }
   app.use(notFoundHandler);
   app.use(createErrorHandler(logger, env.NODE_ENV === "production"));

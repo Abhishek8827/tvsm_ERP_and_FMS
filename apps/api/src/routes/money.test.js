@@ -83,11 +83,6 @@ function makeStore() {
     reversePetty: async () => ({ ...doc, seq: 1 }),
     listTransfers: list,
     createTransfer: async () => ({ transferId: "k".repeat(10), replay: false }),
-    pinStatus: async () => ({ isSet: true, locked: false }),
-    setPin: vi.fn(async ({ audit }) => {
-      await audit();
-    }),
-    verifyPin: vi.fn(async () => ({ ok: true })),
   };
 }
 function build() {
@@ -182,7 +177,7 @@ const MATRIX = [
     { reason: "Not valid" },
     ["principal"],
   ],
-  ["get", "/petty/summary", null, ["admin", "principal", "cashier"]],
+  ["get", "/petty/summary", null, ["admin", "principal"]],
   ["get", "/petty", null, ["admin", "principal"]],
   ["post", "/petty", petty, ["admin"]],
   ["post", `/petty/${ID}/reverse`, { reason: "Entered twice" }, ["admin"]],
@@ -193,9 +188,6 @@ const MATRIX = [
     { from: "cash", to: "petty", amountPaise: 100000 },
     ["admin"],
   ],
-  ["get", "/cashier-pin", null, ["admin"]],
-  ["put", "/cashier-pin", { pin: "1234" }, ["admin"]],
-  ["post", "/money/cashier-view", { pin: "1234" }, ["cashier"]],
 ];
 
 describe("server-side permissions for expenses, petty cash and balances", () => {
@@ -224,65 +216,35 @@ describe("server-side permissions for expenses, petty cash and balances", () => 
 });
 
 describe("what the Cashier can and cannot see", () => {
-  it("petty summary has only the balance and entries; PIN screen needs the right PIN", async () => {
-    const { app, moneyStore } = build();
-    const s = await send(app, "get", "/petty/summary", "cashier");
-    expect(s.body).toEqual({ balancePaise: 4200, last: [] });
-    const ok = await send(app, "post", "/money/cashier-view", "cashier", {
-      pin: "1234",
-    });
-    expect(ok.body.cashPaise).toBe(100);
-    moneyStore.verifyPin.mockResolvedValueOnce({
-      ok: false,
-      reason: "WRONG",
-      attemptsLeft: 3,
-    });
-    const wrong = await send(app, "post", "/money/cashier-view", "cashier", {
-      pin: "9999",
-    });
-    expect(wrong.status).toBe(422);
-    expect(wrong.body.error.code).toBe("PIN_WRONG");
-    expect(wrong.body).not.toHaveProperty("cashPaise");
-    moneyStore.verifyPin.mockResolvedValueOnce({ ok: false, reason: "LOCKED" });
+  it("the Cashier has no petty cash, no balances and no PIN: every such door is 403 or gone", async () => {
+    const { app } = build();
+    for (const [method, path] of [
+      ["get", "/petty/summary"],
+      ["get", "/petty"],
+      ["get", "/money/overview"],
+      ["get", "/money/pending"],
+      ["get", "/transfers"],
+    ])
+      expect((await send(app, method, path, "cashier")).status, path).toBe(403);
+    // The PIN feature was removed completely: these routes no longer exist.
     expect(
       (
         await send(app, "post", "/money/cashier-view", "cashier", {
           pin: "1234",
         })
       ).status,
-    ).toBe(423);
-    moneyStore.verifyPin.mockResolvedValueOnce({
-      ok: false,
-      reason: "NOT_SET",
-    });
+    ).toBe(404);
+    expect((await send(app, "get", "/cashier-pin", "admin")).status).toBe(404);
     expect(
-      (
-        await send(app, "post", "/money/cashier-view", "cashier", {
-          pin: "1234",
-        })
-      ).status,
-    ).toBe(409);
-    expect(
-      (await send(app, "post", "/money/cashier-view", "cashier", { pin: "12" }))
-        .status,
-    ).toBe(422);
-    expect(
-      (
-        await send(app, "post", "/money/cashier-view", "cashier", {
-          pin: "abcd",
-        })
-      ).status,
-    ).toBe(422);
+      (await send(app, "put", "/cashier-pin", "admin", { pin: "1234" })).status,
+    ).toBe(404);
   });
 
-  it("the PIN is never written to the audit log", async () => {
-    const { app, audit } = build();
-    await send(app, "put", "/cashier-pin", "admin", { pin: "4821" });
-    expect(JSON.stringify(audit)).not.toContain("4821");
-    expect(audit.some((a) => a.entity === "cashier_pin")).toBe(true);
-    expect(
-      (await send(app, "put", "/cashier-pin", "admin", { pin: "48" })).status,
-    ).toBe(422);
+  it("the Cashier can still see bank NAMES (and nothing else) to choose the bank on Collect Fee", async () => {
+    const { app } = build();
+    const r = await send(app, "get", "/banks/options", "cashier");
+    expect(r.status).toBe(200);
+    expect(JSON.stringify(r.body)).not.toMatch(/balance|opening/i);
   });
 });
 

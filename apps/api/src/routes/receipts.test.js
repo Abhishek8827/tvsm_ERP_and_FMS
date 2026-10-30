@@ -312,7 +312,7 @@ describe("collecting fees", () => {
     expect(r.body.error.code).toBe("BAD_HEAD");
   });
 
-  it("UPI and QR need a reference; cash keeps none", async () => {
+  it("UPI / QR needs a reference; cash keeps none", async () => {
     const { app } = build();
     const no = await collect(app, {
       mode: "upi",
@@ -321,13 +321,13 @@ describe("collecting fees", () => {
     expect(no.status).toBe(422);
     expect(no.body.error.code).toBe("REFERENCE_REQUIRED");
     const yes = await collect(app, {
-      mode: "qr",
+      mode: "upi",
       reference: "UPI123456",
       bankId: BANK,
       input: { newPaise: rs(1000) },
     });
     expect(yes.body).toMatchObject({
-      mode: "qr",
+      mode: "upi",
       reference: "UPI123456",
       bankName: "IDFC",
     });
@@ -339,7 +339,18 @@ describe("collecting fees", () => {
     expect(cash.body.reference).toBeNull();
   });
 
-  it("UPI and QR must name an active bank account; cash has none", async () => {
+  it('the old separate "qr" mode no longer exists: UPI and QR are one mode', async () => {
+    const { app } = build();
+    const r = await collect(app, {
+      mode: "qr",
+      reference: "UPI123456",
+      bankId: BANK,
+      input: { newPaise: rs(1000) },
+    });
+    expect(r.status).toBe(400);
+  });
+
+  it("UPI / QR must name an active bank account; cash has none", async () => {
     const { app, receipts } = build();
     const none = await collect(app, {
       mode: "upi",

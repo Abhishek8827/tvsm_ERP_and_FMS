@@ -36,7 +36,6 @@ function build(expectedCashPaise = 500000, { stale = false } = {}) {
       cashCancelledPaise: 0,
       expectedCashPaise,
       upiPaise: 100000,
-      qrPaise: 50000,
       receiptCount: 7,
       cancelledCount: 0,
     }),
@@ -117,7 +116,6 @@ describe("Day Close API", () => {
       expectedCashPaise: 500000,
       differencePaise: 0,
       upiPaise: 100000,
-      qrPaise: 50000,
     });
     expect(audit.some((a) => a.entity === "day_close")).toBe(true);
   });

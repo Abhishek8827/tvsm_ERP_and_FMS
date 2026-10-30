@@ -42,8 +42,7 @@ function periodLabel(period) {
 }
 const MODES = [
   { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI" },
-  { value: "qr", label: "QR" },
+  { value: "upi", label: "UPI / QR" },
 ];
 
 /** Cashier: find a student, pick School fees or Transport fees, enter amounts, take payment. */

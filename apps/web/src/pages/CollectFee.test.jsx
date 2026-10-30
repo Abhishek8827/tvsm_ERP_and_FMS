@@ -133,7 +133,7 @@ describe("Collect Fee", () => {
     });
   });
 
-  it("without a default bank the Cashier must choose one for QR", async () => {
+  it("without a default bank the Cashier must choose one for UPI / QR", async () => {
     api.mockImplementation(async (url) => {
       if (String(url).startsWith("/api/students?")) return { rows: [student] };
       if (url === "/api/banks/options") return banksReply([]);
@@ -142,7 +142,7 @@ describe("Collect Fee", () => {
     show();
     await pickStudent();
     await userEvent.type(await screen.findByLabelText(/Tuition fees/), "1000");
-    await userEvent.selectOptions(screen.getByLabelText("Payment mode"), "qr");
+    await userEvent.selectOptions(screen.getByLabelText("Payment mode"), "upi");
     await userEvent.type(
       screen.getByLabelText(/UPI \/ QR reference/),
       "QR12345678",

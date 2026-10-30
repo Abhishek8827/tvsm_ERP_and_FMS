@@ -50,7 +50,7 @@ const receiptSchema = new mongoose.Schema(
     // Split of dueAfterPaise for the printed receipt (older receipts do not have it).
     dueAfterOldPaise: { type: Number, min: 0 },
     dueAfterNewPaise: { type: Number, min: 0 },
-    mode: { type: String, enum: ["cash", "upi", "qr"], required: true },
+    mode: { type: String, enum: ["cash", "upi"], required: true },
     reference: { type: String },
     // Which bank account a UPI / QR payment went to (Step 6). Cash has none.
     bankId: { type: String },

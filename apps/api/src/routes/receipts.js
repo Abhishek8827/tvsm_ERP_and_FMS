@@ -18,7 +18,7 @@ import { postAdvanceMonths } from "../services/feePlan.js";
 import { AppError, notFound } from "../utils/errors.js";
 
 // UPI and QR payments must carry the bank's reference so they can be matched with the statement.
-const MODES_NEEDING_REFERENCE = ["upi", "qr"];
+const MODES_NEEDING_REFERENCE = ["upi"];
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
 const paise = z.number().int().min(0).max(100_000_000);
 const kindField = z.enum(MODULES);
@@ -36,9 +36,9 @@ const issueBody = z.object({
     lateFeePaise: paise.optional(),
     lateFeeRemark: z.string().trim().max(200).optional(),
   }),
-  mode: z.enum(["cash", "upi", "qr"]),
+  mode: z.enum(["cash", "upi"]),
   reference: z.string().trim().max(60).optional(),
-  // Which bank account the UPI / QR money went to (compulsory for UPI and QR).
+  // Which bank account the UPI / QR money went to (compulsory for UPI / QR).
   bankId: objectId.optional(),
 });
 const idemKey = z
@@ -64,7 +64,7 @@ const listQuery = z.object({
   from: dateField.optional(),
   to: dateField.optional(),
   kind: kindField.optional(),
-  mode: z.enum(["cash", "upi", "qr"]).optional(),
+  mode: z.enum(["cash", "upi"]).optional(),
   q: z.string().trim().max(60).optional(),
   status: z.enum(["valid", "cancelled"]).optional(),
 });

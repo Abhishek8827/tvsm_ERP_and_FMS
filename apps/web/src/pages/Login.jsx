@@ -12,7 +12,7 @@ function Field({ label, error, trailing, ...input }) {
     <div>
       <label
         htmlFor={id}
-        className="mb-1 block text-sm font-medium text-[#172554]"
+        className="mb-1 block text-sm font-medium text-white/90"
       >
         {label}
       </label>
@@ -69,42 +69,62 @@ export function Login() {
 
   return (
     <main
-      className="flex min-h-full items-center justify-center overflow-hidden px-4 py-8 sm:px-8 md:py-12 lg:px-14"
+      className="flex h-dvh min-h-0 items-center justify-center overflow-hidden px-4 py-3 sm:px-8 lg:px-14 lg:py-5"
       style={{ backgroundColor: "#EDF3FF", backgroundImage: BG }}
     >
-      <div className="grid w-full max-w-[1240px] items-center gap-x-10 gap-y-6 [grid-template-areas:'school'_'login'_'emblem'] md:grid-cols-[minmax(220px,0.8fr)_minmax(400px,1.2fr)] md:gap-y-8 md:[grid-template-areas:'school_school'_'emblem_login'] lg:gap-x-20">
-        <div className="text-center [grid-area:school]">
-          <h1 className="text-balance text-xl font-extrabold leading-tight tracking-tight text-[#19345F] sm:text-2xl md:text-4xl">
-            TH. VIRENDRA SINGH MEMORIAL HIGHER SECONDARY SCHOOL
-          </h1>
-          <p className="mt-3 text-base text-[#4E6387] sm:text-2xl">NEPANAGAR</p>
-        </div>
+      <div className="grid w-full max-w-[1240px] overflow-hidden rounded-[2rem] border border-white/80 bg-white/95 p-3 shadow-[0_32px_90px_rgba(35,65,120,0.18)] backdrop-blur sm:p-5 lg:h-[calc(100dvh-40px)] lg:max-h-[620px] lg:grid-cols-[minmax(0,1.7fr)_minmax(350px,0.85fr)] lg:p-5">
+        <section className="relative hidden min-h-0 overflow-hidden rounded-[1.4rem] lg:flex lg:flex-col lg:justify-between">
+          <div className="relative z-10 flex items-center gap-5 px-10 pt-7">
+            <img
+              src="/logo.jpg"
+              alt="Th. Virendra Singh Memorial School emblem"
+              className="h-24 w-24 shrink-0 object-contain mix-blend-multiply drop-shadow-[0_12px_24px_rgba(35,65,120,0.12)]"
+            />
+            <div>
+              <h1 className="text-balance text-[1.25rem] font-extrabold leading-[1.12] tracking-tight text-[#19345F] xl:text-[1.5rem]">
+                TH. VIRENDRA SINGH MEMORIAL
+                <br />
+                SECONDARY SCHOOL
+              </h1>
+              <p className="mt-2 text-xs font-bold tracking-[0.32em] text-[#4E6387]">
+                NEPANAGAR
+              </p>
+            </div>
+          </div>
 
-        <div className="flex items-center justify-center [grid-area:emblem]">
+          <div className="absolute inset-x-0 bottom-16 top-[175px]">
+            <img
+              src="/login_Illustration.png"
+              alt="School administration illustration"
+              className="h-full w-full object-contain object-center"
+            />
+          </div>
+          <span className="absolute bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-[#2457C5]/10 bg-white px-6 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#2457C5] shadow-sm">
+            School ERP System
+          </span>
+        </section>
+
+        <div className="mb-5 text-center lg:hidden">
           <img
             src="/logo.jpg"
             alt="Th. Virendra Singh Memorial School emblem"
-            className="h-28 w-28 object-contain mix-blend-multiply drop-shadow-[0_16px_28px_rgba(35,65,120,0.12)] sm:h-36 sm:w-36 md:h-56 md:w-56 lg:h-72 lg:w-72"
+            className="mx-auto h-20 w-20 object-contain mix-blend-multiply"
           />
+          <h1 className="mt-3 text-lg font-extrabold leading-tight text-[#19345F]">
+            TH. VIRENDRA SINGH MEMORIAL HIGHER SECONDARY SCHOOL
+          </h1>
+          <p className="mt-1 text-xs font-bold tracking-[0.25em] text-[#4E6387]">
+            NEPANAGAR
+          </p>
         </div>
 
-        <div className="mx-auto flex w-full max-w-[540px] flex-col gap-4 [grid-area:login]">
-          <div className="text-center">
-            <span className="inline-flex items-center rounded-full border border-white/90 bg-white/60 px-4 py-1.5 text-[0.82rem] font-bold uppercase tracking-[0.08em] text-[#244E9A]">
-              School ERP System
-            </span>
-          </div>
-
-          <form
-            onSubmit={onSubmit}
-            noValidate
-            className="flex flex-col gap-5 rounded-3xl border border-white/95 bg-white/95 p-6 shadow-[0_28px_80px_rgba(45,67,130,0.16),0_6px_20px_rgba(45,67,130,0.06)] backdrop-blur sm:p-8 md:p-10"
-          >
+        <div className="flex min-h-[470px] flex-col justify-center rounded-[1.5rem] bg-gradient-to-br from-[#2457C5] via-[#3568D4] to-[#1F3A8A] px-6 py-6 text-white shadow-[0_24px_60px_rgba(36,87,197,0.28)] sm:px-10 lg:h-full lg:min-h-0 lg:py-8">
+          <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
             <div className="text-center">
-              <h2 className="text-3xl font-extrabold tracking-tight text-[#172554]">
+              <h2 className="text-3xl font-extrabold tracking-tight text-white">
                 Sign in
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-ink-muted">
+              <p className="mt-2 text-sm leading-relaxed text-white/75">
                 Use your school account to continue.
               </p>
             </div>
@@ -112,7 +132,7 @@ export function Login() {
             {notice && (
               <p
                 role="status"
-                className="rounded-xl bg-info/10 px-3 py-2 text-sm text-info"
+                className="rounded-xl bg-white/15 px-3 py-2 text-sm text-white"
               >
                 {notice}
               </p>
@@ -179,19 +199,19 @@ export function Login() {
               type="submit"
               disabled={busy}
               aria-busy={busy || undefined}
-              className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#2457C5] via-[#3568D4] to-[#5B5BD6] text-base font-bold text-white shadow-[0_10px_24px_rgba(36,87,197,0.24)] transition hover:shadow-[0_12px_28px_rgba(36,87,197,0.3)] hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-white text-base font-bold text-[#2457C5] shadow-[0_10px_24px_rgba(20,46,110,0.24)] transition hover:-translate-y-0.5 hover:bg-[#EFF5FF] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {busy && (
                 <span
                   aria-hidden
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
+                  className="h-4 w-4 animate-spin rounded-afull border-2 border-white/40 border-t-white"
                 />
               )}
               {busy ? "Signing in…" : "Sign in"}
             </button>
           </form>
 
-          <p className="px-2 text-center text-xs leading-relaxed text-ink-muted">
+          <p className="mt-2 px-2 text-center text-xs leading-relaxed text-white/70">
             © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved.
             <br />
             Made with ❤️ for schools.

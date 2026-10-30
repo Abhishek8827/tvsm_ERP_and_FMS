@@ -17,8 +17,8 @@ export const SCHOOL = {
 /** Who built the software. Shown in the footer and on the login page. */
 export const SOFTWARE = {
   name: "TVSM School ERP & Fee Management",
-  madeBy: "A.K Productions",
-  phone: "88275 87252",
+  madeBy: "AK",
+  phone: "***** *****",
   email: "abhishekwani.dev@gmail.com",
   website: "www.abhishekwani.dev",
   year: 2026,

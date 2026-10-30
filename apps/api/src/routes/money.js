@@ -6,7 +6,6 @@ import {
   ExpenseRuleError,
   PAY_MODES,
   getFinancialYear,
-  isValidPin,
   todayIst,
 } from "@erp/shared";
 import { requireRole } from "../middleware/requireRole.js";
@@ -15,10 +14,10 @@ import { AppError, notFound } from "../utils/errors.js";
 
 /**
  * School expenses, petty cash, bank & cash (Step 6). Roles (confirmed by the school):
- *  Admin     makes vouchers, payments, adjustments, petty entries, transfers, heads, banks, PIN
+ *  Admin     makes vouchers, payments, adjustments, petty entries, transfers, heads, banks
  *  Principal approves/rejects vouchers and reversals; sees every entry and every balance
- *  Cashier   sees only the petty cash balance + last 5 entries, bank names for Collect Fee, and
- *            (with the 4-digit PIN) all balances. Nothing else.
+ *  Cashier   sees only the bank names needed to choose the bank on Collect Fee. Nothing else
+ *            (no petty cash, no balances; the Cashier PIN was removed on 2026-10-29).
  */
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
 const idemKey = z
@@ -48,12 +47,12 @@ const bankBody = z.object({
     .regex(/^\d{4}$/, "Last 4 digits of the account")
     .optional(),
   openingPaise: z.number().int().min(0).max(100_000_000_00).optional(),
-  defaultForModes: z.array(z.enum(["upi", "qr"])).optional(),
+  defaultForModes: z.array(z.enum(["upi"])).optional(),
 });
 const bankPatch = z.object({
   name: text(60).min(2).optional(),
   active: z.boolean().optional(),
-  defaultForModes: z.array(z.enum(["upi", "qr"])).optional(),
+  defaultForModes: z.array(z.enum(["upi"])).optional(),
 });
 const voucherBody = z.object({
   date: dateField,
@@ -695,7 +694,7 @@ export function moneyRouter(deps, authenticate) {
   // ----- petty cash -----
   router.get(
     "/petty/summary",
-    ...anyRole,
+    ...adminOrPrincipal,
     wrap(async (req, res) => {
       const s = await store().pettySummary(tenant(req));
       res.json({ balancePaise: s.balancePaise, last: s.last.map(shapePetty) });
@@ -812,102 +811,5 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
 
-  // ----- Cashier PIN -----
-  router.get(
-    "/cashier-pin",
-    ...adminOnly,
-    wrap(async (req, res) => {
-      res.json(await store().pinStatus(tenant(req)));
-    }),
-  );
-  router.put(
-    "/cashier-pin",
-    ...adminOnly,
-    wrap(async (req, res) => {
-      const { pin } = z.object({ pin: z.string() }).parse(req.body);
-      if (!isValidPin(pin))
-        throw new AppError(
-          "BAD_PIN",
-          422,
-          "The PIN must be exactly 4 digits.",
-          {
-            pin: "Use 4 digits",
-          },
-        );
-      await store().setPin({
-        tenantId: tenant(req),
-        pin,
-        user: req.user,
-        // WHY the PIN itself is never audited: the log must not hold a secret.
-        audit: () =>
-          recordAudit(
-            deps,
-            req,
-            {
-              action: "update",
-              entity: "cashier_pin",
-              newValue: { reset: true },
-            },
-            { critical: true },
-          ),
-      });
-      res.json({ ok: true });
-    }),
-  );
-  // All balances for the Cashier, only with the correct PIN. Strict rate limit on top of the lockout.
-  router.post(
-    "/money/cashier-view",
-    rateLimit({
-      windowMs: 60_000,
-      limit: 20,
-      standardHeaders: "draft-7",
-      legacyHeaders: false,
-    }),
-    authenticate,
-    requireRole("cashier"),
-    wrap(async (req, res) => {
-      const { pin } = z.object({ pin: z.string() }).parse(req.body);
-      if (!isValidPin(pin))
-        throw new AppError(
-          "BAD_PIN",
-          422,
-          "The PIN must be exactly 4 digits.",
-          {
-            pin: "Use 4 digits",
-          },
-        );
-      const r = await store().verifyPin({ tenantId: tenant(req), pin });
-      if (!r.ok) {
-        if (r.reason === "NOT_SET")
-          throw new AppError(
-            "PIN_NOT_SET",
-            409,
-            "The PIN is not set yet. Ask the Admin to set it.",
-          );
-        if (r.reason === "LOCKED") {
-          await recordAudit(deps, req, {
-            action: "login_blocked",
-            entity: "cashier_pin",
-            reason: "PIN locked after wrong attempts",
-          });
-          throw new AppError(
-            "PIN_LOCKED",
-            423,
-            "The PIN is locked. Ask the Admin to set a new PIN.",
-          );
-        }
-        // WHY 422 and not 401: the web client treats every 401 as an expired session and signs out.
-        throw new AppError(
-          "PIN_WRONG",
-          422,
-          `Wrong PIN. ${r.attemptsLeft} tries left.`,
-          {
-            pin: "Wrong PIN",
-          },
-        );
-      }
-      res.json(await store().overview(tenant(req)));
-    }),
-  );
   return router;
 }

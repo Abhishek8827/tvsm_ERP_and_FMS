@@ -6,7 +6,7 @@ registerGlobalPlugins();
 /**
  * A school bank account (IDFC, Kotak ... more can be added any time). The opening balance is NOT
  * stored here: it is the first entry of the money ledger, so every rupee has one audit trail.
- * `defaultForModes` = receipt modes (upi / qr) that pre-select this bank on Collect Fee.
+ * `defaultForModes` = receipt mode (upi = "UPI / QR") that pre-select this bank on Collect Fee.
  */
 const bankSchema = new mongoose.Schema(
   {
@@ -14,7 +14,7 @@ const bankSchema = new mongoose.Schema(
     nameLower: { type: String, required: true },
     last4: { type: String, match: /^\d{4}$/ },
     active: { type: Boolean, default: true },
-    defaultForModes: { type: [String], enum: ["upi", "qr"], default: [] },
+    defaultForModes: { type: [String], enum: ["upi"], default: [] },
     createdBy: { type: String },
   },
   { timestamps: true },

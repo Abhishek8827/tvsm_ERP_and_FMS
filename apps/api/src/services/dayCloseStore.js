@@ -73,7 +73,6 @@ async function dayTotals(tenantId, date, session) {
     cashCancelledPaise,
     expectedCashPaise: expectedCash({ cashReceiptPaise, cashCancelledPaise }),
     upiPaise: by("upi").paise - cancelled("upi"),
-    qrPaise: by("qr").paise - cancelled("qr"),
     receiptCount: issued.reduce((n, x) => n + x.count, 0),
     cancelledCount: cancelledReceipts.length,
   };
@@ -129,7 +128,6 @@ export function makeDayCloseStore() {
               const same =
                 fresh.expectedCashPaise === totals.expectedCashPaise &&
                 fresh.upiPaise === totals.upiPaise &&
-                fresh.qrPaise === totals.qrPaise &&
                 fresh.receiptCount === totals.receiptCount;
               if (!same) {
                 result = { stale: true };

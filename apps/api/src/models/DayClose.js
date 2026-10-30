@@ -15,7 +15,6 @@ const figures = {
   differencePaise: { type: Number, required: true },
   differenceReason: { type: String },
   upiPaise: { type: Number, required: true },
-  qrPaise: { type: Number, required: true },
   receiptCount: { type: Number, required: true },
 };
 const dayCloseSchema = new mongoose.Schema(
@@ -41,7 +40,6 @@ const dayCloseSchema = new mongoose.Schema(
         countedCashPaise: Number,
         differencePaise: Number,
         upiPaise: Number,
-        qrPaise: Number,
         receiptCount: Number,
       },
     ],

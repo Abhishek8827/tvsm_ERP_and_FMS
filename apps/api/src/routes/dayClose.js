@@ -30,7 +30,6 @@ const shape = (r) =>
     differencePaise: r.differencePaise,
     differenceReason: r.differenceReason ?? null,
     upiPaise: r.upiPaise,
-    qrPaise: r.qrPaise,
     receiptCount: r.receiptCount,
     closedByName: r.closedByName ?? null,
     closedAt: r.closedAt ?? null,
@@ -129,7 +128,6 @@ export function dayCloseRouter(deps, authenticate) {
           differencePaise,
           differenceReason: differencePaise !== 0 ? body.reason : undefined,
           upiPaise: totals.upiPaise,
-          qrPaise: totals.qrPaise,
           receiptCount: totals.receiptCount,
         },
       });

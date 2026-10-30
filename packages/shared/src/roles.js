@@ -4,7 +4,7 @@ export const ROLES = ["admin", "principal", "cashier"];
 export const roleSchema = z.enum(ROLES);
 /**
  * Role-based navigation matches the Figma sidebars:
- *  Cashier:   Dashboard, Collect Fee, Receipts, Students, Petty Cash, Bank & Cash (PIN)
+ *  Cashier:   Dashboard, Collect Fee, Receipts, Students, Day Close (no Petty Cash, no Bank & Cash)
  *  Principal: Dashboard, Approvals, Rebates (view), Reports, Students, Expenses, Petty Cash, Bank & Cash, Audit Log
  *  Admin:     Dashboard, Students, Fee Structure, Fees & Receipts, Fees Database, Rebates, Expenses,
  *             Petty Cash, Bank & Cash, Reports, TC & Bonafide, Data Import, Users & Settings, Audit Log
@@ -105,8 +105,8 @@ export const NAV_ITEMS = [
     key: "petty-cash",
     label: "Petty Cash",
     path: "/petty-cash",
-    // Cashier: only the remaining balance and the last 5 entries.
-    roles: ["admin", "principal", "cashier"],
+    // The Cashier has no petty cash screen (removed 2026-10-29).
+    roles: ["admin", "principal"],
     availableFromStep: 6,
   },
   {
@@ -120,8 +120,8 @@ export const NAV_ITEMS = [
     key: "bank-cash",
     label: "Bank & Cash",
     path: "/bank-cash",
-    // Cashier: all balances behind a 4-digit PIN.
-    roles: ["admin", "principal", "cashier"],
+    // The Cashier has no Bank & Cash screen and no PIN (removed 2026-10-29).
+    roles: ["admin", "principal"],
     availableFromStep: 6,
   },
   {

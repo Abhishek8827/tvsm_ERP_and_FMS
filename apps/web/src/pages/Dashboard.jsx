@@ -18,8 +18,7 @@ function TodayCollection() {
   const q = useQuery({
     queryKey: ["receipts", "today", today],
     queryFn: () => api(`/api/receipts?from=${today}&to=${today}&pageSize=1`),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 60_000,
+    refetchInterval: 60_000,
     retry: false,
   });
   return (
@@ -50,8 +49,7 @@ function TodayCollection() {
             value={money(q.data.totals.byKind.transport)}
           />
           <StatCard label="Cash" value={money(q.data.totals.byMode.cash)} />
-          <StatCard label="UPI" value={money(q.data.totals.byMode.upi)} />
-          <StatCard label="QR" value={money(q.data.totals.byMode.qr)} />
+          <StatCard label="UPI / QR" value={money(q.data.totals.byMode.upi)} />
         </div>
       )}
     </Card>
@@ -63,8 +61,7 @@ function Overview() {
   const q = useQuery({
     queryKey: ["dashboard", "overview"],
     queryFn: () => api("/api/dashboard/overview"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 60_000,
+    refetchInterval: 60_000,
     retry: false,
   });
   if (q.isPending) return <Spinner label="Loading the overview" />;
@@ -210,8 +207,7 @@ export function Dashboard() {
   const health = useQuery({
     queryKey: ["health"],
     queryFn: () => api("/api/health"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 30_000,
+    refetchInterval: 30_000,
     retry: false,
   });
   return (

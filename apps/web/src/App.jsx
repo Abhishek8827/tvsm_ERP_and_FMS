@@ -114,8 +114,12 @@ export function App() {
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
           ))}
-        <Route path="/petty-cash" element={<PettyCash />} />
-        <Route path="/bank-cash" element={<BankCash />} />
+        {(role === "admin" || role === "principal") && (
+          <Route path="/petty-cash" element={<PettyCash />} />
+        )}
+        {(role === "admin" || role === "principal") && (
+          <Route path="/bank-cash" element={<BankCash />} />
+        )}
         {(role === "admin" || role === "principal") && (
           <Route path="/expenses" element={<Expenses />} />
         )}

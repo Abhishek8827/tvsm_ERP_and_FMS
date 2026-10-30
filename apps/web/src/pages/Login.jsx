@@ -193,6 +193,8 @@ export function Login() {
 
           <p className="px-2 text-center text-xs leading-relaxed text-ink-muted">
             © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved.
+            <br />
+            Made with ❤️ for schools.
           </p>
         </div>
       </div>

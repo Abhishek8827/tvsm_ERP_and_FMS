@@ -69,10 +69,10 @@ export function Login() {
 
   return (
     <main
-      className="flex h-dvh min-h-0 items-center justify-center overflow-hidden px-4 py-3 sm:px-8 lg:px-14 lg:py-5"
+      className="relative flex h-dvh min-h-0 items-center justify-center overflow-hidden px-4 py-3 sm:px-8 lg:px-14 lg:py-5"
       style={{ backgroundColor: "#EDF3FF", backgroundImage: BG }}
     >
-      <div className="grid w-full max-w-[1240px] overflow-hidden rounded-[2rem] border border-white/80 bg-white/95 p-3 shadow-[0_32px_90px_rgba(35,65,120,0.18)] backdrop-blur sm:p-5 lg:h-[calc(100dvh-40px)] lg:max-h-[620px] lg:grid-cols-[minmax(0,1.7fr)_minmax(350px,0.85fr)] lg:p-5">
+      <div className="grid w-full max-w-310 overflow-hidden rounded-4xl border border-white/80 bg-white/95 p-3 shadow-[0_32px_90px_rgba(35,65,120,0.18)] backdrop-blur sm:p-5 lg:h-[calc(100dvh-40px)] lg:max-h-155 lg:grid-cols-[minmax(0,1.7fr)_minmax(350px,0.85fr)] lg:p-5">
         <section className="relative hidden min-h-0 overflow-hidden rounded-[1.4rem] lg:flex lg:flex-col lg:justify-between">
           <div className="relative z-10 flex items-center gap-5 px-10 pt-7">
             <img
@@ -92,7 +92,7 @@ export function Login() {
             </div>
           </div>
 
-          <div className="absolute inset-x-0 bottom-16 top-[175px]">
+          <div className="absolute inset-x-0 bottom-16 top-43.75">
             <img
               src="/login_Illustration.png"
               alt="School administration illustration"
@@ -118,10 +118,15 @@ export function Login() {
           </p>
         </div>
 
-        <div className="flex min-h-[470px] flex-col justify-center rounded-[1.5rem] bg-gradient-to-br from-[#2457C5] via-[#3568D4] to-[#1F3A8A] px-6 py-6 text-white shadow-[0_24px_60px_rgba(36,87,197,0.28)] sm:px-10 lg:h-full lg:min-h-0 lg:py-8">
+        <div className="flex min-h-117.5 flex-col justify-center rounded-3xl bg-linear-to-br from-[#2457C5] via-[#3568D4] to-[#1F3A8A] px-6 py-6 text-white shadow-[0_24px_60px_rgba(36,87,197,0.28)] sm:px-10 lg:h-full lg:min-h-0 lg:py-8">
           <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
             <div className="text-center">
-              <h2 className="text-3xl font-extrabold tracking-tight text-white">
+              <img
+                src="/ak.jpg"
+                alt=""
+                className=" m-auto  h-17 w-17 object-contain mix-blend-color-burn shadow-amber-100"
+              />
+              <h2 className="text-3xl font-extrabold tracking-tight text-white mt-3.5">
                 Sign in
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-white/75">
@@ -210,14 +215,12 @@ export function Login() {
               {busy ? "Signing in…" : "Sign in"}
             </button>
           </form>
-
-          <p className="mt-2 px-2 text-center text-xs leading-relaxed text-white/70">
-            © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved.
-            <br />
-            Made with ❤️ for schools.
-          </p>
         </div>
       </div>
+      <p className="absolute bottom-2 left-0 right-0 px-2 text-center text-[11px] leading-relaxed text-[#4E6387] sm:text-xs">
+        © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved. Made with
+        ❤️ for schools.
+      </p>
     </main>
   );
 }

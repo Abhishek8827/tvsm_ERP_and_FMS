@@ -14,7 +14,7 @@ let mockRole = "cashier";
 let summary;
 const open = {
   date: '2026-10-22', today: '2026-10-22', cashReceiptPaise: 500000, cashCancelledPaise: 0,
-  expectedCashPaise: 500000, upiPaise: 100000, qrPaise: 50000, receiptCount: 7, cancelledCount: 0,
+  expectedCashPaise: 500000, upiPaise: 100000, receiptCount: 7, cancelledCount: 0,
   record: null,
 }; // prettier-ignore
 const closedRec = {

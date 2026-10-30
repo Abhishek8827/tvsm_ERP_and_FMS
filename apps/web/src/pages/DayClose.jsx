@@ -46,8 +46,7 @@ function TodayCard({ role }) {
   const q = useQuery({
     queryKey: ["day-close", "summary"],
     queryFn: () => api("/api/day-close/summary"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 30_000,
+    refetchInterval: 30_000,
   });
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["day-close"] });
@@ -120,20 +119,15 @@ function TodayCard({ role }) {
         )
       }
     >
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         <StatCard
           label="Expected cash"
           value={money(d.expectedCashPaise)}
           caption={`Cash receipts ${money(d.cashReceiptPaise)}${d.cashCancelledPaise ? ` − cancelled ${money(d.cashCancelledPaise)}` : ""}`}
         />
         <StatCard
-          label="UPI"
+          label="UPI / QR"
           value={money(d.upiPaise)}
-          caption="Goes to the bank"
-        />
-        <StatCard
-          label="QR"
-          value={money(d.qrPaise)}
           caption="Goes to the bank"
         />
         <StatCard
@@ -274,15 +268,9 @@ export function DayClose() {
     },
     {
       key: "upi",
-      header: "UPI",
+      header: "UPI / QR",
       align: "right",
       render: (r) => money(r.upiPaise),
-    },
-    {
-      key: "qr",
-      header: "QR",
-      align: "right",
-      render: (r) => money(r.qrPaise),
     },
     { key: "by", header: "Closed by", render: (r) => r.closedByName ?? "-" },
   ];

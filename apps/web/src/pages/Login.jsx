@@ -1,16 +1,19 @@
-import { useId, useState } from 'react';
-import { SOFTWARE } from '@erp/shared';
-import { useAuth } from '../auth/AuthContext';
+import { useId, useState } from "react";
+import { SOFTWARE } from "@erp/shared";
+import { useAuth } from "../auth/AuthContext";
 
 const BG =
-  'radial-gradient(ellipse at 8% 18%, rgba(59,130,246,0.24), transparent 32%), radial-gradient(ellipse at 88% 78%, rgba(139,92,246,0.20), transparent 34%), radial-gradient(ellipse at 72% 8%, rgba(34,211,238,0.15), transparent 28%), linear-gradient(130deg, #E5EEFF 0%, #F4F1FF 52%, #E6F7FF 100%)';
+  "radial-gradient(ellipse at 8% 18%, rgba(59,130,246,0.24), transparent 32%), radial-gradient(ellipse at 88% 78%, rgba(139,92,246,0.20), transparent 34%), radial-gradient(ellipse at 72% 8%, rgba(34,211,238,0.15), transparent 28%), linear-gradient(130deg, #E5EEFF 0%, #F4F1FF 52%, #E6F7FF 100%)";
 
 /** One labelled field with its own error line (the line keeps its height, so the card never jumps). */
 function Field({ label, error, trailing, ...input }) {
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="mb-1 block text-sm font-medium text-white/90">
+      <label
+        htmlFor={id}
+        className="mb-1 block text-sm font-medium text-white/90"
+      >
         {label}
       </label>
       <div className="relative">
@@ -19,14 +22,14 @@ function Field({ label, error, trailing, ...input }) {
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-err` : undefined}
           className={`min-h-12 w-full rounded-xl border bg-white px-3.5 text-base text-ink outline-none transition-shadow focus:border-[#2457C5] focus:ring-4 focus:ring-[#2457C5]/10 ${
-            error ? 'border-danger' : 'border-[#C7D2E2] hover:border-[#8EA5C5]'
-          } ${trailing ? 'pr-16' : ''}`}
+            error ? "border-danger" : "border-[#C7D2E2] hover:border-[#8EA5C5]"
+          } ${trailing ? "pr-16" : ""}`}
           {...input}
         />
         {trailing}
       </div>
       <p id={`${id}-err`} className="mt-1 min-h-5 text-sm text-danger">
-        {error || ''}
+        {error || ""}
       </p>
     </div>
   );
@@ -38,11 +41,11 @@ function Field({ label, error, trailing, ...input }) {
  */
 export function Login() {
   const { signIn, notice } = useAuth();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [errors, setErrors] = useState({});
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useState("");
   const [busy, setBusy] = useState(false);
 
   async function onSubmit(e) {
@@ -50,10 +53,10 @@ export function Login() {
     if (busy) return;
     const next = {};
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email.trim()))
-      next.email = 'Enter a valid email address.';
-    if (!password) next.password = 'Enter your password.';
+      next.email = "Enter a valid email address.";
+    if (!password) next.password = "Enter your password.";
     setErrors(next);
-    setFormError('');
+    setFormError("");
     if (Object.keys(next).length > 0) return;
     setBusy(true);
     try {
@@ -67,7 +70,7 @@ export function Login() {
   return (
     <main
       className="relative flex min-h-dvh flex-col overflow-x-hidden lg:h-dvh lg:min-h-0 lg:items-center lg:justify-center lg:overflow-hidden lg:px-14 lg:py-5"
-      style={{ backgroundColor: '#EDF3FF', backgroundImage: BG }}
+      style={{ backgroundColor: "#EDF3FF", backgroundImage: BG }}
     >
       {/* Phone / tablet: picture on top, the sign-in card is a sheet with round top corners.
           Desktop (lg): one big card, picture left, sign-in right. */}
@@ -103,7 +106,7 @@ export function Login() {
           </span>
         </section>
 
-        <div className="relative z-10 -mt-7 flex flex-col justify-center rounded-t-[2rem] bg-linear-to-br from-[#2457C5] via-[#3568D4] to-[#1F3A8A] px-6 pb-6 pt-7 text-white shadow-[0_-12px_40px_rgba(36,87,197,0.25)] sm:px-12 lg:mt-0 lg:h-full lg:min-h-0 lg:rounded-3xl lg:py-8 lg:shadow-[0_24px_60px_rgba(36,87,197,0.28)]">
+        <div className="relative z-10 -mt-7 flex flex-col justify-center rounded-t-4xl bg-linear-to-br from-[#2457C5] via-[#3568D4] to-[#1F3A8A] px-6 pb-6 pt-7 text-white shadow-[0_-12px_40px_rgba(36,87,197,0.25)] sm:px-12 lg:mt-0 lg:h-full lg:min-h-0 lg:rounded-3xl lg:py-8 lg:shadow-[0_24px_60px_rgba(36,87,197,0.28)]">
           <form
             onSubmit={onSubmit}
             noValidate
@@ -124,7 +127,10 @@ export function Login() {
             </div>
 
             {notice && (
-              <p role="status" className="rounded-xl bg-white/15 px-3 py-2 text-sm text-white">
+              <p
+                role="status"
+                className="rounded-xl bg-white/15 px-3 py-2 text-sm text-white"
+              >
                 {notice}
               </p>
             )}
@@ -143,38 +149,45 @@ export function Login() {
                 error={errors.email}
                 onChange={(e) => {
                   setEmail(e.target.value);
-                  if (errors.email) setErrors((c) => ({ ...c, email: undefined }));
-                  if (formError) setFormError('');
+                  if (errors.email)
+                    setErrors((c) => ({ ...c, email: undefined }));
+                  if (formError) setFormError("");
                 }}
               />
               <Field
                 label="Password"
-                type={showPassword ? 'text' : 'password'}
+                type={showPassword ? "text" : "password"}
                 name="password"
                 autoComplete="current-password"
                 value={password}
                 error={errors.password}
                 onChange={(e) => {
                   setPassword(e.target.value);
-                  if (errors.password) setErrors((c) => ({ ...c, password: undefined }));
-                  if (formError) setFormError('');
+                  if (errors.password)
+                    setErrors((c) => ({ ...c, password: undefined }));
+                  if (formError) setFormError("");
                 }}
                 trailing={
                   <button
                     type="button"
                     onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    aria-label={
+                      showPassword ? "Hide password" : "Show password"
+                    }
                     aria-pressed={showPassword}
                     className="absolute inset-y-0 right-1 my-auto h-9 rounded-lg px-3 text-xs font-bold text-[#2457C5] hover:bg-[#2457C5]/10"
                   >
-                    {showPassword ? 'Hide' : 'Show'}
+                    {showPassword ? "Hide" : "Show"}
                   </button>
                 }
               />
             </div>
 
             {formError && (
-              <p role="alert" className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger">
+              <p
+                role="alert"
+                className="rounded-xl bg-danger/10 px-3 py-2 text-sm text-danger"
+              >
                 {formError}
               </p>
             )}
@@ -191,7 +204,7 @@ export function Login() {
                   className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white"
                 />
               )}
-              {busy ? 'Signing in…' : 'Sign in'}
+              {busy ? "Signing in…" : "Sign in"}
             </button>
           </form>
           <p className="mt-4 px-2 text-center text-[11px] leading-relaxed text-white/70 lg:hidden">
@@ -200,7 +213,8 @@ export function Login() {
         </div>
       </div>
       <p className="absolute bottom-2 left-0 right-0 hidden px-2 text-center text-xs leading-relaxed text-[#4E6387] lg:block">
-        © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved. Made with ❤️ for schools.
+        © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved. Made with
+        ❤️ for schools.
       </p>
     </main>
   );

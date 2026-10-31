@@ -25,6 +25,7 @@ let db;
 let fbCalls;
 let audit;
 let app;
+let history;
 beforeEach(() => {
   db = [
     mk("admin", "admin"),
@@ -33,6 +34,7 @@ beforeEach(() => {
   ];
   fbCalls = [];
   audit = [];
+  history = new Set();
   const firebaseAuth = {
     createUser: async (d) => {
       fbCalls.push(["createUser", d.email]);
@@ -64,6 +66,10 @@ beforeEach(() => {
     countActiveAdmins: async () =>
       db.filter((u) => u.role === "admin" && u.isActive).length,
     list: async () => ({ rows: db, total: db.length }),
+    hasHistory: async (_t, id) => history.has(id),
+    remove: async (_t, id) => {
+      db = db.filter((u) => u._id !== id);
+    },
   };
   app = createApp(env, createLogger("silent"), {
     verifyToken: async (t) => ({ uid: t, role: t, tenantId: TENANT }),
@@ -182,5 +188,35 @@ describe("Admin users module", () => {
       .set(as("admin"))
       .send({ role: "cashier" });
     expect(last.status).toBe(409);
+  });
+
+  it("delete: only the Admin; a clean account goes from Firebase and the database, and is audited", async () => {
+    for (const who of ["principal", "cashier"])
+      expect(
+        (await request(app).delete("/api/users/cashier").set(as(who))).status,
+      ).toBe(403);
+    const ok = await request(app).delete("/api/users/cashier").set(as("admin"));
+    expect(ok.status).toBe(200);
+    expect(db.some((u) => u._id === "cashier")).toBe(false);
+    expect(fbCalls).toContainEqual(["deleteUser", "cashier"]);
+    expect(
+      audit.some((a) => a.action === "delete" && a.entity === "user"),
+    ).toBe(true);
+    expect(
+      (await request(app).delete("/api/users/cashier").set(as("admin"))).status,
+    ).toBe(404);
+  });
+  it("delete is refused for yourself and for anyone who already worked in the system", async () => {
+    const self = await request(app).delete("/api/users/admin").set(as("admin"));
+    expect(self.status).toBe(409);
+    expect(self.body.error.code).toBe("SELF_DELETE");
+    history.add("cashier");
+    const used = await request(app)
+      .delete("/api/users/cashier")
+      .set(as("admin"));
+    expect(used.status).toBe(409);
+    expect(used.body.error.code).toBe("HAS_HISTORY");
+    expect(db.some((u) => u._id === "cashier")).toBe(true);
+    expect(fbCalls.some((c) => c[0] === "deleteUser")).toBe(false);
   });
 });

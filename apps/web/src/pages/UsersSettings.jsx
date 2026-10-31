@@ -5,6 +5,7 @@ import { useAuth } from "../auth/AuthContext";
 import {
   Badge,
   Button,
+  ConfirmDialog,
   Dialog,
   Input,
   Pagination,
@@ -27,7 +28,7 @@ export function UsersSettings() {
   const { user: me } = useAuth();
   const queryClient = useQueryClient();
   const [page, setPage] = useState(1);
-  const [dialog, setDialog] = useState(null); // { type: 'create' | 'reset' | 'role', user? }
+  const [dialog, setDialog] = useState(null); // { type: 'create' | 'reset' | 'edit' | 'delete', user? }
   const query = useQuery({
     queryKey: ["users", page],
     queryFn: () => api(`/api/users?page=${page}&pageSize=25`),
@@ -88,9 +89,9 @@ export function UsersSettings() {
           </Button>
           <Button
             variant="secondary"
-            onClick={() => setDialog({ type: "role", user: u })}
+            onClick={() => setDialog({ type: "edit", user: u })}
           >
-            Change role
+            Edit details
           </Button>
           {u.id !== me?.id && (
             <Button
@@ -101,6 +102,14 @@ export function UsersSettings() {
               }
             >
               {u.isActive ? "Switch off" : "Switch on"}
+            </Button>
+          )}
+          {u.id !== me?.id && (
+            <Button
+              variant="secondary"
+              onClick={() => setDialog({ type: "delete", user: u })}
+            >
+              Delete
             </Button>
           )}
         </div>
@@ -149,8 +158,15 @@ export function UsersSettings() {
           onDone={done}
         />
       )}
-      {dialog?.type === "role" && (
-        <RoleDialog
+      {dialog?.type === "edit" && (
+        <EditDialog
+          user={dialog.user}
+          onClose={() => setDialog(null)}
+          onDone={done}
+        />
+      )}
+      {dialog?.type === "delete" && (
+        <DeleteDialog
           user={dialog.user}
           onClose={() => setDialog(null)}
           onDone={done}
@@ -293,19 +309,25 @@ function ResetDialog({ user, onClose, onDone }) {
   );
 }
 
-function RoleDialog({ user, onClose, onDone }) {
+function EditDialog({ user, onClose, onDone }) {
   const { notify } = useToast();
+  const [name, setName] = useState(user.name);
   const [role, setRole] = useState(user.role);
+  const body = {};
+  if (name.trim() !== user.name) body.name = name.trim();
+  if (role !== user.role) body.role = role;
   const save = useMutation({
-    mutationFn: () =>
-      api(`/api/users/${user.id}`, { method: "PATCH", body: { role } }),
-    onSuccess: () => onDone("Role changed. The person must sign in again."),
+    mutationFn: () => api(`/api/users/${user.id}`, { method: "PATCH", body }),
+    onSuccess: () =>
+      onDone(
+        body.role ? "Saved. The person must sign in again." : "Details saved.",
+      ),
     onError: (e) => notify(errorText(e), "error"),
   });
   return (
     <Dialog
       open
-      title={`Change role: ${user.name}`}
+      title={`Edit details: ${user.name}`}
       onClose={onClose}
       footer={
         <>
@@ -317,21 +339,52 @@ function RoleDialog({ user, onClose, onDone }) {
             Cancel
           </Button>
           <Button
-            disabled={role === user.role}
+            disabled={Object.keys(body).length === 0 || name.trim().length < 2}
             loading={save.isPending}
             onClick={() => save.mutate()}
           >
-            Change role
+            Save
           </Button>
         </>
       }
     >
-      <Select
-        label="Role"
-        options={ROLE_OPTIONS}
-        value={role}
-        onChange={(e) => setRole(e.target.value)}
-      />
+      <div className="flex flex-col gap-3">
+        <Input
+          label="Full name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+        />
+        <Select
+          label="Role"
+          options={ROLE_OPTIONS}
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+        />
+      </div>
     </Dialog>
+  );
+}
+
+function DeleteDialog({ user, onClose, onDone }) {
+  const { notify } = useToast();
+  const del = useMutation({
+    mutationFn: () => api(`/api/users/${user.id}`, { method: "DELETE" }),
+    onSuccess: () => onDone(`${user.name} deleted.`),
+    onError: (e) => {
+      notify(errorText(e), "error");
+      onClose();
+    },
+  });
+  return (
+    <ConfirmDialog
+      open
+      tone="danger"
+      title={`Delete ${user.name}?`}
+      description="This removes the login for good. It works only for an account that has never done any work in the system; otherwise use Switch off."
+      confirmLabel="Delete user"
+      loading={del.isPending}
+      onConfirm={() => del.mutate()}
+      onCancel={onClose}
+    />
   );
 }

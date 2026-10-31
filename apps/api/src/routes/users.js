@@ -189,6 +189,52 @@ export function usersRouter(deps, authenticate) {
     }
   });
 
+  // Delete: only for an account that never did anything. Otherwise it is switched off, never
+  // erased, so receipts and the audit log can always say who did what.
+  router.delete("/users/:id", ...admin, async (req, res, next) => {
+    try {
+      const tenantId = req.user.tenantId;
+      const target = await deps.userStore.findById(tenantId, req.params.id);
+      if (!target) throw notFound("User");
+      if (String(target._id) === String(req.user.id))
+        throw new AppError(
+          "SELF_DELETE",
+          409,
+          "You cannot delete your own account.",
+        );
+      if (
+        target.role === "admin" &&
+        target.isActive &&
+        (await deps.userStore.countActiveAdmins(tenantId)) <= 1
+      )
+        throw new AppError(
+          "LAST_ADMIN",
+          409,
+          "At least one active Admin must remain.",
+        );
+      if (await deps.userStore.hasHistory(tenantId, target._id))
+        throw new AppError(
+          "HAS_HISTORY",
+          409,
+          `${target.name} has already worked in the system (receipts, vouchers or records carry the name). Switch the account off instead of deleting it.`,
+        );
+      const auth = fb();
+      await auth.deleteUser(target.firebaseUid).catch((err) => {
+        if (err?.code !== "auth/user-not-found") throw err;
+      });
+      await deps.userStore.remove(tenantId, target._id);
+      await recordAudit(deps, req, {
+        action: "delete",
+        entity: "user",
+        entityId: String(target._id),
+        oldValue: { email: target.email, name: target.name, role: target.role },
+      });
+      res.json({ ok: true });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   router.post("/users/:id/reset-password", ...admin, async (req, res, next) => {
     try {
       const { password: next1 } = resetBody.parse(req.body);

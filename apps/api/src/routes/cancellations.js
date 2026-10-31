@@ -37,8 +37,8 @@ const shape = (c) => ({
 });
 
 /**
- * Receipt cancellation approvals. The Cashier asks (receipts.js); the PRINCIPAL is the only one
- * who approves or rejects here. (The Admin can still cancel directly from the receipt.)
+ * Receipt cancellation approvals. The Cashier asks (receipts.js); the ADMIN approves or rejects
+ * here (the Principal can only look; changed 2026-10-31). The Admin can also cancel directly from the receipt.
  * Approving stops the receipt's payments from counting; the receipt itself is never edited.
  */
 export function cancellationsRouter(deps, authenticate) {
@@ -107,13 +107,13 @@ export function cancellationsRouter(deps, authenticate) {
   router.post(
     "/receipt-cancellations/:id/approve",
     authenticate,
-    requireRole("principal"),
+    requireRole("admin"),
     decide("approve"),
   );
   router.post(
     "/receipt-cancellations/:id/reject",
     authenticate,
-    requireRole("principal"),
+    requireRole("admin"),
     decide("reject"),
   );
   return router;

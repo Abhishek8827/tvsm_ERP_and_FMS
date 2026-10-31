@@ -15,7 +15,7 @@ import { AppError, notFound } from "../utils/errors.js";
 /**
  * School expenses, petty cash, bank & cash (Step 6). Roles (confirmed by the school):
  *  Admin     makes vouchers, payments, adjustments, petty entries, transfers, heads, banks
- *  Principal approves/rejects vouchers and reversals; sees every entry and every balance
+ *  Admin approves/rejects vouchers and reversals (Principal is read-only); the Principal sees every entry and every balance
  *  Cashier   sees only the bank names needed to choose the bank on Collect Fee. Nothing else
  *            (no petty cash, no balances; the Cashier PIN was removed on 2026-10-29).
  */
@@ -121,7 +121,7 @@ const shapePayment = (p) => ({
   mode: p.mode,
   bankName: p.bankName ?? null,
   amountPaise: p.amountPaise,
-  // "Approved by" shows the Principal who approved the voucher and who authorised the payment.
+  // "Approved by" shows who approved the voucher and who authorised the payment.
   approvedBy: [p.approvedByName, p.authorisedBy].filter(Boolean).join(" / "),
   authorisedBy: p.authorisedBy,
   remark: p.remark,
@@ -175,7 +175,6 @@ export function moneyRouter(deps, authenticate) {
   const router = Router();
   const store = () => deps.moneyStore;
   const adminOnly = [authenticate, requireRole("admin")];
-  const principalOnly = [authenticate, requireRole("principal")];
   const adminOrPrincipal = [authenticate, requireRole("admin", "principal")];
   const anyRole = [authenticate, requireRole("admin", "principal", "cashier")];
   const tenant = (req) => req.user.tenantId;
@@ -480,7 +479,7 @@ export function moneyRouter(deps, authenticate) {
   );
   router.post(
     "/vouchers/:id/approve",
-    ...principalOnly,
+    ...adminOnly,
     wrap(async (req, res) => {
       const id = objectId.parse(req.params.id);
       const v = await store().decideVoucher({
@@ -506,7 +505,7 @@ export function moneyRouter(deps, authenticate) {
   );
   router.post(
     "/vouchers/:id/reject",
-    ...principalOnly,
+    ...adminOnly,
     wrap(async (req, res) => {
       const id = objectId.parse(req.params.id);
       const { reason } = reasonBody.parse(req.body);
@@ -608,7 +607,7 @@ export function moneyRouter(deps, authenticate) {
     }),
   );
 
-  // ----- reversals: Admin asks (reason compulsory), Principal decides -----
+  // ----- reversals: Admin asks (reason compulsory) and approves -----
   router.get(
     "/expense-reversals",
     ...adminOrPrincipal,
@@ -661,7 +660,7 @@ export function moneyRouter(deps, authenticate) {
   for (const decision of ["approve", "reject"]) {
     router.post(
       `/expense-reversals/:id/${decision}`,
-      ...principalOnly,
+      ...adminOnly,
       wrap(async (req, res) => {
         const { reason } =
           decision === "reject"

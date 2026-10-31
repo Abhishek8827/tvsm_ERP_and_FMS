@@ -124,7 +124,7 @@ const toStudentSet = (patch) => ({
 /**
  * Transfer Certificates and Bonafide certificates.
  *   1. The Admin makes a REQUEST (nothing is numbered yet).
- *   2. The Principal approves or rejects it online. Only approval creates the certificate, with
+ *   2. The Admin approves it (the screen does this right after asking; the Principal only looks). Only approval creates the certificate, with
  *      its gap-free number, inside one database transaction (a rejected request takes no number).
  *   3. The Admin prints it: the first print is the original, later ones are DUPLICATE copies.
  * The Cashier can only look. Every call that creates something is idempotent.
@@ -133,7 +133,6 @@ export function certificatesRouter(deps, authenticate) {
   const router = Router();
   const view = [authenticate, requireRole("admin", "principal", "cashier")];
   const adminOnly = [authenticate, requireRole("admin")];
-  const principalOnly = [authenticate, requireRole("principal")];
   const wrap = (fn) => async (req, res, next) => {
     try {
       await fn(req, res);
@@ -155,7 +154,7 @@ export function certificatesRouter(deps, authenticate) {
 
   /**
    * Checks everything a TC needs and works out what goes on it. Used when the Admin asks (so a
-   * mistake is caught at once) and again when the Principal approves (dues may have changed).
+   * mistake is caught at once) and again when it is approved (dues may have changed).
    */
   const buildTcDoc = async (tenantId, requesterName, body) => {
     const student = await loadStudent(tenantId, body.studentId);
@@ -265,7 +264,7 @@ export function certificatesRouter(deps, authenticate) {
         throw new AppError(
           "REQUEST_PENDING",
           409,
-          "A request for this student is already waiting for the Principal.",
+          "A request for this student is already waiting for approval.",
         );
       throw err;
     }
@@ -386,7 +385,7 @@ export function certificatesRouter(deps, authenticate) {
     }),
   );
 
-  // ---- requests: the Admin asks, the Principal decides
+  // ---- requests: the Admin asks and approves (Principal is read-only)
   router.post(
     "/certificate-requests/tc",
     ...adminOnly,
@@ -407,7 +406,7 @@ export function certificatesRouter(deps, authenticate) {
         throw new AppError(
           "REQUEST_PENDING",
           409,
-          "A request for this student is already waiting for the Principal.",
+          "A request for this student is already waiting for approval.",
         );
       const b = await buildTcDoc(tenantId, req.user.name, body);
       const { request, replay } = await saveRequest({
@@ -464,7 +463,7 @@ export function certificatesRouter(deps, authenticate) {
         throw new AppError(
           "REQUEST_PENDING",
           409,
-          "A request for this student is already waiting for the Principal.",
+          "A request for this student is already waiting for approval.",
         );
       const { request, replay } = await saveRequest({
         tenantId,
@@ -527,7 +526,7 @@ export function certificatesRouter(deps, authenticate) {
   // double click) returns the same certificate.
   router.post(
     "/certificate-requests/:id/approve",
-    ...principalOnly,
+    ...adminOnly,
     wrap(async (req, res) => {
       const tenantId = req.user.tenantId;
       const id = objectId.parse(req.params.id);
@@ -691,7 +690,7 @@ export function certificatesRouter(deps, authenticate) {
   );
   router.post(
     "/certificate-requests/:id/reject",
-    ...principalOnly,
+    ...adminOnly,
     wrap(async (req, res) => {
       const { reason } = cancelBody.parse(req.body);
       const tenantId = req.user.tenantId;

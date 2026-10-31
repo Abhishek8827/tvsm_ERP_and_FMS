@@ -1,15 +1,15 @@
 /* Design tokens from the Figma variables (TDD 12.4). Values are "R G B" so Tailwind can add alpha. */
 :root {
-  --bg-app: 245 247 250; /* #F5F7FA */
+  --bg-app: 238 244 255; /* #EEF4FF light blue page */
   --bg-surface: 255 255 255; /* #FFFFFF */
-  --bg-sidebar: 20 40 63; /* #14283F */
-  --brand: 43 90 140; /* #2B5A8C */
-  --brand-dark: 31 58 95; /* #1F3A5F */
+  --bg-sidebar: 31 58 138; /* #1F3A8A deep blue (sidebar + top bar frame) */
+  --brand: 36 87 197; /* #2457C5 same blue as the login page */
+  --brand-dark: 31 58 138; /* #1F3A8A */
   --success: 30 142 90; /* #1E8E5A */
   --warning: 183 121 31; /* #B7791F */
   --danger: 197 48 48; /* #C53030 */
   --info: 43 108 176; /* #2B6CB0 */
   --text: 20 32 46; /* #14202E */
   --text-muted: 92 108 126; /* secondary text, 5.4:1 on white */
-  --border: 221 227 235;
+  --border: 214 224 240;
 }

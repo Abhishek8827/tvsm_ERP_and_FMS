@@ -254,7 +254,7 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-[2rem] md:rounded-tr-none">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-4xl md:rounded-tr-none">
           <main className="min-w-0 flex-1 p-4 md:p-8">
             <Outlet />
           </main>

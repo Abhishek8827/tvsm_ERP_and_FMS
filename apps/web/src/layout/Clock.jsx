@@ -27,8 +27,10 @@ export function Clock() {
       dateTime={now.toISOString()}
       className="text-right text-xs leading-tight sm:text-sm"
     >
-      <span className="block font-medium text-ink">{timeFmt.format(now)}</span>
-      <span className="block text-ink-muted">{dateFmt.format(now)}</span>
+      <span className="block font-medium text-white">
+        {timeFmt.format(now)}
+      </span>
+      <span className="block text-white/70">{dateFmt.format(now)}</span>
     </time>
   );
 }

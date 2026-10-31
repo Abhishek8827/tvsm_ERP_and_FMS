@@ -30,7 +30,9 @@
   },
   "pnpm": {
     "overrides": {
-      "body-parser": ">=2.4.0"
+      "body-parser": ">=2.4.0",
+      "qs": ">=6.17.1",
+      "follow-redirects": ">=1.16.2"
     }
   }
 }

@@ -118,4 +118,22 @@ describe("Shell", () => {
       screen.getByRole("option", { name: "Collect Fee" }),
     ).toBeInTheDocument();
   });
+
+  it("the phone menu closes by itself: on choosing a page, on Escape, and on the backdrop", () => {
+    role = "cashier";
+    at("/");
+    const open = () =>
+      fireEvent.click(screen.getByRole("button", { name: "Open menu" }));
+    open();
+    const menu = () => document.getElementById("mobile-menu");
+    expect(menu()).not.toBeNull();
+    fireEvent.click(within(menu()).getByRole("link", { name: "Dashboard" }));
+    expect(menu()).toBeNull();
+    open();
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(menu()).toBeNull();
+    open();
+    fireEvent.click(screen.getByRole("button", { name: "Close menu" }));
+    expect(menu()).toBeNull();
+  });
 });

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { navForRole, navLayoutForRole, SCHOOL } from "@erp/shared";
 import { useAuth } from "../auth/AuthContext";
@@ -81,11 +81,26 @@ export function AppShell() {
   const [seenPath, setSeenPath] = useState(pathname);
   if (seenPath !== pathname) {
     setSeenPath(pathname);
+    setDrawer(false); // any page change (menu link, tile, search, back button) closes the phone menu
     if (activeKey && openGroups[activeKey] === false) {
       const { [activeKey]: _closed, ...rest } = openGroups;
       setOpenGroups(rest);
     }
   }
+  // Escape closes the phone menu; growing the window to desktop width also closes it, so it can
+  // never be left open behind the page.
+  useEffect(() => {
+    if (!drawer) return undefined;
+    const onKey = (e) => e.key === "Escape" && setDrawer(false);
+    const mq = window.matchMedia?.("(min-width: 768px)");
+    const onWide = (e) => e.matches && setDrawer(false);
+    window.addEventListener("keydown", onKey);
+    mq?.addEventListener?.("change", onWide);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      mq?.removeEventListener?.("change", onWide);
+    };
+  }, [drawer]);
   const isOpen = (key) => openGroups[key] ?? key === activeKey;
 
   if (!role) return null;
@@ -239,7 +254,7 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-4xl md:rounded-tr-none">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-[2rem] md:rounded-tr-none">
           <main className="min-w-0 flex-1 p-4 md:p-8">
             <Outlet />
           </main>

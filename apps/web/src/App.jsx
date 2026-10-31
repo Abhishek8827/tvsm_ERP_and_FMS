@@ -140,7 +140,7 @@ export function App() {
         )}
         <Route path="/tc-bonafide" element={<TcBonafide />} />
         <Route path="/day-close" element={<DayClose />} />
-        {role === "principal" && (
+        {role === "admin" && (
           <Route path="/approvals" element={<Approvals />} />
         )}
         {role === "admin" && (

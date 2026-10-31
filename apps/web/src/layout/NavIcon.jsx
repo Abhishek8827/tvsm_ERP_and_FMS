@@ -78,11 +78,11 @@ const P = {
   "audit-log": <path d="M7 4h10v16H7zM10 8h4M10 12h4M10 16h2" />,
 };
 
-export function NavIcon({ name }) {
+export function NavIcon({ name, size = 20 }) {
   return (
     <svg
-      width="20"
-      height="20"
+      width={size}
+      height={size}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"

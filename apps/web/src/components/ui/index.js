@@ -9,3 +9,4 @@ export * from "./FilterBar";
 export * from "./Dialog";
 export * from "./Toast";
 export * from "./NavItem";
+export * from "./NavGroup";

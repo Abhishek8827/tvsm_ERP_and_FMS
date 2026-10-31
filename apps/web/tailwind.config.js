@@ -21,7 +21,7 @@ export default {
         line: v("border"),
       },
       fontFamily: { sans: ["Inter", "system-ui", "sans-serif"] },
-      borderRadius: { card: "10px" },
+      borderRadius: { card: "14px" },
     },
   },
   plugins: [],

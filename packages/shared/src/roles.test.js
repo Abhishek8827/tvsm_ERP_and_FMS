@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { navForRole } from "./roles.js";
+import { navForRole, navLayoutForRole } from "./roles.js";
 describe("navForRole", () => {
   it("cashier never sees admin-only screens (the fee chart is view-only for cashier)", () => {
     const keys = navForRole("cashier").map((n) => n.key);
@@ -31,5 +31,35 @@ describe("navForRole", () => {
   });
   it("admin cannot see principal-only approvals inbox", () => {
     expect(navForRole("admin").map((n) => n.key)).not.toContain("approvals");
+  });
+});
+
+describe("navLayoutForRole", () => {
+  it("Dashboard first, categories in a fixed order, every link appears exactly once", () => {
+    for (const r of ["admin", "principal", "cashier"]) {
+      const layout = navLayoutForRole(r);
+      expect(layout[0].item.key).toBe("dashboard");
+      const keys = layout.flatMap((e) =>
+        e.type === "link" ? [e.item.key] : e.items.map((i) => i.key),
+      );
+      expect(keys.sort()).toEqual(
+        navForRole(r)
+          .map((n) => n.key)
+          .sort(),
+      );
+    }
+  });
+  it("a category with one link for that role is a plain link; Admin gets the five categories", () => {
+    const cashier = navLayoutForRole("cashier");
+    expect(
+      cashier.find((e) => e.type === "group" && e.key === "setup"),
+    ).toBeUndefined();
+    expect(
+      cashier.find((e) => e.type === "link" && e.item.key === "fee-structure"),
+    ).toBeTruthy();
+    const admin = navLayoutForRole("admin")
+      .filter((e) => e.type === "group")
+      .map((e) => e.key);
+    expect(admin).toEqual(["fees", "students", "money", "reports", "setup"]);
   });
 });

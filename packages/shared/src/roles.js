@@ -20,6 +20,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "collect-fee",
+    group: "fees",
     label: "Collect Fee",
     path: "/collect-fee",
     roles: ["cashier", "admin"],
@@ -27,6 +28,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "receipts",
+    group: "fees",
     label: "Receipts",
     path: "/receipts",
     roles: ["cashier"],
@@ -41,6 +43,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "students",
+    group: "students",
     label: "Students",
     path: "/students",
     roles: ROLES,
@@ -48,6 +51,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "fee-structure",
+    group: "setup",
     label: "Fee Structure",
     path: "/fee-structure",
     // Cashier and Principal can only LOOK at the chart; only Admin can change it.
@@ -56,6 +60,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "fees-receipts",
+    group: "fees",
     label: "Fees & Receipts",
     path: "/fees-receipts",
     roles: ["admin"],
@@ -63,6 +68,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "fees-database",
+    group: "fees",
     label: "Fees Database",
     path: "/fees-database",
     // Everyone can LOOK; the Cashier sees it read-only (no export, no changes).
@@ -71,6 +77,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "rebates",
+    group: "fees",
     label: "Rebates",
     path: "/rebates",
     // Admin gives, imports and reverses; the Principal can look and export. Not for the Cashier.
@@ -79,6 +86,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "transport",
+    group: "fees",
     label: "Transport",
     path: "/transport",
     // Everyone can look (the Cashier needs it at the counter); only the Admin changes it.
@@ -87,6 +95,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "cashbook",
+    group: "money",
     label: "Cashbook",
     path: "/cashbook",
     // The school's daily notebook as a report. Everyone can look; only the Admin edits settings.
@@ -95,6 +104,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "expenses",
+    group: "money",
     label: "Expenses",
     path: "/expenses",
     // Admin makes vouchers; the Principal approves and views. The Cashier has no expense screen.
@@ -103,6 +113,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "petty-cash",
+    group: "money",
     label: "Petty Cash",
     path: "/petty-cash",
     // The Cashier has no petty cash screen (removed 2026-10-29).
@@ -111,6 +122,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "day-close",
+    group: "fees",
     label: "Day Close",
     path: "/day-close",
     roles: ["admin", "principal", "cashier"],
@@ -118,6 +130,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "bank-cash",
+    group: "money",
     label: "Bank & Cash",
     path: "/bank-cash",
     // The Cashier has no Bank & Cash screen and no PIN (removed 2026-10-29).
@@ -126,6 +139,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "reports",
+    group: "reports",
     label: "Reports",
     path: "/reports",
     roles: ["admin", "principal"],
@@ -133,6 +147,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "tc-bonafide",
+    group: "students",
     label: "TC & Bonafide",
     path: "/tc-bonafide",
     roles: ["admin", "principal", "cashier"], // Principal and Cashier can only look
@@ -140,6 +155,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "data-import",
+    group: "setup",
     label: "Data Import",
     path: "/data-import",
     roles: ["admin"],
@@ -147,6 +163,7 @@ export const NAV_ITEMS = [
   },
   {
     key: "users-settings",
+    group: "setup",
     label: "Users & Settings",
     path: "/users-settings",
     roles: ["admin"],
@@ -154,12 +171,40 @@ export const NAV_ITEMS = [
   },
   {
     key: "audit-log",
+    group: "reports",
     label: "Audit Log",
     path: "/audit-log",
     roles: ["admin", "principal"],
     availableFromStep: 12,
   },
 ];
+/** Sidebar categories, in the order they appear. Items without a group (Dashboard, Approvals) stand alone. */
+export const NAV_GROUPS = [
+  { key: "fees", label: "Fees" },
+  { key: "students", label: "Students & Certificates" },
+  { key: "money", label: "Money" },
+  { key: "reports", label: "Reports & Audit" },
+  { key: "setup", label: "Setup" },
+];
+
 export function navForRole(role) {
   return NAV_ITEMS.filter((item) => item.roles.includes(role));
+}
+
+/**
+ * The sidebar for one role: standalone links and collapsible categories, in order. A category that
+ * would hold only one link for this role is shown as a plain link (a dropdown of one is pointless).
+ */
+export function navLayoutForRole(role) {
+  const items = navForRole(role);
+  const out = [];
+  for (const item of items.filter((i) => !i.group))
+    out.push({ type: "link", item });
+  for (const g of NAV_GROUPS) {
+    const inGroup = items.filter((i) => i.group === g.key);
+    if (inGroup.length === 1) out.push({ type: "link", item: inGroup[0] });
+    else if (inGroup.length > 1)
+      out.push({ type: "group", key: g.key, label: g.label, items: inGroup });
+  }
+  return out;
 }

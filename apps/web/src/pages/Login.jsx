@@ -213,8 +213,8 @@ export function Login() {
         </div>
       </div>
       <p className="absolute bottom-2 left-0 right-0 hidden px-2 text-center text-xs leading-relaxed text-[#4E6387] lg:block">
-        © {SOFTWARE.year} · {SOFTWARE.madeBy} · All rights reserved. Made with
-        ❤️ for schools.
+        © {SOFTWARE.year} · Developed by {SOFTWARE.madeBy} · All rights
+        reserved.
       </p>
     </main>
   );

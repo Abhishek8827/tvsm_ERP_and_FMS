@@ -200,9 +200,9 @@ const ask = (app, key, b, who = "admin") =>
     .set(as(who))
     .set("Idempotency-Key", key)
     .send(b);
-const approve = (app, id, who = "principal") =>
+const approve = (app, id, who = "admin") =>
   request(app).post(`/api/certificate-requests/${id}/approve`).set(as(who));
-const reject = (app, id, reason, who = "principal") =>
+const reject = (app, id, reason, who = "admin") =>
   request(app)
     .post(`/api/certificate-requests/${id}/reject`)
     .set(as(who))
@@ -219,7 +219,7 @@ beforeEach(() =>
 afterEach(() => vi.useRealTimers());
 
 describe("TC request and approval", () => {
-  it("Admin asks, Principal decides: nobody else may (403), and the Cashier cannot ask", async () => {
+  it("Admin asks and approves: Principal and Cashier may not (403)", async () => {
     const { app } = build();
     for (const who of ["principal", "cashier"]) {
       expect((await ask(app, "key-12345678", body(), who)).status).toBe(403);
@@ -251,7 +251,7 @@ describe("TC request and approval", () => {
       ).toBe(403);
     }
     const r = await ask(app, "key-12345678", body());
-    for (const who of ["admin", "cashier"]) {
+    for (const who of ["principal", "cashier"]) {
       expect((await approve(app, r.body.id, who)).status).toBe(403);
       expect((await reject(app, r.body.id, "not right", who)).status).toBe(403);
     }
@@ -293,7 +293,7 @@ describe("TC request and approval", () => {
       bookNo: "7",
       status: "issued",
       issuedByName: "admin",
-      approvedByName: "principal",
+      approvedByName: "admin",
       originalPrinted: false,
     });
     expect(done.body.certificate.snapshot).toMatchObject({
@@ -307,7 +307,7 @@ describe("TC request and approval", () => {
       status: "inactive",
       inactiveReason: "left_with_tc",
     });
-    expect(reqs[0].decidedByName).toBe("principal");
+    expect(reqs[0].decidedByName).toBe("admin");
     for (const action of ["approve", "issue"])
       expect(audit.some((a) => a.action === action)).toBe(true);
   });
@@ -404,7 +404,7 @@ describe("TC request and approval", () => {
     expect(done.status).toBe(409);
     expect(JSON.stringify(done.body)).toContain("DUES_PENDING");
     expect(tcs).toHaveLength(0);
-    // the Principal can still reject it
+    // the Admin can still reject it
     expect((await reject(app, r.body.id, "Fees pending now")).status).toBe(200);
   });
 
@@ -614,7 +614,7 @@ describe("Bonafide request and approval", () => {
       number: "BON/FY2026-27/001",
       academicYear: "2026-27",
       dateOfIssue: "2026-10-13",
-      approvedByName: "principal",
+      approvedByName: "admin",
     });
     expect(done.body.certificate.snapshot).toMatchObject({
       name: "Aarav",

@@ -28,6 +28,7 @@ import {
 import { CERT_CSS, bonafideHtml, tcHtml } from "../lib/certificateHtml";
 import { printHtml } from "../lib/printHtml";
 import { WhatsappStatus } from "../components/WhatsappStatus";
+import { approveAfter } from "../lib/approveAfter";
 import { errorText, todayInput } from "../lib/rupees";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
@@ -152,6 +153,32 @@ const TC_STATUS = {
   cancelled: ["danger", "Cancelled"],
 };
 
+/**
+ * The Admin asks and the request is approved at once (the Principal is read-only). If the approval
+ * step fails the request stays waiting and the Admin can approve it from the requests list.
+ */
+async function askAndApprove(asking) {
+  const created = await asking;
+  if (created.status !== "pending") return { ...created, approveError: null };
+  const { result, approveError } = await approveAfter(
+    created,
+    `/api/certificate-requests/${created.id}/approve`,
+  );
+  return { ...created, ...result, approveError };
+}
+function notifyIssued(notify, r) {
+  if (r.approveError)
+    notify(
+      `Request saved, but approving it failed: ${errorText(r.approveError)} Approve it from the requests list.`,
+      "error",
+    );
+  else
+    notify(
+      `Done. ${r.certificateNumber ? `Number ${r.certificateNumber} is ` : ""}ready to print.`,
+      "success",
+    );
+}
+
 function TcForm({ draft, student, onSent, onBack }) {
   const { notify } = useToast();
   const keyRef = useRef(newIdempotencyKey());
@@ -221,14 +248,16 @@ function TcForm({ draft, student, onSent, onBack }) {
         "aparId",
       ])
         if (String(f[k] ?? "").trim()) body[k] = String(f[k]).trim();
-      return api("/api/certificate-requests/tc", {
-        method: "POST",
-        body,
-        idempotencyKey: keyRef.current,
-      });
+      return askAndApprove(
+        api("/api/certificate-requests/tc", {
+          method: "POST",
+          body,
+          idempotencyKey: keyRef.current,
+        }),
+      );
     },
     onSuccess: (r) => {
-      notify("Request sent to the Principal for approval.", "success");
+      notifyIssued(notify, r);
       onSent(r);
     },
     onError: (e) => {
@@ -528,14 +557,13 @@ function TcForm({ draft, student, onSent, onBack }) {
       </Card>
 
       <p className="text-sm text-ink-muted">
-        This goes to the Principal first. The Sl. No. is given only when the
-        Principal approves (next free number: <b>{slText(draft.nextSl)}</b> or
-        later). After approval the student becomes inactive, no more fees are
-        posted, and you can print the certificate.
+        The Sl. No. is given when you press the button (next free number:{" "}
+        <b>{slText(draft.nextSl)}</b> or later). After that the student becomes
+        inactive, no more fees are posted, and you can print the certificate.
       </p>
       <div className="flex gap-2">
         <Button type="submit" loading={issue.isPending}>
-          Send for Principal approval
+          Issue certificate
         </Button>
         <Button variant="secondary" onClick={onBack} disabled={issue.isPending}>
           Back
@@ -767,7 +795,7 @@ function TcIssued({ isAdmin, initialQ = "" }) {
         error={list.isError ? errorText(list.error) : null}
         onRetry={() => list.refetch()}
         emptyTitle="No Transfer Certificates issued yet"
-        emptyDescription="A certificate appears here after the Principal approves a request."
+        emptyDescription="A certificate appears here after it is issued."
       />
       {list.data && (
         <Pagination
@@ -835,18 +863,20 @@ function BonafideForm({ student, onSent, onBack }) {
   const [errors, setErrors] = useState({});
   const ask = useMutation({
     mutationFn: () =>
-      api("/api/certificate-requests/bonafide", {
-        method: "POST",
-        body: {
-          studentId: student.id,
-          purpose: purpose.trim(),
-          academicYear,
-          dateOfIssue,
-        },
-        idempotencyKey: keyRef.current,
-      }),
+      askAndApprove(
+        api("/api/certificate-requests/bonafide", {
+          method: "POST",
+          body: {
+            studentId: student.id,
+            purpose: purpose.trim(),
+            academicYear,
+            dateOfIssue,
+          },
+          idempotencyKey: keyRef.current,
+        }),
+      ),
     onSuccess: (r) => {
-      notify("Request sent to the Principal for approval.", "success");
+      notifyIssued(notify, r);
       onSent(r);
     },
     onError: (e) => {
@@ -915,13 +945,13 @@ function BonafideForm({ student, onSent, onBack }) {
           />
         </div>
         <p className="mt-3 text-sm text-ink-muted">
-          Dues are not checked for a Bonafide. The number is given when the
-          Principal approves.
+          Dues are not checked for a Bonafide. The number is given when you
+          press the button.
         </p>
       </Card>
       <div>
         <Button type="submit" loading={ask.isPending}>
-          Send for Principal approval
+          Issue certificate
         </Button>
       </div>
     </form>
@@ -1067,7 +1097,7 @@ function BonafideIssued({ isAdmin, initialQ = "" }) {
         error={list.isError ? errorText(list.error) : null}
         onRetry={() => list.refetch()}
         emptyTitle="No Bonafide certificates issued yet"
-        emptyDescription="A certificate appears here after the Principal approves a request."
+        emptyDescription="A certificate appears here after it is issued."
       />
       {list.data && (
         <Pagination
@@ -1114,19 +1144,18 @@ function BonafideIssued({ isAdmin, initialQ = "" }) {
 // ------------------------------------------------------------------ Requests (Admin asks, Principal decides)
 
 const REQUEST_STATUS = {
-  pending: ["warning", "Waiting for Principal"],
+  pending: ["warning", "Waiting"],
   approved: ["success", "Approved"],
   rejected: ["danger", "Rejected"],
 };
 
-function RequestsPanel({ kind, isAdmin, isPrincipal, onPick, onGoIssued }) {
+function RequestsPanel({ kind, isAdmin, onPick, onGoIssued }) {
   const qc = useQueryClient();
   const { notify } = useToast();
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [q, setQ] = useState("");
-  // The Principal opens this page to decide, so the waiting requests are what they see first.
-  const [status, setStatus] = useState(isPrincipal ? "pending" : "");
+  const [status, setStatus] = useState("");
   const [view, setView] = useState(null);
   const [rejectFor, setRejectFor] = useState(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -1233,11 +1262,11 @@ function RequestsPanel({ kind, isAdmin, isPrincipal, onPick, onGoIssued }) {
         <div className="flex flex-wrap justify-end gap-2">
           <Button
             variant={
-              isPrincipal && r.status === "pending" ? "primary" : "secondary"
+              isAdmin && r.status === "pending" ? "primary" : "secondary"
             }
             onClick={() => setView(r)}
           >
-            {isPrincipal && r.status === "pending" ? "Review" : "View"}
+            {isAdmin && r.status === "pending" ? "Review" : "View"}
           </Button>
           {isAdmin && r.status === "approved" && (
             <Button onClick={() => onGoIssued(r.admissionNo)}>Print</Button>
@@ -1252,14 +1281,14 @@ function RequestsPanel({ kind, isAdmin, isPrincipal, onPick, onGoIssued }) {
       ? tcHtml({ ...view.preview, slNo: null, status: "issued" })
       : bonafideHtml({ ...view.preview, number: null })
     : "";
-  const canDecide = isPrincipal && view?.status === "pending";
+  const canDecide = isAdmin && view?.status === "pending";
 
   return (
     <div className="flex flex-col gap-4">
       {isAdmin && (
         <Card
           title={`Ask for a new ${label}`}
-          subtitle={`Find the student, choose them, then fill the form. The Principal approves it online; after that you can print and sign it.${kind === "bonafide" ? " Only students who are studying now (active) can get one." : ""}`}
+          subtitle={`Find the student, choose them, then fill the form. It is issued at once; then you can print and sign it.${kind === "bonafide" ? " Only students who are studying now (active) can get one." : ""}`}
         >
           <StudentPicker onPick={onPick} onlyActive={kind === "bonafide"} />
         </Card>
@@ -1283,7 +1312,7 @@ function RequestsPanel({ kind, isAdmin, isPrincipal, onPick, onGoIssued }) {
           }}
           options={[
             { value: "", label: "All" },
-            { value: "pending", label: "Waiting for Principal" },
+            { value: "pending", label: "Waiting" },
             { value: "approved", label: "Approved" },
             { value: "rejected", label: "Rejected" },
           ]}
@@ -1391,7 +1420,7 @@ function RequestsPanel({ kind, isAdmin, isPrincipal, onPick, onGoIssued }) {
 }
 
 /** One certificate kind: the Requests (Admin asks, Principal decides) and the Issued list. */
-function CertTab({ kind, isAdmin, isPrincipal }) {
+function CertTab({ kind, isAdmin }) {
   const [sub, setSub] = useState("requests");
   const [student, setStudent] = useState(null);
   const [issuedQ, setIssuedQ] = useState("");
@@ -1438,7 +1467,6 @@ function CertTab({ kind, isAdmin, isPrincipal }) {
         <RequestsPanel
           kind={kind}
           isAdmin={isAdmin}
-          isPrincipal={isPrincipal}
           onPick={setStudent}
           onGoIssued={(admissionNo) => {
             setIssuedQ(admissionNo);
@@ -1534,13 +1562,12 @@ function SettingsTab() {
 }
 
 /**
- * TC & Bonafide. The Admin asks, the Principal approves online, then the Admin prints and signs.
+ * TC & Bonafide. The Admin issues (asks and approves in one go), then prints and signs.
  * The Cashier can only look.
  */
 export function TcBonafide() {
   const { role } = useAuth();
   const isAdmin = role === "admin";
-  const isPrincipal = role === "principal";
   // /tc-bonafide?tab=bonafide opens the Bonafide tab (the Approvals inbox links here).
   const [params] = useSearchParams();
   const [tab, setTab] = useState(
@@ -1557,10 +1584,8 @@ export function TcBonafide() {
         <h1 className="text-2xl font-semibold text-ink">TC & Bonafide</h1>
         <p className="text-sm text-ink-muted">
           {isAdmin
-            ? "Ask for a certificate, wait for the Principal to approve it online, then print and sign it."
-            : isPrincipal
-              ? "Review the requests the Admin sends, then approve or reject them."
-              : "You can look at requests and issued certificates. Only the Admin can ask for or print them."}
+            ? "Issue a certificate, then print and sign it."
+            : "You can look at requests and issued certificates. Only the Admin can issue or print them."}
         </p>
       </div>
       <div role="tablist" className="flex flex-wrap gap-2 border-b border-line">
@@ -1576,12 +1601,8 @@ export function TcBonafide() {
           </button>
         ))}
       </div>
-      {tab === "tc" && (
-        <CertTab kind="tc" isAdmin={isAdmin} isPrincipal={isPrincipal} />
-      )}
-      {tab === "bonafide" && (
-        <CertTab kind="bonafide" isAdmin={isAdmin} isPrincipal={isPrincipal} />
-      )}
+      {tab === "tc" && <CertTab kind="tc" isAdmin={isAdmin} />}
+      {tab === "bonafide" && <CertTab kind="bonafide" isAdmin={isAdmin} />}
       {tab === "settings" && isAdmin && <SettingsTab />}
     </div>
   );

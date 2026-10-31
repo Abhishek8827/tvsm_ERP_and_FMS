@@ -100,7 +100,7 @@ describe("TC & Bonafide screen: Admin", () => {
       await screen.findByRole("tab", { name: "Requests (1 waiting)" }),
     ).toBeInTheDocument();
     const row = await screen.findByRole("row", { name: /Aarav/ });
-    expect(within(row).getByText("Waiting for Principal")).toBeInTheDocument();
+    expect(within(row).getByText("Waiting")).toBeInTheDocument();
     expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument();
     // the search at the top finds students and lets the Admin choose one
     await user.type(screen.getByLabelText(/Find student/), "Aarav");
@@ -207,14 +207,16 @@ describe("TC & Bonafide screen: Admin", () => {
         posts.push({ url, ...opts });
         return req();
       },
+      "/api/certificate-requests/r1/approve": req({
+        status: "approved",
+        certificateNumber: "0143",
+      }),
     });
     show();
     await pickStudent(user);
     expect(await screen.findByText(/No fee dues pending/)).toBeInTheDocument();
     // empty compulsory fields stop the Admin before any request is sent
-    await user.click(
-      screen.getByRole("button", { name: "Send for Principal approval" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Issue certificate" }));
     expect(
       await screen.findByText("Last exam and result is required"),
     ).toBeInTheDocument();
@@ -223,12 +225,8 @@ describe("TC & Bonafide screen: Admin", () => {
     await fill(user, /11\. Subjects/, "English, Hindi");
     await fill(user, /15\. Working days/, "220");
     await fill(user, /16\. Days present/, "198");
-    await user.click(
-      screen.getByRole("button", { name: "Send for Principal approval" }),
-    );
-    expect(
-      await screen.findByText(/Request sent to the Principal/),
-    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Issue certificate" }));
+    expect(await screen.findByText(/Done\./)).toBeInTheDocument();
     expect(posts).toHaveLength(1);
     expect(posts[0].url).toBe("/api/certificate-requests/tc");
     expect(posts[0].idempotencyKey).toBe("key-test-12345");
@@ -257,6 +255,10 @@ describe("TC & Bonafide screen: Admin", () => {
         posts.push(opts);
         return req();
       },
+      "/api/certificate-requests/r1/approve": req({
+        status: "approved",
+        certificateNumber: "0143",
+      }),
     });
     show();
     await pickStudent(user);
@@ -271,9 +273,7 @@ describe("TC & Bonafide screen: Admin", () => {
     await fill(user, /11\. Subjects/, "English");
     await fill(user, /15\. Working days/, "220");
     await fill(user, /16\. Days present/, "198");
-    await user.click(
-      screen.getByRole("button", { name: "Send for Principal approval" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Issue certificate" }));
     expect(await screen.findByText(/Write the reason/)).toBeInTheDocument();
     expect(posts).toHaveLength(0);
     await fill(
@@ -281,10 +281,8 @@ describe("TC & Bonafide screen: Admin", () => {
       /Reason to ask for the TC with dues pending/,
       "Principal allowed",
     );
-    await user.click(
-      screen.getByRole("button", { name: "Send for Principal approval" }),
-    );
-    await screen.findByText(/Request sent to the Principal/);
+    await user.click(screen.getByRole("button", { name: "Issue certificate" }));
+    await screen.findByText(/Done\./);
     expect(posts[0].body.duesOverrideReason).toBe("Principal allowed");
   });
 
@@ -307,9 +305,7 @@ describe("TC & Bonafide screen: Admin", () => {
     await fill(user, /11\. Subjects/, "English");
     await fill(user, /15\. Working days/, "220");
     await fill(user, /16\. Days present/, "198");
-    await user.click(
-      screen.getByRole("button", { name: "Send for Principal approval" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Issue certificate" }));
     expect(
       await screen.findByText("Date of first admission is required"),
     ).toBeInTheDocument();
@@ -324,7 +320,7 @@ describe("TC & Bonafide screen: Admin", () => {
       "/api/certificate-requests/tc": () => {
         throw Object.assign(
           new Error(
-            "A request for this student is already waiting for the Principal.",
+            "A request for this student is already waiting for approval.",
           ),
           { status: 409 },
         );
@@ -337,13 +333,11 @@ describe("TC & Bonafide screen: Admin", () => {
     await fill(user, /11\. Subjects/, "English");
     await fill(user, /15\. Working days/, "220");
     await fill(user, /16\. Days present/, "198");
-    await user.click(
-      screen.getByRole("button", { name: "Send for Principal approval" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Issue certificate" }));
     expect(
-      await screen.findByText(/already waiting for the Principal/),
+      await screen.findByText(/already waiting for approval/),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Request sent to the Principal/)).toBeNull();
+    expect(screen.queryByText(/Done\./)).toBeNull();
   });
 
   it("a student who already has a TC gets no form", async () => {
@@ -357,7 +351,7 @@ describe("TC & Bonafide screen: Admin", () => {
     await pickStudent(user);
     expect(await screen.findByText(/already issued/)).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Send for Principal approval" }),
+      screen.queryByRole("button", { name: "Issue certificate" }),
     ).toBeNull();
   });
 
@@ -371,22 +365,21 @@ describe("TC & Bonafide screen: Admin", () => {
         posts.push(opts);
         return req({ kind: "bonafide" });
       },
+      "/api/certificate-requests/r1/approve": req({
+        kind: "bonafide",
+        status: "approved",
+        certificateNumber: "B-1",
+      }),
     });
     show();
     await user.click(screen.getByRole("tab", { name: "Bonafide" }));
     await pickStudent(user);
-    await user.click(
-      screen.getByRole("button", { name: "Send for Principal approval" }),
-    );
+    await user.click(screen.getByRole("button", { name: "Issue certificate" }));
     expect(await screen.findByText("Write the purpose")).toBeInTheDocument();
     expect(posts).toHaveLength(0);
     await user.type(screen.getByLabelText(/Purpose/), "Passport");
-    await user.click(
-      screen.getByRole("button", { name: "Send for Principal approval" }),
-    );
-    expect(
-      await screen.findByText(/Request sent to the Principal/),
-    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Issue certificate" }));
+    expect(await screen.findByText(/Done\./)).toBeInTheDocument();
     expect(posts[0].body).toMatchObject({
       studentId: "s1",
       purpose: "Passport",
@@ -519,14 +512,14 @@ describe("TC & Bonafide screen: opened from a link", () => {
   });
 });
 
-describe("TC & Bonafide screen: Principal decides, Cashier only looks", () => {
+describe("TC & Bonafide screen: Admin decides a waiting request; Principal and Cashier only look", () => {
   beforeEach(() => {
     api.mockReset();
     printHtml.mockClear();
   });
 
-  it("Principal reviews the certificate, sees the dues reason, and approves once", async () => {
-    mockRole = "principal";
+  it("Admin reviews a waiting request, sees the dues reason, and approves once", async () => {
+    mockRole = "admin";
     const user = userEvent.setup();
     const posts = [];
     route({
@@ -544,14 +537,7 @@ describe("TC & Bonafide screen: Principal decides, Cashier only looks", () => {
       },
     });
     show();
-    // the Principal lands on the requests that are waiting for a decision
     await screen.findByRole("row", { name: /Aarav/ });
-    expect(api).toHaveBeenCalledWith(
-      expect.stringContaining("status=pending&"),
-    );
-    // no ask-card, no Settings, no print for the Principal
-    expect(screen.queryByLabelText(/Find student/)).toBeNull();
-    expect(screen.queryByRole("tab", { name: "Settings" })).toBeNull();
     const row = await screen.findByRole("row", { name: /Aarav/ });
     await user.click(within(row).getByRole("button", { name: "Review" }));
     const frame = await screen.findByTitle("Certificate preview");
@@ -569,8 +555,8 @@ describe("TC & Bonafide screen: Principal decides, Cashier only looks", () => {
     expect(posts).toHaveLength(1);
   });
 
-  it("Principal rejects only with a reason, and it is sent to the server", async () => {
-    mockRole = "principal";
+  it("Admin rejects only with a reason, and it is sent to the server", async () => {
+    mockRole = "admin";
     const user = userEvent.setup();
     const posts = [];
     route({
@@ -594,6 +580,20 @@ describe("TC & Bonafide screen: Principal decides, Cashier only looks", () => {
     await user.click(confirm);
     await vi.waitFor(() => expect(posts).toHaveLength(1));
     expect(posts[0].body).toEqual({ reason: "Wrong class entered" });
+  });
+
+  it("the Principal is read-only: sees requests, but no Review-to-approve, Approve, Reject, ask-card or Settings", async () => {
+    mockRole = "principal";
+    const user = userEvent.setup();
+    route({ "/api/certificate-requests?": reqList(req()), "/api/tc?": tcList });
+    show();
+    const row = await screen.findByRole("row", { name: /Aarav/ });
+    expect(screen.queryByLabelText(/Find student/)).toBeNull();
+    expect(screen.queryByRole("tab", { name: "Settings" })).toBeNull();
+    await user.click(within(row).getByRole("button", { name: "View" }));
+    expect(await screen.findByTitle("Certificate preview")).toBeInTheDocument();
+    for (const n of ["Approve", "Reject", "Print / Save as PDF"])
+      expect(screen.queryByRole("button", { name: n })).toBeNull();
   });
 
   it("Cashier can only look: no ask-card, no Approve, Reject, Print or Settings", async () => {

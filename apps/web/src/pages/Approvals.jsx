@@ -8,12 +8,12 @@ import {
   Button,
   Card,
   ConfirmDialog,
-  ErrorState,
   Table,
   useToast,
 } from "../components/ui";
 import { errorText } from "../lib/rupees";
 import { PendingCertificates } from "./CertificateApprovals";
+
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const when = (d) =>
   d
@@ -26,7 +26,7 @@ const when = (d) =>
       })
     : "-";
 
-/** Receipt cancellation requests: the Cashier asked, the Principal decides. */
+/** Receipt cancellation requests: the Cashier asked, the Admin decides. */
 function Cancellations() {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -36,8 +36,7 @@ function Cancellations() {
     queryKey: ["receipt-cancellations", "requested"],
     queryFn: () =>
       api("/api/receipt-cancellations?status=requested&pageSize=50"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 60_000,
+    refetchInterval: 60_000,
   });
   const decide = useMutation({
     mutationFn: () =>
@@ -178,13 +177,12 @@ function Cancellations() {
   );
 }
 
-/** Expense vouchers waiting for the Principal. The decision itself is made on the voucher page. */
+/** Expense vouchers left waiting. The decision itself is made on the voucher page. */
 function PendingVouchers() {
   const query = useQuery({
     queryKey: ["vouchers", "pending-approvals"],
     queryFn: () => api("/api/vouchers?status=pending&pageSize=50"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 60_000,
+    refetchInterval: 60_000,
   });
   const columns = [
     {
@@ -240,17 +238,13 @@ function PendingReversals() {
   const query = useQuery({
     queryKey: ["money", "pending"],
     queryFn: () => api("/api/money/pending"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 60_000,
+    refetchInterval: 60_000,
   });
   return (
     <Card title="Expense reversal requests">
       {query.isPending && <p className="text-sm text-ink-muted">Loading…</p>}
       {query.isError && (
-        <ErrorState
-          message={errorText(query.error)}
-          onRetry={() => void query.refetch()}
-        />
+        <p className="text-sm text-danger">{errorText(query.error)}</p>
       )}
       {query.data && (
         <p className="text-sm">
@@ -270,14 +264,14 @@ function PendingReversals() {
   );
 }
 
-/** Principal: everything that needs a decision, in one place. */
+/** Admin: everything that needs a decision, in one place (the Principal is read-only). */
 export function Approvals() {
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Approvals</h1>
         <p className="text-sm text-ink-muted">
-          Only you can approve or reject these.
+          Receipt cancellations the Cashier asked for, plus anything left over.
         </p>
       </div>
       <Cancellations />

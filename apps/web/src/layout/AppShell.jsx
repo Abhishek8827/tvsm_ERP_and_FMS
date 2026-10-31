@@ -116,6 +116,13 @@ export function AppShell() {
       write(SIDEBAR_KEY, !h);
       return !h;
     });
+  const closeSidebarAfterNavigation = () => {
+    setDrawer(false);
+    if (window.matchMedia("(min-width: 768px)").matches) {
+      setHidden(true);
+      write(SIDEBAR_KEY, true);
+    }
+  };
 
   const menu = (
     <nav
@@ -129,7 +136,7 @@ export function AppShell() {
             to={e.item.path}
             label={e.item.label}
             icon={e.item.key}
-            onNavigate={() => setDrawer(false)}
+            onNavigate={closeSidebarAfterNavigation}
           />
         ) : (
           <NavGroup
@@ -139,7 +146,7 @@ export function AppShell() {
             items={e.items}
             open={isOpen(e.key)}
             onToggle={() => toggleGroup(e.key)}
-            onNavigate={() => setDrawer(false)}
+            onNavigate={closeSidebarAfterNavigation}
           />
         ),
       )}

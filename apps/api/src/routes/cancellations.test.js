@@ -89,9 +89,9 @@ describe("receipt cancellation approvals", () => {
         .status,
     ).toBe(403);
   });
-  it("only the Principal decides (Admin and Cashier get 403)", async () => {
+  it("only the Admin decides (Principal and Cashier get 403)", async () => {
     const { app, rows } = build();
-    for (const who of ["admin", "cashier"]) {
+    for (const who of ["principal", "cashier"]) {
       expect(
         (
           await request(app)
@@ -114,7 +114,7 @@ describe("receipt cancellation approvals", () => {
     const { app, audit } = build();
     const r = await request(app)
       .post(`/api/receipt-cancellations/${ID}/approve`)
-      .set(as("principal"));
+      .set(as("admin"));
     expect(r.status).toBe(200);
     expect(r.body.status).toBe("cancelled");
     expect(
@@ -126,7 +126,7 @@ describe("receipt cancellation approvals", () => {
       (
         await request(app)
           .post(`/api/receipt-cancellations/${ID}/approve`)
-          .set(as("principal"))
+          .set(as("admin"))
       ).status,
     ).toBe(404);
   });
@@ -136,13 +136,13 @@ describe("receipt cancellation approvals", () => {
       (
         await request(app)
           .post(`/api/receipt-cancellations/${ID}/reject`)
-          .set(as("principal"))
+          .set(as("admin"))
           .send({})
       ).status,
     ).toBe(400);
     const r = await request(app)
       .post(`/api/receipt-cancellations/${ID}/reject`)
-      .set(as("principal"))
+      .set(as("admin"))
       .send({ reason: "Receipt is correct" });
     expect(r.body).toMatchObject({
       status: "rejected",

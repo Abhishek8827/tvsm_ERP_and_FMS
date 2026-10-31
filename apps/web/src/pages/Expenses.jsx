@@ -9,6 +9,7 @@ import { Link } from "react-router-dom";
 import { formatINR } from "@erp/shared";
 import { api, newIdempotencyKey } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { approveAfter } from "../lib/approveAfter";
 import { errorText, parseRupees, todayInput } from "../lib/rupees";
 import {
   Badge,
@@ -67,8 +68,8 @@ function NewVoucherDialog({ open, onClose }) {
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
   const active = (heads.data?.heads ?? []).filter((h) => h.active);
   const create = useMutation({
-    mutationFn: () =>
-      api("/api/vouchers", {
+    mutationFn: async () => {
+      const v = await api("/api/vouchers", {
         method: "POST",
         idempotencyKey: key.current,
         body: {
@@ -78,14 +79,23 @@ function NewVoucherDialog({ open, onClose }) {
           particulars: f.particulars,
           amountPaise: amount.paise,
         },
-      }),
-    onSuccess: async (v) => {
+      });
+      if (v.status !== "pending") return { voucher: v, approveError: null };
+      const { result, approveError } = await approveAfter(
+        v,
+        `/api/vouchers/${v.id}/approve`,
+      );
+      return { voucher: { ...v, ...result }, approveError };
+    },
+    onSuccess: async ({ voucher: v, approveError }) => {
       key.current = newIdempotencyKey();
       await queryClient.invalidateQueries({ queryKey: ["vouchers"] });
-      notify(
-        `Voucher ${v.number} saved. It now waits for the Principal.`,
-        "success",
-      );
+      if (approveError)
+        notify(
+          `Voucher ${v.number} saved, but approving it failed: ${errorText(approveError)} Press Approve on it in the list.`,
+          "error",
+        );
+      else notify(`Voucher ${v.number} saved and approved.`, "success");
       setF({
         date: todayInput(),
         headId: "",
@@ -181,7 +191,7 @@ function NewVoucherDialog({ open, onClose }) {
   );
 }
 
-function VouchersTab({ isAdmin, isPrincipal }) {
+function VouchersTab({ isAdmin }) {
   const [status, setStatus] = useState("");
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
@@ -284,7 +294,7 @@ function VouchersTab({ isAdmin, isPrincipal }) {
       render: (r) => (
         <div className="flex items-center gap-2">
           <StatusBadge status={r.status} />
-          {isPrincipal && r.status === "pending" && (
+          {isAdmin && r.status === "pending" && (
             <>
               <Button
                 className="min-h-8 px-3"
@@ -510,7 +520,7 @@ function PaymentsTab() {
         error={query.isError ? query.error.message : undefined}
         onRetry={() => void query.refetch()}
         emptyTitle="No payments yet"
-        emptyDescription="A payment appears here after the Principal approves a voucher and the Admin pays it."
+        emptyDescription="A payment appears here after the Admin pays an approved voucher."
       />
       {d && d.total > 0 && (
         <Pagination
@@ -528,8 +538,8 @@ function PaymentsTab() {
   );
 }
 
-/** Reversal requests: the Admin asked, the Principal decides (reason compulsory to reject). */
-function RequestsTab({ isPrincipal }) {
+/** Reversal requests: the Admin asks and approves (reason compulsory to reject); the Principal only looks. */
+function RequestsTab({ isAdmin }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
   const [acting, setActing] = useState(null); // { id, decision }
@@ -608,7 +618,7 @@ function RequestsTab({ isPrincipal }) {
       key: "act",
       header: "",
       render: (r) =>
-        isPrincipal && r.status === "requested" ? (
+        isAdmin && r.status === "requested" ? (
           <div className="flex gap-2">
             <Button
               onClick={() => {
@@ -774,8 +784,7 @@ export function Expenses() {
   const pending = useQuery({
     queryKey: ["money", "pending"],
     queryFn: () => api("/api/money/pending"),
-    refetchInterval: (query) =>
-      query.state.status === "error" ? false : 60_000,
+    refetchInterval: 60_000,
   });
   const tabs = [
     ["vouchers", "Expense vouchers"],
@@ -791,8 +800,7 @@ export function Expenses() {
       <div>
         <h1 className="text-2xl font-semibold text-ink">Expenses</h1>
         <p className="text-sm text-ink-muted">
-          School expenses of ₹500 or more. Payment only after the Principal
-          approves.
+          School expenses of ₹500 or more.
         </p>
       </div>
       <div role="tablist" className="flex flex-wrap gap-2 border-b border-line">
@@ -808,11 +816,9 @@ export function Expenses() {
           </button>
         ))}
       </div>
-      {tab === "vouchers" && (
-        <VouchersTab isAdmin={isAdmin} isPrincipal={role === "principal"} />
-      )}
+      {tab === "vouchers" && <VouchersTab isAdmin={isAdmin} />}
       {tab === "payments" && <PaymentsTab />}
-      {tab === "requests" && <RequestsTab isPrincipal={role === "principal"} />}
+      {tab === "requests" && <RequestsTab isAdmin={isAdmin} />}
       {tab === "heads" && isAdmin && <HeadsTab />}
     </div>
   );

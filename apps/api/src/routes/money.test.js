@@ -153,8 +153,8 @@ const MATRIX = [
   ["get", "/vouchers", null, ["admin", "principal"]],
   ["get", `/vouchers/${ID}`, null, ["admin", "principal"]],
   ["post", "/vouchers", voucher, ["admin"]],
-  ["post", `/vouchers/${ID}/approve`, {}, ["principal"]],
-  ["post", `/vouchers/${ID}/reject`, { reason: "Not needed" }, ["principal"]],
+  ["post", `/vouchers/${ID}/approve`, {}, ["admin"]],
+  ["post", `/vouchers/${ID}/reject`, { reason: "Not needed" }, ["admin"]],
   [
     "post",
     `/vouchers/${ID}/adjustments`,
@@ -170,12 +170,12 @@ const MATRIX = [
     { kind: "payment", targetId: ID, reason: "Wrong payee" },
     ["admin"],
   ],
-  ["post", `/expense-reversals/${ID}/approve`, {}, ["principal"]],
+  ["post", `/expense-reversals/${ID}/approve`, {}, ["admin"]],
   [
     "post",
     `/expense-reversals/${ID}/reject`,
     { reason: "Not valid" },
-    ["principal"],
+    ["admin"],
   ],
   ["get", "/petty/summary", null, ["admin", "principal"]],
   ["get", "/petty", null, ["admin", "principal"]],
@@ -297,12 +297,12 @@ describe("input checks", () => {
 
   it("rejecting needs a reason", async () => {
     expect(
-      (await send(ctx.app, "post", `/vouchers/${ID}/reject`, "principal", {}))
+      (await send(ctx.app, "post", `/vouchers/${ID}/reject`, "admin", {}))
         .status,
     ).toBe(400);
     expect(
       (
-        await send(ctx.app, "post", `/vouchers/${ID}/reject`, "principal", {
+        await send(ctx.app, "post", `/vouchers/${ID}/reject`, "admin", {
           reason: "",
         })
       ).status,
@@ -313,7 +313,7 @@ describe("input checks", () => {
           ctx.app,
           "post",
           `/expense-reversals/${ID}/reject`,
-          "principal",
+          "admin",
           {},
         )
       ).status,
@@ -352,13 +352,13 @@ describe("input checks", () => {
   it("approving a voucher that is not pending is a 409", async () => {
     ctx.moneyStore.decideVoucher.mockResolvedValueOnce(null);
     expect(
-      (await send(ctx.app, "post", `/vouchers/${ID2}/approve`, "principal", {}))
+      (await send(ctx.app, "post", `/vouchers/${ID2}/approve`, "admin", {}))
         .status,
     ).toBe(409);
   });
 
   it("approvals and creations are audited with who and what", async () => {
-    await send(ctx.app, "post", `/vouchers/${ID}/approve`, "principal", {});
+    await send(ctx.app, "post", `/vouchers/${ID}/approve`, "admin", {});
     // The fake store does not call the audit callback, so we only check that routes pass one.
     expect(ctx.moneyStore.decideVoucher.mock.calls[0][0].audit).toBeTypeOf(
       "function",

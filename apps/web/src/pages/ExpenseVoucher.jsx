@@ -4,6 +4,7 @@ import { Link, useParams } from "react-router-dom";
 import { formatINR } from "@erp/shared";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
+import { approveAfter } from "../lib/approveAfter";
 import { errorText, parseRupees } from "../lib/rupees";
 import {
   Badge,
@@ -127,6 +128,21 @@ export function ExpenseVoucher() {
     notify(message, "success");
     setActing(null);
   };
+  // The Admin asks for a reversal and approves it in one go (the Principal is read-only).
+  const askAndApprove = async () => {
+    const r = await api("/api/expense-reversals", {
+      method: "POST",
+      body:
+        acting.kind === "cancel-voucher"
+          ? { kind: "voucher", targetId: id, reason }
+          : { kind: "payment", targetId: acting.paymentId, reason },
+    });
+    const { approveError } = await approveAfter(
+      r,
+      `/api/expense-reversals/${r.id}/approve`,
+    );
+    return { approveError };
+  };
   const act = useMutation({
     mutationFn: () => {
       if (acting.kind === "approve")
@@ -136,21 +152,19 @@ export function ExpenseVoucher() {
           method: "POST",
           body: { reason },
         });
-      return api("/api/expense-reversals", {
-        method: "POST",
-        body:
-          acting.kind === "cancel-voucher"
-            ? { kind: "voucher", targetId: id, reason }
-            : { kind: "payment", targetId: acting.paymentId, reason },
-      });
+      return askAndApprove();
     },
-    onSuccess: () =>
+    onSuccess: (out) =>
       done(
         acting.kind === "approve"
           ? "Voucher approved."
           : acting.kind === "reject"
             ? "Voucher rejected."
-            : "Request sent to the Principal.",
+            : out?.approveError
+              ? `Saved, but approving it failed: ${errorText(out.approveError)} Approve it in Expenses > Reversal requests.`
+              : acting.kind === "cancel-voucher"
+                ? "Voucher cancelled."
+                : "Payment reversed.",
       ),
     onError: (e) => notify(errorText(e), "error"),
   });
@@ -206,7 +220,7 @@ export function ExpenseVoucher() {
               setActing({ kind: "reverse-payment", paymentId: p.id });
             }}
           >
-            Request reversal
+            Reverse payment
           </Button>
         ) : null,
     },
@@ -223,14 +237,14 @@ export function ExpenseVoucher() {
       "Reject",
     ],
     "reverse-payment": [
-      "Request payment reversal?",
-      "The Principal must approve. Until then the payment stays.",
-      "Send request",
+      "Reverse this payment?",
+      "The money goes back to the account. The payment stays in the record, marked reversed.",
+      "Reverse payment",
     ],
     "cancel-voucher": [
-      "Request voucher cancellation?",
-      "Only an unpaid voucher can be cancelled. The Principal must approve.",
-      "Send request",
+      "Cancel this voucher?",
+      "Only an unpaid voucher can be cancelled. It stays in the record, marked cancelled.",
+      "Cancel voucher",
     ],
   };
   const [t, d, c] = titles[acting?.kind ?? "approve"];
@@ -290,7 +304,7 @@ export function ExpenseVoucher() {
         <StatCard label="Balance due" value={money(v.balanceDuePaise)} />
       </div>
       <div className="flex flex-wrap gap-2">
-        {role === "principal" && v.status === "pending" && (
+        {isAdmin && v.status === "pending" && (
           <>
             <Button
               onClick={() => {
@@ -327,7 +341,7 @@ export function ExpenseVoucher() {
               setActing({ kind: "cancel-voucher" });
             }}
           >
-            Request cancellation
+            Cancel voucher
           </Button>
         )}
       </div>

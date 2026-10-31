@@ -5,6 +5,8 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { errorText } from "../lib/rupees";
 import { Badge, Card, ErrorState, Spinner, StatCard } from "../components/ui";
+import { FeeSummaryTables } from "./FeeSummaryTables";
+import { QuickTiles } from "./QuickTiles";
 /**
  * Step 1 dashboard intentionally shows NO business numbers: there is no data yet, and rule 1
  * forbids placeholders. The only live information is the API/database health from /api/health.
@@ -144,7 +146,7 @@ function Overview() {
           </div>
         )}
       </Card>
-      <Card title="Waiting for the Principal">
+      <Card title="Waiting for a decision">
         <div className="grid gap-3 sm:grid-cols-3">
           <StatCard
             label="Receipt cancellations"
@@ -203,7 +205,7 @@ function Overview() {
 }
 
 export function Dashboard() {
-  const { user, role } = useAuth();
+  const { role } = useAuth();
   const health = useQuery({
     queryKey: ["health"],
     queryFn: () => api("/api/health"),
@@ -211,36 +213,43 @@ export function Dashboard() {
     retry: false,
   });
   return (
-    <div className="flex max-w-5xl flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold">Dashboard</h1>
-        <p className="text-sm text-ink-muted">
-          Signed in as {user.name} ({user.role}).
-        </p>
       </div>
-      {role === "cashier" && <TodayCollection />}
-      {(role === "admin" || role === "principal") && <Overview />}
-      <Card title="System status" subtitle="Live from the API">
-        {health.isPending && <Spinner label="Checking the server" />}
-        {health.isError && (
-          <ErrorState
-            message={health.error.message}
-            onRetry={() => void health.refetch()}
-          />
-        )}
-        {health.data && (
-          <div className="flex items-center gap-3">
-            <Badge tone={health.data.status === "ok" ? "success" : "warning"}>
-              {health.data.status === "ok"
-                ? "All systems normal"
-                : "Database not connected"}
-            </Badge>
-            <span className="text-sm text-ink-muted">
-              Database: {health.data.db}
-            </span>
-          </div>
-        )}
-      </Card>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+        <div className="flex min-w-0 flex-col gap-4">
+          {role === "cashier" && <TodayCollection />}
+          {(role === "admin" || role === "principal") && <FeeSummaryTables />}
+          {(role === "admin" || role === "principal") && <Overview />}
+          <Card title="System status" subtitle="Live from the API">
+            {health.isPending && <Spinner label="Checking the server" />}
+            {health.isError && (
+              <ErrorState
+                message={health.error.message}
+                onRetry={() => void health.refetch()}
+              />
+            )}
+            {health.data && (
+              <div className="flex items-center gap-3">
+                <Badge
+                  tone={health.data.status === "ok" ? "success" : "warning"}
+                >
+                  {health.data.status === "ok"
+                    ? "All systems normal"
+                    : "Database not connected"}
+                </Badge>
+                <span className="text-sm text-ink-muted">
+                  Database: {health.data.db}
+                </span>
+              </div>
+            )}
+          </Card>
+        </div>
+        <aside className="xl:sticky xl:top-0 xl:self-start">
+          <QuickTiles />
+        </aside>
+      </div>
     </div>
   );
 }

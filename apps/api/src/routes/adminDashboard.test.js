@@ -82,3 +82,38 @@ describe("dashboard overview", () => {
     expect(r.body.funds.cashPaise).toBe(1);
   });
 });
+
+describe("dashboard fee summary (School and Bus tables)", () => {
+  const get = (app, who, q = "") =>
+    request(app).get(`/api/dashboard/fee-summary${q}`).set(as(who));
+  it("Admin and Principal can read it; the Cashier gets 403; no token 401", async () => {
+    const app = build();
+    expect((await get(app, "admin")).status).toBe(200);
+    expect((await get(app, "principal")).status).toBe(200);
+    expect((await get(app, "cashier")).status).toBe(403);
+    expect((await request(app).get("/api/dashboard/fee-summary")).status).toBe(
+      401,
+    );
+  });
+  it("gives the ten session months June to March, two tables and a total", async () => {
+    const r = await get(build(), "admin");
+    expect(r.body.months).toHaveLength(10);
+    expect(r.body.months[0].endsWith("-06")).toBe(true);
+    expect(r.body.months[9].endsWith("-03")).toBe(true);
+    expect(r.body.months).toContain(r.body.month);
+    expect(r.body.school.total).toMatchObject({
+      students: 0,
+      duesPaise: 0,
+      duePct: null,
+    });
+    expect(r.body.bus.rows).toEqual([]);
+  });
+  it("refuses a month outside the session and a wrong status", async () => {
+    const app = build();
+    expect((await get(app, "admin", "?month=2020-01")).body.error.code).toBe(
+      "BAD_MONTH",
+    );
+    expect((await get(app, "admin", "?status=zzz")).status).toBe(400);
+    expect((await get(app, "admin", "?month=abc")).status).toBe(400);
+  });
+});

@@ -83,14 +83,31 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
           paid: 0,
           rebate: 0,
           dueNow: 0,
+          tillBilled: 0,
+          tillPaid: 0,
+          tillRebate: 0,
         });
         h.billed += it.amount;
         h.paid += it.paid;
         h.rebate += it.concession;
-        if (inst.isDue) h.dueNow += it.due;
+        if (inst.isDue) {
+          h.dueNow += it.due;
+          // everything that has fallen due up to the chosen day (the Dashboard month tables)
+          h.tillBilled += it.amount;
+          h.tillPaid += it.paid;
+          h.tillRebate += it.concession;
+        }
       }
     const sumHeads = (heads, field) =>
       heads.reduce((n, k) => n + (byHead[k]?.[field] ?? 0), 0);
+    const tillOf = (sum, newHeads, oldHeads) => ({
+      oldPaise: sum(oldHeads, "dueNow"),
+      receivablePaise: sum(newHeads, "tillBilled"),
+      paidPaise: sum(newHeads, "tillPaid"),
+      rebatePaise: sum(newHeads, "tillRebate"),
+      // old fees paid / rebated are already taken off by `dueNow`, so old is what is STILL owed
+      hasAny: sum([...newHeads, ...oldHeads], "billed") > 0,
+    });
     const school = moduleDues({
       kind: "school",
       charges,
@@ -146,6 +163,16 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
         newBusDue: sumHeads(["transport"], "dueNow"),
         admDue: sumHeads(["admission"], "dueNow"),
         formDue: sumHeads(["form"], "dueNow"),
+      },
+      // Up to the chosen day: old unpaid fees, then billed / paid / rebate of the instalments that
+      // fell due. School = every head except transport; Bus = the two transport heads.
+      till: {
+        school: tillOf(
+          sumHeads,
+          ["tuition", "admission", "form"],
+          ["old_fees"],
+        ),
+        bus: tillOf(sumHeads, ["transport"], ["transport_old"]),
       },
       school: {
         outstandingPaise: school.outstanding,

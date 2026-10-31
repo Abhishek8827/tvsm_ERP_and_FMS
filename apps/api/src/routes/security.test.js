@@ -112,10 +112,8 @@ describe("every route needs a login", () => {
       ]) {
         // A fresh app every 200 calls so this test never runs into the 300/minute rate limit.
         if ((sent += 1) % 200 === 0) ({ app } = build());
-        const r = await request(app)
-          [method.toLowerCase()](path)
-          .set(headers)
-          .send({});
+        const send = request(app)[method.toLowerCase()];
+        const r = await send(path).set(headers).send({});
         if (r.status !== 401) open.push(`${method} ${path} -> ${r.status}`);
       }
     }

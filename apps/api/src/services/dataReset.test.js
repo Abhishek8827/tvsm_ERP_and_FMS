@@ -15,22 +15,28 @@ describe("data cleaner plan", () => {
     const files = readdirSync(new URL("../models/", import.meta.url))
       .filter(
         (f) =>
-          f.endsWith(".js") && !f.endsWith(".test.js") && f !== "Immutable.js",
+          f.endsWith(".js") && !f.endsWith(".test.js") && f !== "immutable.js",
       )
       .map((f) => f.replace(".js", ""))
       .sort();
     expect(PLAN.map((p) => p.name).sort()).toEqual(files);
   });
-  it("keeps users, fee structure, expense heads and certificate settings, as the owner decided", () => {
+  it("keeps users, fee structure, expense heads, admission session and certificate settings, as the owner decided", () => {
     expect(names("keep").sort()).toEqual(
-      ["CertificateSettings", "ExpenseHead", "FeeStructure", "User"].sort(),
+      [
+        "AdmissionSettings",
+        "CertificateSettings",
+        "ExpenseHead",
+        "FeeStructure",
+        "User",
+      ].sort(),
     );
   });
   it("wipes all money, student, certificate, counter and audit data", () => {
     for (const n of [
       'Receipt', 'ReceiptCancellation', 'LedgerEntry', 'ExpenseVoucher', 'ExpensePayment',
       'PettyEntry', 'Student', 'Charge', 'TransferCertificate', 'BonafideCertificate',
-      'Counter', 'AuditLog', 'DayClose', 'WhatsappMessage',
+      'Counter', 'AuditLog', 'DayClose', 'WhatsappMessage', 'NewAdmission',
     ]) expect(names('wipe'), n).toContain(n); // prettier-ignore
   });
   it("removes only DEMO banks, and zeroes the opening figures kept in settings", () => {

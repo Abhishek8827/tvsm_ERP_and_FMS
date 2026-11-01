@@ -1,4 +1,5 @@
 import { AuditLog } from "../models/AuditLog.js";
+import { AdmissionSettings } from "../models/AdmissionSettings.js";
 import { BankAccount } from "../models/BankAccount.js";
 import { BonafideCertificate } from "../models/BonafideCertificate.js";
 import { CashbookSettings } from "../models/CashbookSettings.js";
@@ -13,6 +14,7 @@ import { ExpenseReversal } from "../models/ExpenseReversal.js";
 import { ExpenseVoucher } from "../models/ExpenseVoucher.js";
 import { FeeStructure } from "../models/FeeStructure.js";
 import { LedgerEntry } from "../models/LedgerEntry.js";
+import { NewAdmission } from "../models/NewAdmission.js";
 import { PettyEntry } from "../models/PettyEntry.js";
 import { Rebate } from "../models/Rebate.js";
 import { Receipt } from "../models/Receipt.js";
@@ -46,6 +48,12 @@ export const PLAN = [
   },
   { name: "ExpenseHead", model: ExpenseHead, action: "keep", why: "setup" },
   {
+    name: "AdmissionSettings",
+    model: AdmissionSettings,
+    action: "keep",
+    why: "which session admission forms are collected for",
+  },
+  {
     name: "CertificateSettings",
     model: CertificateSettings,
     action: "keep",
@@ -73,6 +81,7 @@ export const PLAN = [
     action: "wipe",
     why: "students are re-imported from the real Excel",
   },
+  { name: "NewAdmission", model: NewAdmission, action: "wipe" },
   { name: "Charge", model: Charge, action: "wipe" },
   { name: "Receipt", model: Receipt, action: "wipe" },
   { name: "ReceiptCancellation", model: ReceiptCancellation, action: "wipe" },

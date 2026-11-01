@@ -47,6 +47,76 @@ function SortHeader({ label, field, sort, dir, onSort }) {
   );
 }
 
+const STRENGTH_ROWS = [
+  ["Pre-primary", ["PG", "NURSERY", "LKG", "UKG"]],
+  ["Primary", ["1", "2", "3", "4", "5"]],
+  ["Middle / Higher", ["6", "7", "8", "9", "10", "11", "12"]],
+];
+
+/** Head-count per class in three rows. Click a class to filter the list below. */
+function ClassStrength({ selected, onPick }) {
+  const q = useQuery({
+    queryKey: ["students", "strength"],
+    queryFn: () => api("/api/students/strength"),
+  });
+  if (q.isPending) return null;
+  if (q.isError)
+    return <p className="text-sm text-danger">{q.error.message}</p>;
+  const byKey = new Map(q.data.classes.map((c) => [c.classKey, c]));
+  return (
+    <div className="flex flex-col gap-2 rounded-card border border-line bg-surface p-3">
+      {STRENGTH_ROWS.map(([title, keys]) => {
+        const total = keys.reduce((n, k) => n + (byKey.get(k)?.active ?? 0), 0);
+        return (
+          <div key={title} className="flex flex-wrap items-stretch gap-2">
+            <div className="flex w-32 flex-col justify-center text-sm">
+              <span className="font-medium text-ink">{title}</span>
+              <span className="text-ink-muted">{total} active</span>
+            </div>
+            {keys.map((k) => {
+              const c = byKey.get(k);
+              const sections = Object.entries(c?.sections ?? {}).sort(
+                ([a], [b]) => a.localeCompare(b),
+              );
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  aria-pressed={selected === k}
+                  aria-label={`${classLabel(k)} strength`}
+                  onClick={() => onPick(selected === k ? "" : k)}
+                  className={`min-w-20 rounded-lg border px-3 py-1.5 text-left text-xs ${
+                    selected === k
+                      ? "border-brand bg-brand/10"
+                      : "border-line hover:bg-app"
+                  }`}
+                >
+                  <span className="block text-ink-muted">{classLabel(k)}</span>
+                  <span className="block text-base font-semibold text-ink">
+                    {c?.active ?? 0}
+                  </span>
+                  {sections.length > 1 && (
+                    <span className="block text-ink-muted">
+                      {sections
+                        .map(([name, n]) => `${name}:${n.active}`)
+                        .join(" ")}
+                    </span>
+                  )}
+                  {c?.inactive > 0 && (
+                    <span className="block text-ink-muted">
+                      {c.inactive} inactive
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 /** Students list: server-side search, filters, sorting and pages (stays fast with 1,500+ students). */
 export function Students() {
   const { role } = useAuth();
@@ -323,6 +393,14 @@ export function Students() {
           />
         </div>
       )}
+
+      <ClassStrength
+        selected={classKey}
+        onPick={(k) => {
+          change(setClassKey)(k);
+          setSection("");
+        }}
+      />
 
       <FilterBar>
         <Input

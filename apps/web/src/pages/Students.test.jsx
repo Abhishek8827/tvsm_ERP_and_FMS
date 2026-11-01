@@ -38,6 +38,19 @@ const list = {
     },
   ],
 };
+const strength = {
+  classes: [
+    {
+      classKey: "1",
+      active: 3,
+      inactive: 0,
+      sections: {
+        A: { active: 2, inactive: 0 },
+        B: { active: 1, inactive: 0 },
+      },
+    },
+  ],
+};
 function show() {
   return render(
     <QueryClientProvider
@@ -53,15 +66,37 @@ function show() {
     </QueryClientProvider>,
   );
 }
-const urls = () => api.mock.calls.map((c) => String(c[0]));
+const urls = () =>
+  api.mock.calls
+    .map((c) => String(c[0]))
+    .filter((u) => !u.includes("/strength"));
 
 describe("Students list", () => {
   beforeEach(() => {
     mockRole = "admin";
     api.mockReset();
-    api.mockImplementation(async (url) =>
-      String(url).includes("bulk-delete") ? { deleted: 1, requested: 1 } : list,
+    api.mockImplementation(async (url) => {
+      if (String(url).includes("bulk-delete"))
+        return { deleted: 1, requested: 1 };
+      if (String(url).includes("/strength")) return strength;
+      return list;
+    });
+  });
+
+  it("shows class strength in three rows and clicking a class filters the list", async () => {
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "1st strength" }),
     );
+    await vi.waitFor(() =>
+      expect(urls().some((u) => u.includes("classKey=1"))).toBe(true),
+    );
+    expect(screen.getByText("Pre-primary")).toBeInTheDocument();
+    expect(screen.getByText("Primary")).toBeInTheDocument();
+    expect(screen.getByText("Middle / Higher")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "1st strength" }),
+    ).toHaveTextContent("A:2 B:1");
   });
 
   it("shows active, inactive and grand totals, the address next to contact, and section options", async () => {

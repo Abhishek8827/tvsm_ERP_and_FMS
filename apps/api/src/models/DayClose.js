@@ -11,8 +11,9 @@ registerGlobalPlugins();
  */
 const figures = {
   expectedCashPaise: { type: Number, required: true },
-  countedCashPaise: { type: Number, required: true },
-  differencePaise: { type: Number, required: true },
+  // Counting the drawer is optional: a day locked without a count keeps these two empty (null).
+  countedCashPaise: { type: Number },
+  differencePaise: { type: Number },
   differenceReason: { type: String },
   upiPaise: { type: Number, required: true },
   receiptCount: { type: Number, required: true },
@@ -21,6 +22,8 @@ const dayCloseSchema = new mongoose.Schema(
   {
     date: { type: String, required: true }, // YYYY-MM-DD in IST
     status: { type: String, enum: ["closed", "open"], required: true },
+    // 'auto' = locked by the system after midnight IST because nobody closed it.
+    kind: { type: String, enum: ["manual", "auto"], default: "manual" },
     ...figures,
     closedBy: { type: String },
     closedByName: { type: String },

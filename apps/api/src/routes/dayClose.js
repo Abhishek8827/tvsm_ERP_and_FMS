@@ -10,7 +10,7 @@ const dateField = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Use a date like 2026-10-22");
 const closeBody = z.object({
   date: dateField.optional(),
-  countedCashPaise: z.number().int().min(0).max(100_000_000_00),
+  countedCashPaise: z.number().int().min(0).max(100_000_000_00).optional(),
   reason: z.string().trim().max(300).optional(),
 });
 const reopenBody = z.object({
@@ -25,9 +25,10 @@ const shape = (r) =>
   r && {
     date: r.date,
     status: r.status,
+    kind: r.kind ?? "manual",
     expectedCashPaise: r.expectedCashPaise,
-    countedCashPaise: r.countedCashPaise,
-    differencePaise: r.differencePaise,
+    countedCashPaise: r.countedCashPaise ?? null,
+    differencePaise: r.differencePaise ?? null,
     differenceReason: r.differenceReason ?? null,
     upiPaise: r.upiPaise,
     receiptCount: r.receiptCount,
@@ -100,13 +101,15 @@ export function dayCloseRouter(deps, authenticate) {
       const tenantId = req.user.tenantId;
       // Figures are worked out HERE from the receipts; the browser only sends what was counted.
       const totals = await deps.dayCloseStore.dayTotals(tenantId, date);
-      let differencePaise;
+      // No count given = the day is locked without a cash check (the count is optional).
+      let differencePaise = null;
       try {
-        ({ differencePaise } = checkClose({
-          expectedPaise: totals.expectedCashPaise,
-          countedPaise: body.countedCashPaise,
-          reason: body.reason,
-        }));
+        if (body.countedCashPaise !== undefined)
+          ({ differencePaise } = checkClose({
+            expectedPaise: totals.expectedCashPaise,
+            countedPaise: body.countedCashPaise,
+            reason: body.reason,
+          }));
       } catch (e) {
         if (e instanceof DayCloseRuleError)
           throw new AppError(
@@ -124,9 +127,9 @@ export function dayCloseRouter(deps, authenticate) {
         totals,
         figures: {
           expectedCashPaise: totals.expectedCashPaise,
-          countedCashPaise: body.countedCashPaise,
+          countedCashPaise: body.countedCashPaise ?? null,
           differencePaise,
-          differenceReason: differencePaise !== 0 ? body.reason : undefined,
+          differenceReason: differencePaise ? body.reason : undefined,
           upiPaise: totals.upiPaise,
           receiptCount: totals.receiptCount,
         },
@@ -150,10 +153,10 @@ export function dayCloseRouter(deps, authenticate) {
           action: "create",
           entity: "day_close",
           entityId: date,
-          reason: differencePaise !== 0 ? body.reason : undefined,
+          reason: differencePaise ? body.reason : undefined,
           newValue: {
             expectedCashPaise: totals.expectedCashPaise,
-            countedCashPaise: body.countedCashPaise,
+            countedCashPaise: body.countedCashPaise ?? null,
             differencePaise,
           },
         },

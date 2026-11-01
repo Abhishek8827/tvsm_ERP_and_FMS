@@ -52,9 +52,11 @@ describe("Day Close screen", () => {
     mockRole = "cashier";
     show();
     expect(await screen.findByText("Expected cash")).toBeInTheDocument();
-    const close = screen.getByRole("button", { name: "Close the day" });
-    expect(close).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Close without counting" }),
+    ).toBeEnabled();
     await userEvent.type(screen.getByLabelText(/Cash counted/), "4900");
+    const close = screen.getByRole("button", { name: "Close the day" });
     expect(screen.getByText(/Difference: -/)).toBeInTheDocument();
     expect(close).toBeDisabled();
     await userEvent.type(
@@ -71,6 +73,19 @@ describe("Day Close screen", () => {
       countedCashPaise: 490000,
       reason: "Change given",
     });
+  });
+
+  it("the count is optional: closing without counting sends no counted amount", async () => {
+    mockRole = "cashier";
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Close without counting" }),
+    );
+    await userEvent.click(
+      screen.getAllByRole("button", { name: "Close the day" }).at(-1),
+    );
+    const post = api.mock.calls.find((c) => c[0] === "/api/day-close");
+    expect(post[1].body).toEqual({ date: "2026-10-22" });
   });
 
   it("Principal can look but has no close form and no reopen", async () => {

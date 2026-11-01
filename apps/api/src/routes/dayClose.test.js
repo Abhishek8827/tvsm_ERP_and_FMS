@@ -120,6 +120,19 @@ describe("Day Close API", () => {
     expect(audit.some((a) => a.entity === "day_close")).toBe(true);
   });
 
+  it("the cash count is optional: no count locks the day with counted and difference empty", async () => {
+    const { app, audit } = build();
+    const r = await post(app, "cashier", {});
+    expect(r.status).toBe(201);
+    expect(r.body).toMatchObject({
+      status: "closed",
+      expectedCashPaise: 500000,
+      countedCashPaise: null,
+      differencePaise: null,
+    });
+    expect(audit.some((a) => a.entity === "day_close")).toBe(true);
+  });
+
   it("if receipts changed while closing, answers 409 DAY_CHANGED and saves nothing", async () => {
     const { app, audit } = build(500000, { stale: true });
     const r = await post(app, "cashier", { countedCashPaise: 500000 });

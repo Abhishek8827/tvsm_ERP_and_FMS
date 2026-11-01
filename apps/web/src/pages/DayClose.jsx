@@ -51,13 +51,14 @@ function TodayCard({ role }) {
   const refresh = () =>
     queryClient.invalidateQueries({ queryKey: ["day-close"] });
   const parsed = parseRupees(counted);
+  const counting = counted.trim() !== ""; // counting the drawer is optional
   const close = useMutation({
     mutationFn: () =>
       api("/api/day-close", {
         method: "POST",
         body: {
           date: q.data.date,
-          countedCashPaise: parsed.paise,
+          ...(counting ? { countedCashPaise: parsed.paise } : {}),
           ...(reason.trim() ? { reason: reason.trim() } : {}),
         },
       }),
@@ -101,11 +102,11 @@ function TodayCard({ role }) {
   const d = q.data;
   const closed = d.record?.status === "closed";
   const diff =
-    parsed.error || counted.trim() === ""
-      ? null
-      : parsed.paise - d.expectedCashPaise;
+    parsed.error || !counting ? null : parsed.paise - d.expectedCashPaise;
   const needsReason = diff !== null && diff !== 0;
-  const ready = diff !== null && (!needsReason || reason.trim().length >= 3);
+  const ready = counting
+    ? diff !== null && (!needsReason || reason.trim().length >= 3)
+    : true;
 
   return (
     <Card
@@ -140,10 +141,20 @@ function TodayCard({ role }) {
       {closed ? (
         <div className="mt-4 rounded-lg border border-line bg-app p-4 text-sm">
           <p>
-            Closed by <b>{d.record.closedByName}</b>. Counted{" "}
-            {money(d.record.countedCashPaise)}, expected{" "}
-            {money(d.record.expectedCashPaise)}
-            {d.record.differencePaise !== 0 && (
+            {d.record.kind === "auto" ? (
+              <>Locked automatically after midnight. </>
+            ) : (
+              <>
+                Closed by <b>{d.record.closedByName}</b>.{" "}
+              </>
+            )}
+            {d.record.countedCashPaise === null ? (
+              <>Cash was not counted</>
+            ) : (
+              <>Counted {money(d.record.countedCashPaise)}</>
+            )}
+            , expected {money(d.record.expectedCashPaise)}
+            {d.record.differencePaise && (
               <>
                 , difference{" "}
                 <b className="text-danger">
@@ -165,7 +176,7 @@ function TodayCard({ role }) {
       ) : role === "cashier" ? (
         <div className="mt-4 flex max-w-md flex-col gap-3">
           <Input
-            label="Cash counted in the drawer (₹)"
+            label="Cash counted in the drawer (₹, optional)"
             inputMode="decimal"
             value={counted}
             error={parsed.error}
@@ -189,7 +200,7 @@ function TodayCard({ role }) {
           )}
           <div>
             <Button disabled={!ready} onClick={() => setConfirm(true)}>
-              Close the day
+              {counting ? "Close the day" : "Close without counting"}
             </Button>
           </div>
         </div>
@@ -202,7 +213,7 @@ function TodayCard({ role }) {
       <ConfirmDialog
         open={confirm}
         title="Close the day?"
-        description={`Counted ${money(parsed.paise)} against expected ${money(d.expectedCashPaise)}. After this, fees cannot be collected today unless the Admin reopens the day.`}
+        description={`${counting ? `Counted ${money(parsed.paise)} against expected ${money(d.expectedCashPaise)}.` : "Cash will not be counted."} After this, fees cannot be collected today unless the Admin reopens the day.`}
         confirmLabel="Close the day"
         loading={close.isPending}
         onConfirm={() => close.mutate()}
@@ -238,7 +249,9 @@ export function DayClose() {
       header: "Status",
       render: (r) =>
         r.status === "closed" ? (
-          <Badge tone="success">Closed</Badge>
+          <Badge tone="success">
+            {r.kind === "auto" ? "Auto-locked" : "Closed"}
+          </Badge>
         ) : (
           <Badge tone="warning">Reopened</Badge>
         ),
@@ -253,14 +266,19 @@ export function DayClose() {
       key: "cnt",
       header: "Counted",
       align: "right",
-      render: (r) => money(r.countedCashPaise),
+      render: (r) =>
+        r.countedCashPaise === null ? (
+          <span className="text-ink-muted">Not counted</span>
+        ) : (
+          money(r.countedCashPaise)
+        ),
     },
     {
       key: "diff",
       header: "Difference",
       align: "right",
       render: (r) =>
-        r.differencePaise === 0 ? (
+        !r.differencePaise ? (
           "-"
         ) : (
           <span className="text-danger">{signed(r.differencePaise)}</span>

@@ -106,11 +106,12 @@ export function makeDayCloseStore() {
      * WHY a transaction: the day lock makes this wait for, or fail against, any receipt being
      * issued at the same moment, and the figures are checked again inside it.
      */
-    async close({ tenantId, date, figures, user, totals }) {
+    async close({ tenantId, date, figures, user, totals, kind = "manual" }) {
       const now = new Date();
       const entry = { action: "close", at: now, byName: user.name, ...figures };
       const set = {
         status: "closed",
+        kind,
         ...figures,
         closedBy: String(user.id),
         closedByName: user.name,
@@ -164,6 +165,52 @@ export function makeDayCloseStore() {
         }
       }
       throw last;
+    },
+    /**
+     * Locks every PAST day that had receipts but was never closed (and never reopened by the
+     * Admin: a reopened day has a record, so it is left alone). Returns the dates locked now.
+     * The cash is not counted for these days, so counted / difference stay empty.
+     */
+    async autoLockPastDays({ tenantId, today }) {
+      const days = await Receipt.aggregate([
+        { $match: { tenantId, issuedAt: { $lt: istStartOfDay(today) } } },
+        {
+          $group: {
+            _id: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$issuedAt",
+                timezone: "+05:30",
+              },
+            },
+          },
+        },
+      ]);
+      const dates = days.map((d) => d._id);
+      if (!dates.length) return [];
+      const have = new Set(
+        await DayClose.distinct("date", { tenantId, date: { $in: dates } }),
+      );
+      const locked = [];
+      for (const date of dates.filter((d) => !have.has(d)).sort()) {
+        const totals = await dayTotals(tenantId, date);
+        const saved = await this.close({
+          tenantId,
+          date,
+          totals,
+          kind: "auto",
+          user: { id: "system", name: "Auto-lock" },
+          figures: {
+            expectedCashPaise: totals.expectedCashPaise,
+            countedCashPaise: null,
+            differencePaise: null,
+            upiPaise: totals.upiPaise,
+            receiptCount: totals.receiptCount,
+          },
+        });
+        if (saved && !saved.stale) locked.push({ date, ...totals });
+      }
+      return locked;
     },
     reopen: ({ tenantId, date, reason, user }) =>
       DayClose.findOneAndUpdate(

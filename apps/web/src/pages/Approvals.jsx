@@ -217,10 +217,7 @@ function PendingVouchers() {
     },
   ];
   return (
-    <Card
-      title="Expense vouchers"
-      subtitle="Open a voucher to approve or reject it."
-    >
+    <Card title="Expense vouchers">
       <Table
         columns={columns}
         rows={query.data?.rows}
@@ -270,9 +267,6 @@ export function Approvals() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Approvals</h1>
-        <p className="text-sm text-ink-muted">
-          Receipt cancellations the Cashier asked for, plus anything left over.
-        </p>
       </div>
       <Cancellations />
       <PendingVouchers />

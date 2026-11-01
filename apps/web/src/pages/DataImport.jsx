@@ -22,9 +22,6 @@ export function DataImport() {
     <div className="flex max-w-4xl flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Data import</h1>
-        <p className="text-sm text-ink-muted">
-          Every file is checked first. Nothing is saved until you confirm.
-        </p>
       </div>
       <div className="grid gap-4 sm:grid-cols-2">
         {STEPS.map((s) => (

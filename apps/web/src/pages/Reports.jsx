@@ -168,10 +168,7 @@ function BalanceSheet({ r }) {
           total={{ now: r.totalFundsPaise }}
         />
       </div>
-      <Card
-        title="Memo items (not in the totals)"
-        subtitle="Cash basis: these are shown for information only."
-      >
+      <Card title="Memo items (not in the totals)">
         <dl className="divide-y divide-line text-sm">
           <div className="flex justify-between py-2">
             <dt>Fee dues still to be received (late fee not included)</dt>
@@ -600,10 +597,6 @@ export function Reports() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Reports</h1>
-          <p className="text-sm text-ink-muted">
-            Statutory and financial statements, worked out from the
-            school&apos;s own records (cash basis).
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {role === "admin" && (

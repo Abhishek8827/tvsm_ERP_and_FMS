@@ -173,7 +173,16 @@ export async function countPlan(tenantId, plan = PLAN) {
  * pre-launch cleanup is the only place allowed to go around it. Then writes ONE audit entry that
  * says what was removed, by whom and why, so the new audit log does not start unexplained.
  */
-export async function runWipe(tenantId, { by, plan = PLAN } = {}) {
+export async function runWipe(
+  tenantId,
+  {
+    by,
+    plan = PLAN,
+    role = "system",
+    entityId = "pre-launch-cleanup",
+    reason = "Pre-launch cleanup: all test data removed, numbers restarted, opening balances zeroed",
+  } = {},
+) {
   const before = await countPlan(tenantId, plan);
   const removed = {};
   const reset = [];
@@ -192,12 +201,11 @@ export async function runWipe(tenantId, { by, plan = PLAN } = {}) {
   await AuditLog.create({
     tenantId,
     userId: by ?? "data-reset-script",
-    userRole: "system",
+    userRole: role,
     action: "delete",
     entity: "system_data",
-    entityId: "pre-launch-cleanup",
-    reason:
-      "Pre-launch cleanup: all test data removed, numbers restarted, opening balances zeroed",
+    entityId,
+    reason,
     newValue: { removed, reset },
     at: new Date(),
   });

@@ -84,10 +84,7 @@ export function PendingCertificates() {
     },
   ];
   return (
-    <Card
-      title="Transfer Certificate and Bonafide requests"
-      subtitle="Open a request to read the certificate, then approve or reject it. The number is given only when you approve."
-    >
+    <Card title="Transfer Certificate and Bonafide requests">
       <Table
         columns={columns}
         rows={query.data?.rows ?? (query.isPending ? undefined : [])}

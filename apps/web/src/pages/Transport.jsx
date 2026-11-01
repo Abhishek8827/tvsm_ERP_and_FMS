@@ -158,10 +158,6 @@ export function Transport() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Transport</h1>
-          <p className="text-sm text-ink-muted">
-            Students on the school bus. The bus fee is charged only for these
-            students, from the month shown.
-          </p>
         </div>
         {isAdmin && (
           <Button onClick={() => setAdding("")}>Add student to bus</Button>

@@ -251,10 +251,6 @@ export function Rebates() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Rebates</h1>
-          <p className="text-sm text-ink-muted">
-            Every concession given to students. Reversed rebates stay in the
-            list.
-          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           {isAdmin && (

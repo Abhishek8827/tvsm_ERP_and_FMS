@@ -370,10 +370,7 @@ function TcForm({ draft, student, onSent, onBack }) {
         </div>
       )}
 
-      <Card
-        title="Student details"
-        subtitle="Anything missing is filled here and saved back to the student record."
-      >
+      <Card title="Student details">
         <div className="grid gap-3 sm:grid-cols-2">
           {missingKeys.includes("fatherName") && (
             <Input
@@ -1286,10 +1283,7 @@ function RequestsPanel({ kind, isAdmin, onPick, onGoIssued }) {
   return (
     <div className="flex flex-col gap-4">
       {isAdmin && (
-        <Card
-          title={`Ask for a new ${label}`}
-          subtitle={`Find the student, choose them, then fill the form. It is issued at once; then you can print and sign it.${kind === "bonafide" ? " Only students who are studying now (active) can get one." : ""}`}
-        >
+        <Card title={`Ask for a new ${label}`}>
           <StudentPicker onPick={onPick} onlyActive={kind === "bonafide"} />
         </Card>
       )}
@@ -1582,11 +1576,6 @@ export function TcBonafide() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">TC & Bonafide</h1>
-        <p className="text-sm text-ink-muted">
-          {isAdmin
-            ? "Issue a certificate, then print and sign it."
-            : "You can look at requests and issued certificates. Only the Admin can issue or print them."}
-        </p>
       </div>
       <div role="tablist" className="flex flex-wrap gap-2 border-b border-line">
         {tabs.map(([key, label]) => (

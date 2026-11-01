@@ -20,6 +20,7 @@ import { Rebates } from "./pages/Rebates";
 import { Transport } from "./pages/Transport";
 import { FeeStructure } from "./pages/FeeStructure";
 import { FeesDatabase } from "./pages/FeesDatabase";
+import { SystemSettings } from "./pages/SystemSettings";
 import { UsersSettings } from "./pages/UsersSettings";
 import { Approvals } from "./pages/Approvals";
 import { DayClose } from "./pages/DayClose";
@@ -109,7 +110,8 @@ export function App() {
               i.key !== "tc-bonafide" &&
               i.key !== "day-close" &&
               i.key !== "approvals" &&
-              i.key !== "users-settings",
+              i.key !== "users-settings" &&
+              i.key !== "system-settings",
           )
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
@@ -145,6 +147,9 @@ export function App() {
         )}
         {role === "admin" && (
           <Route path="/users-settings" element={<UsersSettings />} />
+        )}
+        {role === "admin" && (
+          <Route path="/system-settings" element={<SystemSettings />} />
         )}
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />

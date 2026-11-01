@@ -5,6 +5,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { errorText } from "../lib/rupees";
 import { Badge, Card, ErrorState, Spinner, StatCard } from "../components/ui";
+import { BackupReminder } from "./BackupReminder";
 import { FeeSummaryTables } from "./FeeSummaryTables";
 import { QuickTiles } from "./QuickTiles";
 /**
@@ -217,6 +218,7 @@ export function Dashboard() {
       <div>
         <h1 className="text-2xl font-semibold">Dashboard</h1>
       </div>
+      {role === "admin" && <BackupReminder />}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
         <div className="flex min-w-0 flex-col gap-4">
           {role === "cashier" && <TodayCollection />}

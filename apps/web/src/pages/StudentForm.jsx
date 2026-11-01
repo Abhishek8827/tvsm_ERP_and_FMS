@@ -319,14 +319,6 @@ export function StudentForm() {
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              checked={form.isNewAdmission}
-              onChange={set("isNewAdmission")}
-            />
-            New admission (admission fee will be charged)
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
               checked={form.isRTE}
               onChange={set("isRTE")}
             />

@@ -11,6 +11,7 @@
     "fees:seed": "node --env-file-if-exists=.env src/scripts/seedFeeStructure.js",
     "students:demo": "node --env-file-if-exists=.env src/scripts/seedDemoStudents.js",
     "money:demo": "node --env-file-if-exists=.env src/scripts/seedDemoMoney.js",
+    "students:mark-old": "node --env-file-if-exists=.env src/scripts/markStudentsOld.js",
     "users:seed": "node --env-file-if-exists=.env src/scripts/seedUsers.js",
     "loadtest": "node src/scripts/loadTest.js",
     "data:reset": "node --env-file-if-exists=.env src/scripts/resetData.js"

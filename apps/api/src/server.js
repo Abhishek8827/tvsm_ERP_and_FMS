@@ -12,6 +12,7 @@ import {
   makeUserStore,
 } from "./services/stores.js";
 import { makeRebateStore } from "./services/rebateStore.js";
+import { makeAdmissionStore } from "./services/admissionStore.js";
 import { startAuditRetentionJob } from "./services/auditRetention.js";
 import { startDayAutoLockJob } from "./services/dayAutoLock.js";
 import { startMonthlyPlanJob } from "./services/monthlyPlan.js";
@@ -67,6 +68,7 @@ async function main() {
         reportsStore: makeReportsStore(),
         certificateStore,
         auditStore: makeAuditStore(),
+        admissionStore: makeAdmissionStore(),
       }
     : undefined;
 

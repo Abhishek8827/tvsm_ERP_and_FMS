@@ -11,6 +11,7 @@ import { requestId } from "./middleware/requestId.js";
 import { createAuthenticate } from "./middleware/authenticate.js";
 import { AppError } from "./utils/errors.js";
 import { adminDashboardRouter } from "./routes/adminDashboard.js";
+import { admissionsRouter } from "./routes/admissions.js";
 import { auditLogRouter } from "./routes/auditLog.js";
 import { backupRouter } from "./routes/backup.js";
 import { authRouter } from "./routes/auth.js";
@@ -35,6 +36,7 @@ import { whatsappRouter } from "./routes/whatsapp.js";
 
 // Every protected area. Used for the 503 answer when sign-in is not configured.
 const PROTECTED_PREFIXES = [
+  "/api/admissions",
   "/api/audit-log",
   "/api/backup",
   "/api/auth",
@@ -139,6 +141,7 @@ export function createApp(env, logger, auth) {
       reportsRouter,
       auditLogRouter,
       backupRouter,
+      admissionsRouter,
       whatsappRouter,
     ];
     for (const make of routers) app.use("/api", make(deps, authenticate));

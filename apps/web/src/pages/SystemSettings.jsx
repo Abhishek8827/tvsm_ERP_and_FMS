@@ -117,10 +117,7 @@ function RestoreCard() {
   });
   const ready = !!file && phrase === RESTORE_PHRASE;
   return (
-    <Card
-      title="Restore"
-      subtitle="Adds only what is missing. Records already in the system are never changed or replaced."
-    >
+    <Card title="Restore">
       <div className="flex max-w-md flex-col gap-3">
         <div>
           <label

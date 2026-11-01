@@ -124,10 +124,6 @@ export function UsersSettings() {
           <h1 className="text-2xl font-semibold text-ink">
             Users &amp; Permissions
           </h1>
-          <p className="text-sm text-ink-muted">
-            Logins for the Admin, Principal and Cashiers. Passwords are never
-            shown anywhere.
-          </p>
         </div>
         <Button onClick={() => setDialog({ type: "create" })}>Add user</Button>
       </div>

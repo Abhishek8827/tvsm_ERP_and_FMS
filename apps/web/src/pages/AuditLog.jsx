@@ -155,10 +155,6 @@ export function AuditLog() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Audit Log</h1>
-          <p className="text-sm text-ink-muted">
-            Every financial and certificate action. Entries cannot be edited or
-            deleted.
-          </p>
         </div>
         <Button
           variant="secondary"

@@ -104,7 +104,12 @@ describe("Quick access tiles", () => {
       "/collect-fee",
     );
     expect(tiles.queryByRole("link", { name: "Dashboard" })).toBeNull();
-    for (const n of ["Users & Settings", "Bank & Cash", "Reports", "Approvals"])
+    for (const n of [
+      "Users & Permissions",
+      "Bank & Cash Management",
+      "Reports",
+      "Approvals",
+    ])
       expect(tiles.queryByRole("link", { name: n })).toBeNull();
   });
 });

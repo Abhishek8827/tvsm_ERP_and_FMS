@@ -162,9 +162,20 @@ describe("sign-in", () => {
       await userEvent.click(screen.getByRole("button", { name: "Sign in" }));
       await screen.findByRole("heading", { name: "Dashboard" });
       const forbidden = {
-        cashier: ["Data Import", "Approvals", "Users & Settings"],
-        principal: ["Collect Fee", "Data Import", "Users & Settings"],
-        admin: ["Approvals"],
+        cashier: [
+          "Data Import",
+          "Approvals",
+          "Users & Permissions",
+          "System Settings",
+        ],
+        principal: [
+          "Collect Fee",
+          "Approvals",
+          "Data Import",
+          "Users & Permissions",
+          "System Settings",
+        ],
+        admin: [],
       }[role];
       for (const label of forbidden)
         expect(mainNav().queryByText(label)).toBeNull();

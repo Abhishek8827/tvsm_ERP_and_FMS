@@ -122,7 +122,7 @@ export function UsersSettings() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-ink">
-            Users &amp; Settings
+            Users &amp; Permissions
           </h1>
           <p className="text-sm text-ink-muted">
             Logins for the Admin, Principal and Cashiers. Passwords are never

@@ -19,6 +19,13 @@ export const NAV_ITEMS = [
     availableFromStep: 1,
   },
   {
+    key: "approvals",
+    label: "Approvals",
+    path: "/approvals",
+    roles: ["admin"], // Cashier cancellation requests; the Principal is read-only
+    availableFromStep: 8,
+  },
+  {
     key: "collect-fee",
     group: "fees",
     label: "Collect Fee",
@@ -33,30 +40,6 @@ export const NAV_ITEMS = [
     path: "/receipts",
     roles: ["cashier"],
     availableFromStep: 5,
-  },
-  {
-    key: "approvals",
-    label: "Approvals",
-    path: "/approvals",
-    roles: ["admin"], // Cashier cancellation requests; the Principal is read-only
-    availableFromStep: 8,
-  },
-  {
-    key: "students",
-    group: "students",
-    label: "Students",
-    path: "/students",
-    roles: ROLES,
-    availableFromStep: 3,
-  },
-  {
-    key: "fee-structure",
-    group: "setup",
-    label: "Fee Structure",
-    path: "/fee-structure",
-    // Cashier and Principal can only LOOK at the chart; only Admin can change it.
-    roles: ["admin", "principal", "cashier"],
-    availableFromStep: 3,
   },
   {
     key: "fees-receipts",
@@ -78,7 +61,7 @@ export const NAV_ITEMS = [
   {
     key: "rebates",
     group: "fees",
-    label: "Rebates",
+    label: "Fee Rebates & Concessions",
     path: "/rebates",
     // Admin gives, imports and reverses; the Principal can look and export. Not for the Cashier.
     roles: ["admin", "principal"],
@@ -87,10 +70,34 @@ export const NAV_ITEMS = [
   {
     key: "transport",
     group: "fees",
-    label: "Transport",
+    label: "Transport Fees",
     path: "/transport",
     // Everyone can look (the Cashier needs it at the counter); only the Admin changes it.
     roles: ROLES,
+    availableFromStep: 8,
+  },
+  {
+    key: "day-close",
+    group: "fees",
+    label: "Day Closing",
+    path: "/day-close",
+    roles: ["admin", "principal", "cashier"],
+    availableFromStep: 7,
+  },
+  {
+    key: "students",
+    group: "students",
+    label: "Student Directory",
+    path: "/students",
+    roles: ROLES,
+    availableFromStep: 3,
+  },
+  {
+    key: "tc-bonafide",
+    group: "students",
+    label: "Certificates & TC",
+    path: "/tc-bonafide",
+    roles: ["admin", "principal", "cashier"], // Principal and Cashier can only look
     availableFromStep: 8,
   },
   {
@@ -121,17 +128,9 @@ export const NAV_ITEMS = [
     availableFromStep: 6,
   },
   {
-    key: "day-close",
-    group: "fees",
-    label: "Day Close",
-    path: "/day-close",
-    roles: ["admin", "principal", "cashier"],
-    availableFromStep: 7,
-  },
-  {
     key: "bank-cash",
     group: "money",
-    label: "Bank & Cash",
+    label: "Bank & Cash Management",
     path: "/bank-cash",
     // The Cashier has no Bank & Cash screen and no PIN (removed 2026-10-29).
     roles: ["admin", "principal"],
@@ -140,18 +139,27 @@ export const NAV_ITEMS = [
   {
     key: "reports",
     group: "reports",
-    label: "Reports",
+    label: "Reports & Analytics",
     path: "/reports",
     roles: ["admin", "principal"],
     availableFromStep: 12,
   },
   {
-    key: "tc-bonafide",
-    group: "students",
-    label: "TC & Bonafide",
-    path: "/tc-bonafide",
-    roles: ["admin", "principal", "cashier"], // Principal and Cashier can only look
-    availableFromStep: 8,
+    key: "audit-log",
+    group: "reports",
+    label: "Audit Trail",
+    path: "/audit-log",
+    roles: ["admin", "principal"],
+    availableFromStep: 12,
+  },
+  {
+    key: "fee-structure",
+    group: "setup",
+    label: "Fee Structure",
+    path: "/fee-structure",
+    // Cashier and Principal can only LOOK at the chart; only Admin can change it.
+    roles: ["admin", "principal", "cashier"],
+    availableFromStep: 3,
   },
   {
     key: "data-import",
@@ -164,27 +172,28 @@ export const NAV_ITEMS = [
   {
     key: "users-settings",
     group: "setup",
-    label: "Users & Settings",
+    label: "Users & Permissions",
     path: "/users-settings",
     roles: ["admin"],
     availableFromStep: 6,
   },
   {
-    key: "audit-log",
-    group: "reports",
-    label: "Audit Log",
-    path: "/audit-log",
-    roles: ["admin", "principal"],
+    key: "system-settings",
+    group: "setup",
+    label: "System Settings",
+    path: "/system-settings",
+    // Backup & Restore and other system-wide settings. Admin only.
+    roles: ["admin"],
     availableFromStep: 12,
   },
 ];
 /** Sidebar categories, in the order they appear. Items without a group (Dashboard, Approvals) stand alone. */
 export const NAV_GROUPS = [
-  { key: "fees", label: "Fees" },
-  { key: "students", label: "Students & Certificates" },
-  { key: "money", label: "Money" },
+  { key: "fees", label: "Fee Management" },
+  { key: "students", label: "Student Management" },
+  { key: "money", label: "Accounts & Finance" },
   { key: "reports", label: "Reports & Audit" },
-  { key: "setup", label: "Setup" },
+  { key: "setup", label: "Administration & Setup" },
 ];
 
 export function navForRole(role) {

@@ -75,6 +75,12 @@ const P = {
   ),
   "data-import": <path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" />,
   "users-settings": <path d="M5 7h14M5 12h14M5 17h14M9 5v4M15 10v4M8 15v4" />,
+  "new-admissions": (
+    <>
+      <circle cx="10" cy="8" r="3.5" />
+      <path d="M3.5 20c0-3.6 2.9-5.5 6.5-5.5M18 13v6M15 16h6" />
+    </>
+  ),
   "system-settings": (
     <>
       <circle cx="12" cy="12" r="3" />

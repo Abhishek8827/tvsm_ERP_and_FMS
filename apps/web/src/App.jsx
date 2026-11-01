@@ -20,6 +20,7 @@ import { Rebates } from "./pages/Rebates";
 import { Transport } from "./pages/Transport";
 import { FeeStructure } from "./pages/FeeStructure";
 import { FeesDatabase } from "./pages/FeesDatabase";
+import { NewAdmissions } from "./pages/NewAdmissions";
 import { SystemSettings } from "./pages/SystemSettings";
 import { UsersSettings } from "./pages/UsersSettings";
 import { Approvals } from "./pages/Approvals";
@@ -111,7 +112,8 @@ export function App() {
               i.key !== "day-close" &&
               i.key !== "approvals" &&
               i.key !== "users-settings" &&
-              i.key !== "system-settings",
+              i.key !== "system-settings" &&
+              i.key !== "new-admissions",
           )
           .map((i) => (
             <Route key={i.key} path={i.path} element={<ComingSoon />} />
@@ -151,6 +153,7 @@ export function App() {
         {role === "admin" && (
           <Route path="/system-settings" element={<SystemSettings />} />
         )}
+        <Route path="/new-admissions" element={<NewAdmissions />} />
         <Route path="/students" element={<Students />} />
         <Route path="/students/:id" element={<StudentProfile />} />
         <Route path="/fee-structure" element={<FeeStructure />} />

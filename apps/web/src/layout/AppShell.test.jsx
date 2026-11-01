@@ -73,11 +73,19 @@ describe("Shell", () => {
       sidebar().getByRole("link", { name: "Cashbook" }),
     ).toBeInTheDocument();
   });
-  it("the hamburger hides and shows the sidebar", () => {
+  it("a hidden sidebar opens as a floating menu that hides again by itself; Pin brings it back", () => {
     at("/");
     fireEvent.click(screen.getByRole("button", { name: "Hide sidebar" }));
     expect(screen.queryByLabelText("Sidebar")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show sidebar" }));
+    const menu = () => document.getElementById("mobile-menu");
+    expect(menu()).not.toBeNull();
+    fireEvent.click(within(menu()).getByRole("link", { name: "Dashboard" }));
+    expect(menu()).toBeNull();
+    expect(screen.queryByLabelText("Sidebar")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show sidebar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pin sidebar" }));
+    expect(menu()).toBeNull();
     expect(screen.getByLabelText("Sidebar")).toBeInTheDocument();
   });
   it("the Cashier has no Rebates link and no Setup category", () => {

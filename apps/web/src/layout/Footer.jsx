@@ -6,7 +6,7 @@ export function Footer() {
     <footer className="border-t border-line bg-surface px-4 py-3 text-center text-xs text-ink-muted md:px-8">
       <p>
         Latest Version: {SOFTWARE.version} © {SOFTWARE.year} · Developed by{" "}
-        {SOFTWARE.madeBy} · All rights reserved. Contact:{SOFTWARE.phone}
+        {SOFTWARE.madeBy} · All rights reserved. Contact: {SOFTWARE.phone}
       </p>
     </footer>
   );

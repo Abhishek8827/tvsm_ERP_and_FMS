@@ -93,14 +93,14 @@ export function AppShell() {
     if (!drawer) return undefined;
     const onKey = (e) => e.key === "Escape" && setDrawer(false);
     const mq = window.matchMedia?.("(min-width: 768px)");
-    const onWide = (e) => e.matches && setDrawer(false);
+    const onWide = (e) => e.matches && !hidden && setDrawer(false);
     window.addEventListener("keydown", onKey);
     mq?.addEventListener?.("change", onWide);
     return () => {
       window.removeEventListener("keydown", onKey);
       mq?.removeEventListener?.("change", onWide);
     };
-  }, [drawer]);
+  }, [drawer, hidden]);
   const isOpen = (key) => openGroups[key] ?? key === activeKey;
 
   if (!role) return null;
@@ -116,13 +116,6 @@ export function AppShell() {
       write(SIDEBAR_KEY, !h);
       return !h;
     });
-  const closeSidebarAfterNavigation = () => {
-    setDrawer(false);
-    if (window.matchMedia("(min-width: 768px)").matches) {
-      setHidden(true);
-      write(SIDEBAR_KEY, true);
-    }
-  };
 
   const menu = (
     <nav
@@ -136,7 +129,7 @@ export function AppShell() {
             to={e.item.path}
             label={e.item.label}
             icon={e.item.key}
-            onNavigate={closeSidebarAfterNavigation}
+            onNavigate={() => setDrawer(false)}
           />
         ) : (
           <NavGroup
@@ -146,7 +139,7 @@ export function AppShell() {
             items={e.items}
             open={isOpen(e.key)}
             onToggle={() => toggleGroup(e.key)}
-            onNavigate={closeSidebarAfterNavigation}
+            onNavigate={() => setDrawer(false)}
           />
         ),
       )}
@@ -203,7 +196,7 @@ export function AppShell() {
       )}
 
       {drawer && (
-        <div className="fixed inset-0 z-40 md:hidden">
+        <div className="fixed inset-0 z-40">
           <button
             type="button"
             aria-label="Close menu"
@@ -214,6 +207,17 @@ export function AppShell() {
             id="mobile-menu"
             className="relative flex h-full w-72 max-w-[85%] flex-col gap-3 bg-linear-to-b from-sidebar to-brand px-3 pb-4 pt-4"
           >
+            <button
+              type="button"
+              onClick={() => {
+                write(SIDEBAR_KEY, false);
+                setHidden(false);
+                setDrawer(false);
+              }}
+              className="hidden min-h-10 items-center justify-center rounded-xl border border-white/25 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 hover:bg-white/10 md:flex"
+            >
+              Pin sidebar
+            </button>
             {menu}
             {account}
           </div>
@@ -233,8 +237,8 @@ export function AppShell() {
             <Hamburger
               className="hidden md:flex"
               aria-label={hidden ? "Show sidebar" : "Hide sidebar"}
-              aria-expanded={!hidden}
-              onClick={toggleSidebar}
+              aria-expanded={!hidden || drawer}
+              onClick={() => (hidden ? setDrawer(true) : toggleSidebar())}
             />
             <p
               className="hidden truncate text-sm lg:block"
@@ -261,7 +265,7 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-4xl md:rounded-tr-none">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-[2rem] md:rounded-tr-none">
           <main className="min-w-0 flex-1 p-4 md:p-8">
             <Outlet />
           </main>

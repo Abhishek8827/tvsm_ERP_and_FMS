@@ -213,4 +213,49 @@ describe("Collect Fee", () => {
       await screen.findByText(/Old fees are still pending/),
     ).toBeInTheDocument();
   });
+  it("cash: shows change when the parent pays more and blocks Collect when less is received", async () => {
+    api.mockImplementation(async (url) =>
+      String(url).startsWith("/api/students?") ? { rows: [student] } : dues(),
+    );
+    show();
+    await pickStudent();
+    await userEvent.type(await screen.findByLabelText(/Tuition fees/), "1000");
+    const received = screen.getByLabelText(/Amount received/);
+    await userEvent.type(received, "1500");
+    expect(screen.getByText("Change to return: ₹500")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Collect/ })).toBeEnabled();
+    await userEvent.clear(received);
+    await userEvent.type(received, "800");
+    expect(screen.getByText("Balance due: ₹200")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Collect/ })).toBeDisabled();
+  });
+
+  it('transport shows all 12 months; months with no fee posted are "Not due yet"', async () => {
+    api.mockImplementation(async (url) =>
+      String(url).startsWith("/api/students?")
+        ? { rows: [student] }
+        : dues({
+            kind: "transport",
+            remaining: { transport: 50000 },
+            instalments: [
+              {
+                period: "2026-06",
+                dueDate: "2026-06-15",
+                due: 50000,
+                isDue: true,
+                isOverdue: false,
+              },
+            ],
+          }),
+    );
+    show();
+    await pickStudent();
+    await userEvent.click(
+      await screen.findByRole("tab", { name: "Transport Fees" }),
+    );
+    await screen.findByLabelText(/Transport fees \(₹\)/);
+    expect(screen.getByText("Apr 2026")).toBeInTheDocument();
+    expect(screen.getByText("Mar 2027")).toBeInTheDocument();
+    expect(screen.getAllByText("Not due yet")).toHaveLength(11);
+  });
 });

@@ -581,6 +581,8 @@ const isRetryable = (err) =>
  */
 export function makeReceiptStore() {
   return {
+    // `allYears`: look at the person's receipts of EVERY year, not only `fy` (an admission form can
+    // be paid across the 1 April change; the number still comes from `fy`).
     async issue({
       tenantId,
       studentId,
@@ -589,6 +591,7 @@ export function makeReceiptStore() {
       idempotencyKey,
       build,
       audit,
+      allYears = false,
     }) {
       const find = (session) =>
         Receipt.findOne({ tenantId, idempotencyKey })
@@ -638,12 +641,14 @@ export function makeReceiptStore() {
               ...(await Receipt.find({
                 tenantId,
                 studentId,
-                fy,
+                ...(allYears ? {} : { fy }),
                 _id: { $nin: gone },
               })
                 .session(session)
                 .lean()),
-              ...(await rebateCredits(tenantId, studentId, fy, session)),
+              ...(allYears
+                ? []
+                : await rebateCredits(tenantId, studentId, fy, session)),
             ];
             const doc = await build(prior);
             const counter = await Counter.findOneAndUpdate(

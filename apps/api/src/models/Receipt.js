@@ -22,7 +22,12 @@ const lineSchema = new mongoose.Schema(
 
 const receiptSchema = new mongoose.Schema(
   {
-    kind: { type: String, enum: ["school", "transport"], required: true },
+    kind: {
+      type: String,
+      enum: ["school", "transport", "admission"],
+      required: true,
+    },
+    // For kind 'admission' this is the id of the admission FORM (not a student).
     fy: { type: String, required: true },
     seq: { type: Number, required: true },
     number: { type: String, required: true }, // S-FY2026-27/2054  or  T-FY2026-27/0123

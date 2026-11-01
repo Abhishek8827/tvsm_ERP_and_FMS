@@ -30,6 +30,7 @@ export function SystemSettings() {
       </div>
       <BackupCard />
       <RestoreCard />
+      <HardResetCard />
     </div>
   );
 }
@@ -204,5 +205,148 @@ function RestoreResult({ result }) {
         </p>
       )}
     </div>
+  );
+}
+
+/** Danger zone: erase all school data. Shown as "switched off" unless the server allows it. */
+function HardResetCard() {
+  const { notify } = useToast();
+  const queryClient = useQueryClient();
+  const status = useQuery({
+    queryKey: ["hard-reset", "status"],
+    queryFn: () => api("/api/system/hard-reset/status"),
+    retry: false,
+  });
+  const [f, setF] = useState({
+    password: "",
+    key: "",
+    answer: "",
+    reason: "",
+    phrase: "",
+  });
+  const [result, setResult] = useState(null);
+  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  const backup = useMutation({
+    mutationFn: () => api("/api/backup/download", { blob: true }),
+    onSuccess: async (blob) => {
+      saveBlob(blob, `backup-before-reset-${istStamp()}.json`);
+      await queryClient.invalidateQueries({ queryKey: ["hard-reset"] });
+      await queryClient.invalidateQueries({ queryKey: ["backup"] });
+      notify("Backup downloaded. You can erase now.", "success");
+    },
+    onError: (e) => notify(errorText(e), "error"),
+  });
+  const erase = useMutation({
+    mutationFn: () =>
+      api("/api/system/hard-reset", { method: "POST", body: f }),
+    onSuccess: async (out) => {
+      setResult(out);
+      setF({ password: "", key: "", answer: "", reason: "", phrase: "" });
+      await queryClient.invalidateQueries();
+      notify("All data erased.", "success");
+    },
+    onError: (e) => notify(errorText(e), "error"),
+  });
+  const s = status.data;
+  const ready =
+    s?.backupFresh &&
+    f.password &&
+    f.key &&
+    f.answer &&
+    f.reason.trim().length >= 5 &&
+    f.phrase === s?.phrase;
+  return (
+    <Card
+      title="Danger zone: erase all data"
+      subtitle="For starting again from zero. This cannot be undone."
+    >
+      {status.isPending && <Spinner label="Checking" />}
+      {status.isError && (
+        <ErrorState
+          message={errorText(status.error)}
+          onRetry={() => void status.refetch()}
+        />
+      )}
+      {s && !s.enabled && (
+        <p className="text-sm text-ink-muted">
+          Hard reset is switched off on this server. It can only be turned on by
+          whoever manages the server settings.
+        </p>
+      )}
+      {s?.enabled && (
+        <div className="flex max-w-md flex-col gap-3">
+          <p className="text-sm text-ink-muted">
+            Erases students, fees, receipts, vouchers, certificates, admissions
+            and numbers. Users, the Fee Structure, settings and the audit log
+            stay.
+          </p>
+          <div className="flex items-center gap-3">
+            {s.backupFresh ? (
+              <Badge tone="success">Backup taken</Badge>
+            ) : (
+              <Badge tone="warning">Backup needed</Badge>
+            )}
+            <Button
+              variant="secondary"
+              loading={backup.isPending}
+              onClick={() => backup.mutate()}
+            >
+              Download backup now
+            </Button>
+          </div>
+          <Input
+            label="Your password"
+            type="password"
+            autoComplete="current-password"
+            value={f.password}
+            onChange={set("password")}
+          />
+          <Input
+            label="Reset key"
+            type="password"
+            autoComplete="off"
+            value={f.key}
+            onChange={set("key")}
+          />
+          <Input
+            label={s.question}
+            autoComplete="off"
+            value={f.answer}
+            onChange={set("answer")}
+          />
+          <Input
+            label="Why are you erasing everything?"
+            value={f.reason}
+            onChange={set("reason")}
+          />
+          <Input
+            label={`Type ${s.phrase} to confirm`}
+            autoComplete="off"
+            value={f.phrase}
+            onChange={set("phrase")}
+          />
+          <div>
+            <Button
+              variant="danger"
+              disabled={!ready}
+              loading={erase.isPending}
+              onClick={() => erase.mutate()}
+            >
+              Erase all data
+            </Button>
+          </div>
+          {result && (
+            <p role="status" className="text-sm text-ink">
+              Erased:{" "}
+              {Object.entries(result.removed)
+                .filter(([, n]) => n > 0)
+                .map(([k, n]) => `${k} ${n}`)
+                .join(", ") || "nothing was there"}
+              .
+            </p>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

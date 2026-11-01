@@ -3,7 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { BackupReminder } from "./BackupReminder";
+import { BackupReminder } from "../components/BackupReminder";
 import { ToastProvider } from "../components/ui";
 import { SystemSettings } from "./SystemSettings";
 
@@ -126,5 +126,68 @@ describe("Backup reminder (Dashboard, Admin)", () => {
     wrap(<BackupReminder />);
     await waitFor(() => expect(api).toHaveBeenCalled());
     expect(screen.queryByRole("alert")).toBeNull();
+  });
+});
+
+describe("Hard reset card", () => {
+  it("says it is switched off when the server has it off, with no form", async () => {
+    api.mockImplementation(async (url) =>
+      url === "/api/system/hard-reset/status" ? { enabled: false } : status,
+    );
+    wrap(<SystemSettings />);
+    expect(
+      await screen.findByText(/Hard reset is switched off/),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Erase all data" })).toBeNull();
+  });
+
+  it("needs a fresh backup and every field before Erase works, then sends them all", async () => {
+    let fresh = false;
+    api.mockImplementation(async (url, opts) => {
+      if (url === "/api/system/hard-reset/status")
+        return {
+          enabled: true,
+          question: "First school?",
+          phrase: "ERASE ALL DATA",
+          backupFresh: fresh,
+        };
+      if (url === "/api/backup/download") {
+        fresh = true;
+        return new Blob(["{}"]);
+      }
+      if (url === "/api/system/hard-reset" && opts?.method === "POST")
+        return { removed: { Student: 3 }, reset: [] };
+      return status;
+    });
+    wrap(<SystemSettings />);
+    const erase = await screen.findByRole("button", { name: "Erase all data" });
+    await userEvent.type(screen.getByLabelText("Your password"), "pw");
+    await userEvent.type(screen.getByLabelText("Reset key"), "K");
+    await userEvent.type(screen.getByLabelText("First school?"), "Nepanagar");
+    await userEvent.type(
+      screen.getByLabelText("Why are you erasing everything?"),
+      "Go live",
+    );
+    await userEvent.type(
+      screen.getByLabelText(/Type ERASE ALL DATA/),
+      "ERASE ALL DATA",
+    );
+    expect(erase).toBeDisabled(); // no backup yet
+    await userEvent.click(
+      screen.getByRole("button", { name: "Download backup now" }),
+    );
+    await waitFor(() => expect(erase).toBeEnabled());
+    await userEvent.click(erase);
+    expect(await screen.findByText(/Erased: Student 3/)).toBeInTheDocument();
+    const post = api.mock.calls.find(
+      (c) => c[0] === "/api/system/hard-reset" && c[1]?.method === "POST",
+    );
+    expect(post[1].body).toEqual({
+      password: "pw",
+      key: "K",
+      answer: "Nepanagar",
+      reason: "Go live",
+      phrase: "ERASE ALL DATA",
+    });
   });
 });

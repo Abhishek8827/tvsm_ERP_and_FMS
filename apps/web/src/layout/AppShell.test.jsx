@@ -52,7 +52,7 @@ describe("Shell", () => {
   });
   it("categories open and close; closed ones hide their links", () => {
     at("/");
-    const money = sidebar().getByRole("button", { name: "Money" });
+    const money = sidebar().getByRole("button", { name: "Accounts & Finance" });
     expect(money).toHaveAttribute("aria-expanded", "false");
     expect(sidebar().queryByRole("link", { name: "Cashbook" })).toBeNull();
     fireEvent.click(money);
@@ -65,10 +65,9 @@ describe("Shell", () => {
   });
   it("the category holding the open page is open on arrival", () => {
     at("/cashbook");
-    expect(sidebar().getByRole("button", { name: "Money" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(
+      sidebar().getByRole("button", { name: "Accounts & Finance" }),
+    ).toHaveAttribute("aria-expanded", "true");
     expect(
       sidebar().getByRole("link", { name: "Cashbook" }),
     ).toBeInTheDocument();
@@ -88,11 +87,13 @@ describe("Shell", () => {
     expect(menu()).toBeNull();
     expect(screen.getByLabelText("Sidebar")).toBeInTheDocument();
   });
-  it("the Cashier has no Rebates link and no Setup category", () => {
+  it("the Cashier has no Rebates link and no Administration & Setup category", () => {
     role = "cashier";
     at("/rebates");
     expect(screen.queryByRole("link", { name: /Rebates/ })).toBeNull();
-    expect(sidebar().queryByRole("button", { name: "Setup" })).toBeNull();
+    expect(
+      sidebar().queryByRole("button", { name: "Administration & Setup" }),
+    ).toBeNull();
     expect(
       sidebar().getByRole("link", { name: "Fee Structure" }),
     ).toBeInTheDocument();
@@ -101,7 +102,7 @@ describe("Shell", () => {
     for (const r of ["admin", "principal", "cashier"]) {
       role = r;
       const { unmount } = at("/");
-      for (const name of ["Fees", "Money"]) {
+      for (const name of ["Fee Management", "Accounts & Finance"]) {
         const b = sidebar().queryByRole("button", { name });
         if (b && b.getAttribute("aria-expanded") === "false")
           fireEvent.click(b);
@@ -143,5 +144,20 @@ describe("Shell", () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "Close menu" }));
     expect(menu()).toBeNull();
+  });
+
+  it("the Admin menu follows the school order: standalone links, then five categories", () => {
+    at("/");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const top = [...nav.children].map((el) => el.textContent.trim());
+    expect(top).toEqual([
+      "Dashboard",
+      "Approvals",
+      "Fee Management",
+      "Student Management",
+      "Accounts & Finance",
+      "Reports & Audit",
+      "Administration & Setup",
+    ]);
   });
 });

@@ -5,7 +5,7 @@ import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { errorText } from "../lib/rupees";
 import { Badge, Card, ErrorState, Spinner, StatCard } from "../components/ui";
-import { BackupReminder } from "./BackupReminder";
+import { BackupReminder } from "../components/BackupReminder";
 import { FeeSummaryTables } from "./FeeSummaryTables";
 import { QuickTiles } from "./QuickTiles";
 /**
@@ -25,10 +25,7 @@ function TodayCollection() {
     retry: false,
   });
   return (
-    <Card
-      title="Today's collection"
-      subtitle="All receipts made today, by every cashier"
-    >
+    <Card title="Today's collection">
       {q.isPending && <Spinner label="Loading today's collection" />}
       {q.isError && (
         <ErrorState
@@ -79,7 +76,7 @@ function Overview() {
   const bankTotal = d.funds.banks.reduce((n, b) => n + b.balancePaise, 0);
   return (
     <>
-      <Card title="Funds" subtitle="Current balances">
+      <Card title="Funds">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label="Cash in hand" value={money(d.funds.cashPaise)} />
           <StatCard label="Petty cash" value={money(d.funds.pettyPaise)} />
@@ -97,10 +94,7 @@ function Overview() {
           />
         </div>
       </Card>
-      <Card
-        title={`Fees ${d.fy}`}
-        subtitle="Active students, from the fee ledger"
-      >
+      <Card title={`Fees ${d.fy}`}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Billed (till this month)"
@@ -224,7 +218,7 @@ export function Dashboard() {
           {role === "cashier" && <TodayCollection />}
           {(role === "admin" || role === "principal") && <FeeSummaryTables />}
           {(role === "admin" || role === "principal") && <Overview />}
-          <Card title="System status" subtitle="Live from the API">
+          <Card title="System status">
             {health.isPending && <Spinner label="Checking the server" />}
             {health.isError && (
               <ErrorState

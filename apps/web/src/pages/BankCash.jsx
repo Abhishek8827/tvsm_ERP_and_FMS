@@ -506,10 +506,7 @@ function StaffView({ isAdmin }) {
           <BankSettings overview={q.data} />
         </Card>
       )}
-      <Card
-        title="Transfers"
-        subtitle="Cash ⇄ bank and petty cash top-ups. A transfer moves money; it is not income or expense."
-      >
+      <Card title="Transfers">
         <TransfersTable banks={q.data.banks} />
       </Card>
       {isAdmin && dialog === "bank" && (
@@ -535,9 +532,6 @@ export function BankCash() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Bank & Cash</h1>
-        <p className="text-sm text-ink-muted">
-          Cash in hand, petty cash and every bank account.
-        </p>
       </div>
       <StaffView isAdmin={role === "admin"} />
     </div>

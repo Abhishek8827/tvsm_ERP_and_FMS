@@ -67,6 +67,37 @@ describe("Expenses register", () => {
     },
   };
 
+  it("heads table shows vouchers, payments and balance per head; clicking a head filters the vouchers", async () => {
+    route({
+      "/api/expense-heads/summary": {
+        heads: [
+          {
+            headId: "h1",
+            vouchersPaise: 1000000,
+            paidPaise: 400000,
+            balanceDuePaise: 600000,
+          },
+        ],
+      },
+      "/api/expense-heads": {
+        heads: [{ id: "h1", name: "Repairs", active: true }],
+      },
+      ...lists,
+    });
+    show(<Expenses />, "/expenses");
+    const head = await screen.findByRole("button", { name: "Repairs" });
+    const row = head.closest("tr");
+    expect(within(row).getByText("₹10,000")).toBeInTheDocument();
+    expect(within(row).getByText("₹4,000")).toBeInTheDocument();
+    expect(within(row).getByText("₹6,000")).toBeInTheDocument();
+    await userEvent.click(head);
+    await vi.waitFor(() =>
+      expect(
+        api.mock.calls.some((c) => String(c[0]).includes("headId=h1")),
+      ).toBe(true),
+    );
+  });
+
   it("shows the voucher register with the school columns", async () => {
     route(lists);
     show(<Expenses />, "/expenses");

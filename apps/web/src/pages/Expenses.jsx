@@ -22,6 +22,7 @@ import {
   Pagination,
   Select,
   StatCard,
+  Spinner,
   Table,
   useToast,
 } from "../components/ui";
@@ -199,6 +200,7 @@ function VouchersTab({ isAdmin }) {
   const [to, setTo] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
+  const [headId, setHeadId] = useState("");
   const [creating, setCreating] = useState(false);
   const [paying, setPaying] = useState(null); // the voucher row being paid
   const [deciding, setDeciding] = useState(null); // { row, kind: 'approve' | 'reject' }
@@ -231,13 +233,14 @@ function VouchersTab({ isAdmin }) {
     return () => window.clearTimeout(t);
   }, [search]);
   const query = useQuery({
-    queryKey: ["vouchers", { status, q, from, to, page, pageSize }],
+    queryKey: ["vouchers", { status, q, from, to, page, pageSize, headId }],
     queryFn: () => {
       const p = new URLSearchParams({ page, pageSize });
       if (status) p.set("status", status);
       if (q) p.set("q", q);
       if (from) p.set("from", from);
       if (to) p.set("to", to);
+      if (headId) p.set("headId", headId);
       return api(`/api/vouchers?${p}`);
     },
     placeholderData: keepPreviousData,
@@ -346,6 +349,13 @@ function VouchersTab({ isAdmin }) {
           caption={`${d?.totals?.approved?.count ?? 0} vouchers`}
         />
       </div>
+      <HeadsOverview
+        selected={headId}
+        onPick={(id) => {
+          setHeadId(id);
+          setPage(1);
+        }}
+      />
       <FilterBar>
         <Select
           label="Status"
@@ -677,6 +687,85 @@ function RequestsTab({ isAdmin }) {
   );
 }
 
+/** Head | Vouchers amount | Payments | Balance due. Click a head to see only its vouchers. */
+function HeadsOverview({ selected, onPick }) {
+  const heads = useQuery({
+    queryKey: ["expense-heads"],
+    queryFn: () => api("/api/expense-heads"),
+  });
+  const summary = useQuery({
+    queryKey: ["expense-heads", "summary"],
+    queryFn: () => api("/api/expense-heads/summary"),
+  });
+  if (heads.isPending || summary.isPending)
+    return <Spinner label="Loading heads" />;
+  if (heads.isError || summary.isError)
+    return (
+      <p className="text-sm text-danger">
+        {(heads.error ?? summary.error).message}
+      </p>
+    );
+  const by = new Map(summary.data.heads.map((h) => [h.headId, h]));
+  const rows = heads.data.heads
+    .map((h) => ({ ...h, ...(by.get(h.id) ?? {}) }))
+    .filter((h) => h.active || h.vouchersPaise > 0);
+  if (rows.length === 0) return null;
+  const sum = (k) => rows.reduce((n, r) => n + (r[k] ?? 0), 0);
+  return (
+    <div className="overflow-x-auto rounded-card border border-line bg-surface">
+      <table className="w-full text-left text-sm">
+        <thead className="bg-app text-xs uppercase text-ink-muted">
+          <tr>
+            <th className="px-4 py-2 font-medium">Head</th>
+            <th className="px-4 py-2 text-right font-medium">
+              Vouchers amount
+            </th>
+            <th className="px-4 py-2 text-right font-medium">Payments</th>
+            <th className="px-4 py-2 text-right font-medium">Balance due</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">
+          {rows.map((h) => (
+            <tr key={h.id} className={selected === h.id ? "bg-brand/10" : ""}>
+              <td className="px-4 py-2">
+                <button
+                  type="button"
+                  aria-pressed={selected === h.id}
+                  className="font-medium text-brand hover:underline"
+                  onClick={() => onPick(selected === h.id ? "" : h.id)}
+                >
+                  {h.name}
+                </button>
+              </td>
+              <td className="px-4 py-2 text-right">
+                {money(h.vouchersPaise ?? 0)}
+              </td>
+              <td className="px-4 py-2 text-right">
+                {money(h.paidPaise ?? 0)}
+              </td>
+              <td className="px-4 py-2 text-right">
+                {money(h.balanceDuePaise ?? 0)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+        <tfoot className="bg-app font-medium">
+          <tr>
+            <td className="px-4 py-2">Total</td>
+            <td className="px-4 py-2 text-right">
+              {money(sum("vouchersPaise"))}
+            </td>
+            <td className="px-4 py-2 text-right">{money(sum("paidPaise"))}</td>
+            <td className="px-4 py-2 text-right">
+              {money(sum("balanceDuePaise"))}
+            </td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  );
+}
+
 /** Admin: expense heads. A deactivated head stays on old vouchers. */
 function HeadsTab() {
   const { notify } = useToast();
@@ -737,10 +826,7 @@ function HeadsTab() {
   ];
   return (
     <div className="flex flex-col gap-4">
-      <Card
-        title="Add a head"
-        subtitle="Heads are made here. Nothing is pre-filled."
-      >
+      <Card title="Add a head">
         <form
           className="flex flex-wrap items-end gap-3"
           onSubmit={(e) => {
@@ -799,9 +885,6 @@ export function Expenses() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Expenses</h1>
-        <p className="text-sm text-ink-muted">
-          School expenses of ₹500 or more.
-        </p>
       </div>
       <div role="tablist" className="flex flex-wrap gap-2 border-b border-line">
         {tabs.map(([key, label]) => (

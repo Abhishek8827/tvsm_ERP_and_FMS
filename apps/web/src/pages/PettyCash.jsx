@@ -399,10 +399,6 @@ export function PettyCash() {
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">Petty Cash</h1>
-        <p className="text-sm text-ink-muted">
-          Expenses under ₹500. No voucher number and no approval, only a serial
-          number.
-        </p>
       </div>
       <RegisterView isAdmin={role === "admin"} />
     </div>

@@ -59,6 +59,14 @@ function makeStore() {
     createBank: async () => doc,
     updateBank: async () => doc,
     listHeads: async () => [{ _id: ID, name: "Stationery", active: true }],
+    headSummary: async () => [
+      {
+        headId: ID,
+        vouchersPaise: 100000,
+        paidPaise: 40000,
+        balanceDuePaise: 60000,
+      },
+    ],
     createHead: async () => ({ _id: ID, name: "Stationery", active: true }),
     updateHead: async () => ({ _id: ID, name: "Stationery", active: false }),
     listVouchers: list,
@@ -148,6 +156,8 @@ const MATRIX = [
   ["post", "/banks", { name: "IDFC", openingPaise: 100000 }, ["admin"]],
   ["patch", `/banks/${ID}`, { active: false }, ["admin"]],
   ["get", "/expense-heads", null, ["admin", "principal"]],
+  ["get", "/expense-heads/summary", null, ["admin", "principal"]],
+  ["get", `/vouchers?headId=${ID}`, null, ["admin", "principal"]],
   ["post", "/expense-heads", { name: "Stationery" }, ["admin"]],
   ["patch", `/expense-heads/${ID}`, { active: false }, ["admin"]],
   ["get", "/vouchers", null, ["admin", "principal"]],

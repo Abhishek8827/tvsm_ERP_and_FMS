@@ -492,9 +492,19 @@ export function makeMoneyStore() {
         return saved;
       });
     },
-    async listVouchers({ tenantId, status, q, from, to, page, pageSize }) {
+    async listVouchers({
+      tenantId,
+      status,
+      q,
+      from,
+      to,
+      page,
+      pageSize,
+      headId,
+    }) {
       const match = { tenantId, ...dateRange("date", from, to) };
       if (status) match.status = status;
+      if (headId) match.headId = new mongoose.Types.ObjectId(headId);
       if (q?.trim()) {
         const rx = { $regex: escapeRegex(q.trim()), $options: "i" };
         match.$or = [
@@ -546,6 +556,46 @@ export function makeMoneyStore() {
           sums.map((s) => [s._id, { paise: s.paise, count: s.count }]),
         ),
       };
+    },
+    // Per head: approved voucher amount, payments actually made, and what is still to pay.
+    async headSummary(tenantId) {
+      const vouchers = await ExpenseVoucher.aggregate([
+        { $match: { tenantId, status: "approved" } },
+        {
+          $project: {
+            headId: 1,
+            amountPaise: 1,
+            adjustedPaise: { $sum: "$adjustments.amountPaise" },
+          },
+        },
+      ]);
+      const paidRows = await ExpensePayment.aggregate([
+        {
+          $match: {
+            tenantId,
+            status: "active",
+            voucherId: { $in: vouchers.map((v) => v._id) },
+          },
+        },
+        { $group: { _id: "$voucherId", paise: { $sum: "$amountPaise" } } },
+      ]);
+      const paid = new Map(paidRows.map((r) => [String(r._id), r.paise]));
+      const byHead = new Map();
+      for (const v of vouchers) {
+        const k = String(v.headId);
+        const h = byHead.get(k) ?? {
+          headId: k,
+          vouchersPaise: 0,
+          paidPaise: 0,
+          balanceDuePaise: 0,
+        };
+        const p = paid.get(String(v._id)) ?? 0;
+        h.vouchersPaise += v.amountPaise;
+        h.paidPaise += p;
+        h.balanceDuePaise += v.amountPaise - p - (v.adjustedPaise ?? 0);
+        byHead.set(k, h);
+      }
+      return [...byHead.values()];
     },
     async getVoucher(tenantId, id) {
       const voucher = await ExpenseVoucher.findOne({

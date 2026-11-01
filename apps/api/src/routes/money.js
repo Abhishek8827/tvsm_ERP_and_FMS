@@ -348,6 +348,13 @@ export function moneyRouter(deps, authenticate) {
       });
     }),
   );
+  router.get(
+    "/expense-heads/summary",
+    ...adminOrPrincipal,
+    wrap(async (req, res) => {
+      res.json({ heads: await store().headSummary(tenant(req)) });
+    }),
+  );
   router.post(
     "/expense-heads",
     ...adminOnly,
@@ -422,6 +429,7 @@ export function moneyRouter(deps, authenticate) {
             .enum(["pending", "approved", "rejected", "cancelled"])
             .optional(),
           q: text(60).optional(),
+          headId: objectId.optional(),
         })
         .parse(req.query);
       const out = await store().listVouchers({ tenantId: tenant(req), ...f });

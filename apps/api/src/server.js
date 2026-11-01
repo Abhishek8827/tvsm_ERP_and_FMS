@@ -12,6 +12,8 @@ import {
   makeUserStore,
 } from "./services/stores.js";
 import { makeRebateStore } from "./services/rebateStore.js";
+import { startAuditRetentionJob } from "./services/auditRetention.js";
+import { startDayAutoLockJob } from "./services/dayAutoLock.js";
 import { startMonthlyPlanJob } from "./services/monthlyPlan.js";
 import { makeDayCloseStore } from "./services/dayCloseStore.js";
 import { makeCashbookStore } from "./services/cashbookStore.js";
@@ -80,8 +82,20 @@ async function main() {
         logger,
       })
     : () => {};
+  const stopAuditJob = auth
+    ? startAuditRetentionJob({ tenantId: env.DEFAULT_TENANT_ID, logger })
+    : () => {};
+  const stopDayLockJob = auth
+    ? startDayAutoLockJob({
+        deps: auth,
+        tenantId: env.DEFAULT_TENANT_ID,
+        logger,
+      })
+    : () => {};
   const shutdown = (signal) => {
     stopMonthlyJob();
+    stopDayLockJob();
+    stopAuditJob();
     logger.info(`${signal} received, shutting down`);
     server.close(() => {
       void disconnectDb().finally(() => process.exit(0));

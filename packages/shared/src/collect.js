@@ -50,9 +50,10 @@ const headsOf = (kind) => {
   return [h.old, h.current, ...h.once];
 };
 
-/** Receipt number, e.g. S-FY2026-27/2054 (school) or T-FY2026-27/0123 (transport). */
+/** Receipt number, e.g. S-FY2026-27/2054 (school), T-FY2026-27/0123 (transport) or A-FY2026-27/0001 (new admission). */
 export function receiptNumber(kind, fy, seq) {
-  return `${kind === "transport" ? "T" : "S"}-FY${fy}/${String(seq).padStart(4, "0")}`;
+  const prefix = kind === "transport" ? "T" : kind === "admission" ? "A" : "S";
+  return `${prefix}-FY${fy}/${String(seq).padStart(4, "0")}`;
 }
 
 /** Payments recorded on receipts -> credits that computeDues understands. */

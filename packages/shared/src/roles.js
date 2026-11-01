@@ -93,6 +93,15 @@ export const NAV_ITEMS = [
     availableFromStep: 3,
   },
   {
+    key: "new-admissions",
+    group: "students",
+    label: "New Admissions",
+    path: "/new-admissions",
+    // Admin and Cashier enter forms and collect fees; only the Admin decides. Principal can look.
+    roles: ROLES,
+    availableFromStep: 12,
+  },
+  {
     key: "tc-bonafide",
     group: "students",
     label: "Certificates & TC",

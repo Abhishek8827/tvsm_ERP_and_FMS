@@ -14,6 +14,7 @@ import { adminDashboardRouter } from "./routes/adminDashboard.js";
 import { admissionsRouter } from "./routes/admissions.js";
 import { auditLogRouter } from "./routes/auditLog.js";
 import { backupRouter } from "./routes/backup.js";
+import { hardResetRouter } from "./routes/hardReset.js";
 import { authRouter } from "./routes/auth.js";
 import { cancellationsRouter } from "./routes/cancellations.js";
 import { cashbookRouter } from "./routes/cashbook.js";
@@ -39,6 +40,7 @@ const PROTECTED_PREFIXES = [
   "/api/admissions",
   "/api/audit-log",
   "/api/backup",
+  "/api/system",
   "/api/auth",
   "/api/banks",
   "/api/bonafide",
@@ -141,6 +143,7 @@ export function createApp(env, logger, auth) {
       reportsRouter,
       auditLogRouter,
       backupRouter,
+      hardResetRouter,
       admissionsRouter,
       whatsappRouter,
     ];

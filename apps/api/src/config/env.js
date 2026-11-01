@@ -33,6 +33,14 @@ const schema = z.object({
   FIREBASE_PROJECT_ID: z.string().optional(),
   FIREBASE_ADMIN_SA_JSON_B64: z.string().optional(),
   FIREBASE_AUTH_EMULATOR_HOST: z.string().optional(),
+  // HARD RESET (Admin screen that erases all data). OFF unless HARD_RESET_ENABLED=yes. When it is
+  // on, ALL of the following must be set, so it can never run half-guarded. Secrets: env only.
+  HARD_RESET_ENABLED: z.enum(["yes", "no"]).default("no"),
+  HARD_RESET_KEY: z.string().optional(),
+  HARD_RESET_QUESTION: z.string().optional(),
+  HARD_RESET_ANSWER: z.string().optional(),
+  // The Firebase web API key (the same public key the web app uses) to re-check the Admin's password.
+  FIREBASE_WEB_API_KEY: z.string().optional(),
   // WhatsApp Cloud API (Meta). Both the id and the token must be set, or nothing is sent and the
   // screens say "WhatsApp is not set up". The token is a secret: environment only, never logged.
   WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
@@ -54,6 +62,18 @@ export function loadEnv(source = process.env) {
     throw new Error(`Invalid environment configuration:\n${lines.join("\n")}`);
   }
   const env = parsed.data;
+  if (env.HARD_RESET_ENABLED === "yes") {
+    const missing = [
+      "HARD_RESET_KEY",
+      "HARD_RESET_QUESTION",
+      "HARD_RESET_ANSWER",
+      "FIREBASE_WEB_API_KEY",
+    ].filter((k) => !env[k]);
+    if (missing.length)
+      throw new Error(
+        `HARD_RESET_ENABLED=yes needs these set too: ${missing.join(", ")}`,
+      );
+  }
   if (env.NODE_ENV === "production" && env.ALLOW_SEED) {
     throw new Error(
       "ALLOW_SEED must be false in production (synthetic data is dev/staging only).",

@@ -69,6 +69,13 @@ async function main() {
         certificateStore,
         auditStore: makeAuditStore(),
         admissionStore: makeAdmissionStore(),
+        hardReset: {
+          enabled: env.HARD_RESET_ENABLED === "yes",
+          key: env.HARD_RESET_KEY,
+          question: env.HARD_RESET_QUESTION,
+          answer: env.HARD_RESET_ANSWER,
+          webApiKey: env.FIREBASE_WEB_API_KEY,
+        },
       }
     : undefined;
 

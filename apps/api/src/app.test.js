@@ -51,7 +51,7 @@ describe("app foundation", () => {
     const res = await request(app)
       .get("/api/health")
       .set("Origin", "http://evil.example");
-    expect(res.status).toBe(500); // cors() raised "Origin not allowed"; generic message only
+    expect(res.status).toBe(403);
     expect(res.body.error.message).not.toMatch(/evil/);
   });
 });

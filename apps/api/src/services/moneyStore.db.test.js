@@ -209,7 +209,11 @@ describe.skipIf(!haveDb)("money store on a real database", () => {
     await store.addAdjustment({
       tenantId: T,
       id: v._id,
-      input: { amountPaise: rs(500), reason: "Discount", remark: "ok" },
+      input: {
+        amountPaise: rs(500),
+        reason: "Discount",
+        remark: "Vendor agreed to the discount",
+      },
       user,
     });
     const o = await store.overview(T);

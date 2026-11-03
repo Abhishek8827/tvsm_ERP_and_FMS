@@ -265,46 +265,6 @@ export function makeStudentStore() {
         sections: sections.filter(Boolean).sort(),
       };
     },
-    // Head-count per class and section (active / inactive), for the strength panel on Students.
-    async strength(tenantId) {
-      const rows = await Student.aggregate([
-        { $match: { tenantId } },
-        {
-          $group: {
-            _id: {
-              classKey: "$classKey",
-              section: "$section",
-              status: "$status",
-            },
-            n: { $sum: 1 },
-          },
-        },
-      ]);
-      const byClass = new Map();
-      for (const r of rows) {
-        const { classKey, section, status } = r._id;
-        const c = byClass.get(classKey) ?? {
-          classKey,
-          active: 0,
-          inactive: 0,
-          sections: {},
-        };
-        const key = section || "-";
-        const sec = c.sections[key] ?? { active: 0, inactive: 0 };
-        if (status === "active") {
-          c.active += r.n;
-          sec.active += r.n;
-        } else {
-          c.inactive += r.n;
-          sec.inactive += r.n;
-        }
-        c.sections[key] = sec;
-        byClass.set(classKey, c);
-      }
-      return CLASS_KEYS.filter((k) => byClass.has(k)).map((k) =>
-        byClass.get(k),
-      );
-    },
     // admission number -> student id, for importing old fees against existing students
     async idsByAdmissionNo(tenantId, nos) {
       const rows = await Student.find({ tenantId, admissionNo: { $in: nos } })
@@ -448,6 +408,25 @@ export function makeStudentStore() {
         { ordered: false },
       );
       return made.length;
+    },
+    // Import re-upload: set each field ONLY if it is still empty in the database right now,
+    // so a value saved meanwhile (or earlier) is never overwritten.
+    async fillMissing(tenantId, id, patch) {
+      const set = {};
+      for (const [k, v] of Object.entries(patch)) {
+        set[k] = {
+          $cond: [
+            { $in: [{ $ifNull: [`$${k}`, ""] }, ["", null]] },
+            { $literal: v },
+            `$${k}`,
+          ],
+        };
+      }
+      set.updatedAt = new Date();
+      const res = await Student.updateOne({ tenantId, _id: id }, [
+        { $set: set },
+      ]);
+      return res.modifiedCount;
     },
     async create(tenantId, data) {
       const doc = await Student.create({

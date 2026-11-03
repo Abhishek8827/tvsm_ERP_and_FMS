@@ -4,6 +4,7 @@ import { Counter } from "../models/Counter.js";
 import { DayClose } from "../models/DayClose.js";
 import { Receipt } from "../models/Receipt.js";
 import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
+import { SPLIT_STAGES, splitsOf } from "./receiptSplits.js";
 
 const dup = (e) => e?.code === 11000;
 const transient = (e) =>
@@ -33,11 +34,12 @@ async function dayTotals(tenantId, date, session) {
   const [issued, cancelledRows] = await Promise.all([
     Receipt.aggregate([
       { $match: { tenantId, issuedAt: { $gte: from, $lt: to } } },
+      ...SPLIT_STAGES,
       {
         $group: {
-          _id: "$mode",
-          paise: { $sum: "$totalPaise" },
-          count: { $sum: 1 },
+          _id: "$pay.mode",
+          paise: { $sum: "$pay.amountPaise" },
+          count: { $sum: { $cond: [{ $eq: ["$payIdx", 0] }, 1, 0] } },
         },
       },
     ]).session(session ?? null),
@@ -55,7 +57,7 @@ async function dayTotals(tenantId, date, session) {
         tenantId,
         _id: { $in: cancelledRows.map((r) => r.receiptId) },
       })
-        .select("mode totalPaise")
+        .select("mode payments totalPaise")
         .session(session ?? null)
         .lean()
     : [];
@@ -63,8 +65,9 @@ async function dayTotals(tenantId, date, session) {
     issued.find((x) => x._id === mode) ?? { paise: 0, count: 0 };
   const cancelled = (mode) =>
     cancelledReceipts
-      .filter((r) => r.mode === mode)
-      .reduce((n, r) => n + r.totalPaise, 0);
+      .flatMap((r) => splitsOf(r))
+      .filter((s) => s.mode === mode)
+      .reduce((n, s) => n + s.amountPaise, 0);
   const cashReceiptPaise = by("cash").paise;
   const cashCancelledPaise = cancelled("cash");
   return {

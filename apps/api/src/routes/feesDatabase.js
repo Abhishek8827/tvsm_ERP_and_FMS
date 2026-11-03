@@ -26,6 +26,26 @@ import { AppError, notFound } from "../utils/errors.js";
 const XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
 const EXPORT_LIMIT = 6000;
+// Which receipt lines are "school fee" and which are "transport fee" in the payment history.
+// Everything else on a receipt (T.C., other, late fee) is shown as "other".
+const SCHOOL_HEADS = ["tuition", "old_fees", "admission", "form"];
+const TRANSPORT_HEADS = ["transport", "transport_old"];
+const detailsQuery = z.object({
+  fy: z
+    .string()
+    .regex(/^\d{4}-\d{2}$/)
+    .optional(),
+  from: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  to: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  mode: z.enum(["cash", "upi"]).optional(),
+  category: z.enum(["school", "transport", "other"]).optional(),
+});
 const bool = z.enum(["true", "false"]).transform((v) => v === "true");
 const rupeesToPaise = z.coerce
   .number()
@@ -367,6 +387,156 @@ export function feesDatabaseRouter(deps, authenticate) {
           ),
       });
       res.status(201).json(shapeRebate(saved));
+    }),
+  );
+
+  // One student's full fee picture: who, what was billed / paid / rebated / is due (school and
+  // transport kept apart, old dues apart from this session's), and every receipt.
+  // READ-ONLY and worked out by the same fee engine as Collect Fee.
+  router.get(
+    "/students/:id/fee-details",
+    authenticate,
+    requireRole("admin", "principal", "cashier"),
+    wrap(async (req, res) => {
+      const q = detailsQuery.parse(req.query);
+      const tenantId = req.user.tenantId;
+      const fy = q.fy ?? getFinancialYear(new Date());
+      const student = await deps.studentStore.findById(
+        tenantId,
+        objectId.parse(req.params.id),
+      );
+      if (!student) throw notFound("Student");
+      const chart = await deps.feeStore.get(tenantId, fy);
+      const [chargeRows, counted, all] = await Promise.all([
+        deps.chargeStore.listForStudent(tenantId, student._id, fy),
+        deps.receiptStore.listForStudent(tenantId, student._id, fy),
+        deps.receiptStore.listByStudent(tenantId, student._id, {
+          fy,
+          from: q.from,
+          to: q.to,
+          mode: q.mode,
+        }),
+      ]);
+      const charges = chargeRows.map((c) => ({
+        id: String(c._id),
+        head: c.head,
+        period: c.period,
+        dueDate: c.dueDate,
+        amount: c.amountPaise,
+      }));
+      const dues = computeDues({
+        charges,
+        credits: creditsFromReceipts(counted),
+        asOf: todayIst(),
+        config: chart ?? undefined,
+        lateFeesSettled: lateSettledFromReceipts(counted),
+      });
+      const byHead = {};
+      for (const inst of dues.instalments)
+        for (const it of inst.items) {
+          const h = (byHead[it.head] ??= {
+            billed: 0,
+            paid: 0,
+            concession: 0,
+            due: 0,
+          });
+          h.billed += it.amount;
+          h.paid += it.paid;
+          h.concession += it.concession;
+          h.due += it.due;
+        }
+      const group = (heads) =>
+        heads.reduce(
+          (n, k) => ({
+            billedPaise: n.billedPaise + (byHead[k]?.billed ?? 0),
+            paidPaise: n.paidPaise + (byHead[k]?.paid ?? 0),
+            concessionPaise: n.concessionPaise + (byHead[k]?.concession ?? 0),
+            outstandingPaise: n.outstandingPaise + (byHead[k]?.due ?? 0),
+          }),
+          {
+            billedPaise: 0,
+            paidPaise: 0,
+            concessionPaise: 0,
+            outstandingPaise: 0,
+          },
+        );
+      const part = (r, heads) =>
+        r.lines
+          .filter((l) => heads.includes(l.head))
+          .reduce((n, l) => n + l.amountPaise, 0);
+      let payments = all.map((r) => {
+        const school = part(r, SCHOOL_HEADS);
+        const transport = part(r, TRANSPORT_HEADS);
+        return {
+          id: String(r._id),
+          number: r.number,
+          issuedAt: r.issuedAt,
+          status: r.status,
+          totalPaise: r.totalPaise,
+          schoolPaise: school,
+          transportPaise: transport,
+          otherPaise: r.totalPaise - school - transport,
+          mode: r.mode,
+          reference: r.reference ?? null,
+          bankName: r.bankName ?? null,
+          cashierName: r.cashierName ?? null,
+          cancellation: r.cancellation
+            ? {
+                status: r.cancellation.status,
+                reason: r.cancellation.reason,
+                requestedByName: r.cancellation.requestedByName ?? null,
+                decidedByName: r.cancellation.decidedByName ?? null,
+                decidedAt: r.cancellation.decidedAt ?? null,
+              }
+            : null,
+        };
+      });
+      if (q.category === "school")
+        payments = payments.filter((p) => p.schoolPaise > 0);
+      if (q.category === "transport")
+        payments = payments.filter((p) => p.transportPaise > 0);
+      if (q.category === "other")
+        payments = payments.filter((p) => p.otherPaise > 0);
+      const counts = (p) => p.status !== "cancelled";
+      res.json({
+        fy,
+        student: {
+          id: String(student._id),
+          name: student.name,
+          admissionNo: student.admissionNo,
+          fatherName: student.fatherName ?? "",
+          classKey: student.classKey,
+          section: student.section ?? "",
+          address: student.address ?? "",
+          contactNo: student.contactNo ?? "",
+          status: student.status,
+          usesTransport: !!student.usesTransport,
+          transportFrom: student.transportFrom ?? null,
+          transportUntil: student.transportUntil ?? null,
+        },
+        planPosted: charges.length > 0,
+        summary: {
+          oldSchool: group(["old_fees"]),
+          oldTransport: group(["transport_old"]),
+          currentSchool: group(["tuition", "admission", "form"]),
+          currentTransport: group(["transport"]),
+          totals: {
+            billedPaise: dues.totals.billed,
+            concessionPaise: dues.totals.concession,
+            paidPaise: dues.totals.paid,
+            outstandingPaise: dues.totals.outstanding,
+            lateFeePaise: dues.totals.lateFee,
+          },
+        },
+        payments,
+        // Cancelled receipts are listed but never counted as money received.
+        paymentTotals: {
+          count: payments.filter(counts).length,
+          totalPaise: payments
+            .filter(counts)
+            .reduce((n, p) => n + p.totalPaise, 0),
+        },
+      });
     }),
   );
 

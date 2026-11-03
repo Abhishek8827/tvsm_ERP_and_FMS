@@ -26,8 +26,9 @@ const users = {
 };
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 
-function build({ charges: custom, bus = false } = {}) {
+function build({ charges: custom, bus = false, receipts = [] } = {}) {
   const audit = [];
+  const listCalls = [];
   const rebates = [];
   const students = [
     {
@@ -71,7 +72,17 @@ function build({ charges: custom, bus = false } = {}) {
     auditStore: { append: async (e) => audit.push(e) },
     studentStore: {
       forFees: async () => students,
-      findById: async (_t, id) => students.find((s) => s._id === id) ?? null,
+      findById: async (_t, id) =>
+        students.find((s) => s._id === id) ??
+        (id === ID
+          ? {
+              _id: ID,
+              admissionNo: "9",
+              name: "Detail",
+              classKey: "5",
+              status: "active",
+            }
+          : null),
     },
     feeStore: { get: async () => null },
     chargeStore: {
@@ -79,7 +90,14 @@ function build({ charges: custom, bus = false } = {}) {
       listForStudent: async (_t, id) =>
         charges.filter((c) => String(c.studentId) === String(id)),
     },
-    receiptStore: { linesForStudents: async () => [] },
+    receiptStore: {
+      linesForStudents: async () => [],
+      listForStudent: async () => [],
+      listByStudent: async (_t, _id, f) => {
+        listCalls.push(f);
+        return receipts;
+      },
+    },
     rebateStore: {
       activeForStudents: async () => [],
       create: async ({ build: b, reason, kind }) => {
@@ -101,7 +119,12 @@ function build({ charges: custom, bus = false } = {}) {
       reverse: async () => null,
     },
   };
-  return { app: createApp(env, createLogger("silent"), deps), audit, rebates };
+  return {
+    app: createApp(env, createLogger("silent"), deps),
+    audit,
+    rebates,
+    listCalls,
+  };
 }
 const ID = "a".repeat(24);
 
@@ -318,5 +341,109 @@ describe("Fees Database columns and lists", () => {
     );
     expect(sheet).toHaveLength(3);
     expect(sheet[1][sheet[0].indexOf("OLD SCHOOL DUE")]).toBe(700);
+  });
+
+  describe("student fee details", () => {
+    const rec = (over) => ({
+      _id: "x1",
+      number: "S-FY2026-27/0001",
+      issuedAt: new Date("2026-06-10T05:00:00Z"),
+      status: "valid",
+      totalPaise: 150000,
+      mode: "cash",
+      lines: [
+        { head: "tuition", amountPaise: 100000 },
+        { head: "transport", amountPaise: 40000 },
+        { head: "late", amountPaise: 10000 },
+      ],
+      ...over,
+    });
+    it("every role can read it; unknown student is 404; a bad id is 400", async () => {
+      const { app } = build();
+      for (const who of ["admin", "principal", "cashier"])
+        expect(
+          (
+            await request(app)
+              .get(`/api/students/${ID}/fee-details`)
+              .set(as(who))
+          ).status,
+        ).toBe(200);
+      expect(
+        (
+          await request(app)
+            .get(`/api/students/${"b".repeat(24)}/fee-details`)
+            .set(as("admin"))
+        ).status,
+      ).toBe(404);
+      expect(
+        (
+          await request(app)
+            .get("/api/students/zzz/fee-details")
+            .set(as("admin"))
+        ).status,
+      ).toBe(400);
+      expect(
+        (await request(app).get(`/api/students/${ID}/fee-details`)).status,
+      ).toBe(401);
+    });
+    it("splits each receipt into school, transport and other, and never counts a cancelled receipt", async () => {
+      const { app, listCalls } = build({
+        receipts: [
+          rec(),
+          rec({
+            _id: "x2",
+            number: "S-FY2026-27/0002",
+            status: "cancelled",
+            totalPaise: 50000,
+            lines: [{ head: "tuition", amountPaise: 50000 }],
+            cancellation: {
+              status: "cancelled",
+              reason: "Wrong amount",
+              decidedByName: "Principal",
+            },
+          }),
+        ],
+      });
+      const res = await request(app)
+        .get(
+          `/api/students/${ID}/fee-details?fy=2026-27&mode=cash&from=2026-06-01`,
+        )
+        .set(as("admin"));
+      expect(res.status).toBe(200);
+      expect(res.body.payments[0]).toMatchObject({
+        schoolPaise: 100000,
+        transportPaise: 40000,
+        otherPaise: 10000,
+      });
+      expect(res.body.payments[1]).toMatchObject({
+        status: "cancelled",
+        cancellation: { reason: "Wrong amount", decidedByName: "Principal" },
+      });
+      expect(res.body.paymentTotals).toEqual({ count: 1, totalPaise: 150000 });
+      expect(listCalls[0]).toMatchObject({
+        fy: "2026-27",
+        mode: "cash",
+        from: "2026-06-01",
+      });
+      const transportOnly = await request(app)
+        .get(`/api/students/${ID}/fee-details?category=transport`)
+        .set(as("admin"));
+      expect(transportOnly.body.payments).toHaveLength(1);
+    });
+    it("keeps old and current, school and transport dues in separate lines", async () => {
+      const { app } = build();
+      const res = await request(app)
+        .get(`/api/students/${ID}/fee-details`)
+        .set(as("admin"));
+      expect(Object.keys(res.body.summary)).toEqual(
+        expect.arrayContaining([
+          "oldSchool",
+          "oldTransport",
+          "currentSchool",
+          "currentTransport",
+          "totals",
+        ]),
+      );
+    });
   });
 });

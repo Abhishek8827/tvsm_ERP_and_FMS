@@ -63,7 +63,6 @@ const INITIAL = {
   transport: "",
   newAdmission: "",
   rte: "",
-  village: "",
   category: "",
   gender: "",
   minDue: "",
@@ -136,7 +135,7 @@ const amt = (v) => (v > 0 ? money(v) : "-");
  * Every column of the school's sheet. `show` = visible at first; the user can tick any column on
  * or off (remembered in this browser). Excel export always has ALL columns.
  */
-function buildColumnDefs({ head, uptoLabel }) {
+function buildColumnDefs({ head }) {
   const c = (r) => r.cols;
   return [
     {
@@ -164,21 +163,12 @@ function buildColumnDefs({ head, uptoLabel }) {
         <div>
           <Link
             className="font-medium text-brand hover:underline"
-            to={`/students/${r.id}`}
+            to={`/fees-database/students/${r.id}`}
           >
             {r.name}
           </Link>
           {r.fatherName && (
             <p className="text-xs text-ink-muted">S/o {r.fatherName}</p>
-          )}
-          {r.planPosted && (r.dueNowPaise > 0 || r.lateFeePaise > 0) && (
-            <p className="text-xs text-ink-muted" data-testid="due-summary">
-              Due till {uptoLabel}: {money(r.dueNowPaise)} + penalty{" "}
-              {money(r.lateFeePaise)} ={" "}
-              <b className="text-ink">
-                {money((r.dueNowPaise ?? 0) + (r.lateFeePaise ?? 0))}
-              </b>
-            </p>
           )}
         </div>
       ),
@@ -215,10 +205,9 @@ function buildColumnDefs({ head, uptoLabel }) {
     {
       key: "bus",
       group: "Bus fees",
-      label: "Bus (village)",
+      label: "Transport",
       show: true,
-      render: (r) =>
-        r.usesTransport ? <Badge>{r.village || "Bus"}</Badge> : "-",
+      render: (r) => (r.usesTransport ? <Badge>Bus</Badge> : "-"),
     },
     {
       key: "oldSchool",
@@ -503,15 +492,7 @@ export function FeesDatabase() {
     [sort, dir],
   );
 
-  const uptoLabel = filters.upto
-    ? (monthOptions(getFinancialYear(new Date()))
-        .find((m) => m.value === filters.upto)
-        ?.label.replace("Up to ", "") ?? "today")
-    : "today";
-  const defs = useMemo(
-    () => buildColumnDefs({ head, uptoLabel }),
-    [head, uptoLabel],
-  );
+  const defs = useMemo(() => buildColumnDefs({ head }), [head]);
   const shown = new Set(
     visible ?? defs.filter((d) => d.show).map((d) => d.key),
   );
@@ -710,7 +691,7 @@ export function FeesDatabase() {
       <FilterBar>
         <Input
           label="Search"
-          placeholder="Name, father, mobile, adm. no, village"
+          placeholder="Name, father, mobile, adm. no, address"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -762,11 +743,6 @@ export function FeesDatabase() {
                 options={YES_NO}
                 value={filters.transport}
                 onChange={set("transport")}
-              />
-              <Input
-                label="Village"
-                value={filters.village}
-                onChange={set("village")}
               />
               <Select
                 label="New admission"

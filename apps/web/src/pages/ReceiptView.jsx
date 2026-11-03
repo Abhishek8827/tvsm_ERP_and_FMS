@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Link, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { classLabel, formatINR, rupeesInWords } from "@erp/shared";
 import { LETTERHEAD_CSS, letterheadLines } from "../lib/letterhead";
 import { api } from "../api/client";
@@ -208,6 +208,7 @@ const PAGE_CSS = `@page{size:A4 portrait;margin:0}html,body{margin:0;background:
 export function ReceiptView() {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { role } = useAuth();
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -302,7 +303,17 @@ export function ReceiptView() {
     <div className="flex flex-col gap-4">
       <style>{SHEET_CSS}</style>
       <div className="no-print flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-ink">Receipt {r.number}</h1>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="secondary"
+            onClick={() => (fresh ? navigate("/collect-fee") : navigate(-1))}
+          >
+            {fresh ? "← Back to Collect Fee" : "← Back"}
+          </Button>
+          <h1 className="text-2xl font-semibold text-ink">
+            Receipt {r.number}
+          </h1>
+        </div>
         <div className="flex flex-wrap gap-2">
           {original ? (
             <Button

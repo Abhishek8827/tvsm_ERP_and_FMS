@@ -51,6 +51,7 @@ function show(state) {
         <MemoryRouter initialEntries={[{ pathname: "/receipts/r1", state }]}>
           <Routes>
             <Route path="/receipts/:id" element={<ReceiptView />} />
+            <Route path="/collect-fee" element={<p>Collect Fee page</p>} />
           </Routes>
         </MemoryRouter>
       </ToastProvider>
@@ -64,6 +65,15 @@ describe("Receipt view", () => {
     role = "cashier";
     printHtml.mockReset();
     printHtml.mockResolvedValue();
+  });
+
+  it("a fresh receipt has a Back to Collect Fee button that returns to Collect Fee", async () => {
+    api.mockResolvedValue(receipt);
+    show({ fresh: true });
+    await userEvent.click(
+      await screen.findByRole("button", { name: /Back to Collect Fee/ }),
+    );
+    expect(await screen.findByText("Collect Fee page")).toBeInTheDocument();
   });
 
   it("prints a Student copy and an Office copy with the number, title, month and total", async () => {

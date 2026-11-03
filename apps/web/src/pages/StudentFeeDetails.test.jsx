@@ -6,6 +6,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StudentFeeDetails } from "./StudentFeeDetails";
 
 vi.mock("../api/client", () => ({ api: vi.fn() }));
+let mockRole = "admin";
+vi.mock("../auth/AuthContext", () => ({ useAuth: () => ({ role: mockRole }) }));
 import { api } from "../api/client";
 
 const group = (b, c, p, o) => ({
@@ -69,6 +71,7 @@ function show() {
 describe("Student fee details", () => {
   beforeEach(() => {
     api.mockReset();
+    mockRole = "admin";
     api.mockResolvedValue(details());
   });
 
@@ -105,6 +108,35 @@ describe("Student fee details", () => {
     expect(
       screen.getByText(/in 1\s+receipts\. Cancelled receipts are not counted/),
     ).toBeInTheDocument();
+  });
+
+  it("shows imported vs corrected old fees and the correction history; only the Admin gets Edit Old Fees", async () => {
+    api.mockResolvedValue(
+      details({
+        summary: {
+          ...details().summary,
+          oldSchool: { ...group(300000, 0, 0, 300000), importedPaise: 500000 },
+        },
+        oldFeeCorrections: [
+          { id: 'a1', effectiveDate: '2026-06-01', label: 'Old school fee', previousPaise: 500000, newPaise: 300000, reason: 'Joined mid session', createdByName: 'Admin' },
+        ],
+      }),
+    ); // prettier-ignore
+    show();
+    expect(
+      await screen.findByText(/Imported ₹5,000, corrected by the Admin/),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Joined mid session")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Old Fees" }),
+    ).toBeInTheDocument();
+  });
+
+  it("Cashier does not see Edit Old Fees", async () => {
+    mockRole = "cashier";
+    show();
+    await screen.findByText("Aarav Sharma");
+    expect(screen.queryByRole("button", { name: "Edit Old Fees" })).toBeNull();
   });
 
   it("filters are sent to the server", async () => {

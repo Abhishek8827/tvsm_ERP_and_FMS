@@ -3,8 +3,10 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { classLabel, formatINR, getFinancialYear } from "@erp/shared";
 import { api } from "../api/client";
+import { useAuth } from "../auth/AuthContext";
 import {
   Badge,
+  Button,
   Card,
   ErrorState,
   FilterBar,
@@ -13,6 +15,7 @@ import {
   Spinner,
   Table,
 } from "../components/ui";
+import { EditOldFeesDialog } from "./EditOldFeesDialog";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const MODE_LABEL = { cash: "Cash", upi: "UPI / QR" };
@@ -48,6 +51,8 @@ const SUMMARY_ROWS = [
  */
 export function StudentFeeDetails() {
   const { id } = useParams();
+  const { role } = useAuth();
+  const [editing, setEditing] = useState(false);
   const [fy, setFy] = useState(getFinancialYear(new Date()));
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -130,7 +135,14 @@ export function StudentFeeDetails() {
       header: "Payment mode",
       render: (r) => (
         <span>
-          {MODE_LABEL[r.mode] ?? r.mode}
+          {r.mode === "split"
+            ? (r.payments ?? [])
+                .map(
+                  (p) =>
+                    `${MODE_LABEL[p.mode]} ${formatINR(p.amountPaise, { hideZeroPaise: true })}`,
+                )
+                .join(" + ")
+            : (MODE_LABEL[r.mode] ?? r.mode)}
           {r.reference ? (
             <span className="text-ink-muted"> · {r.reference}</span>
           ) : null}
@@ -164,13 +176,23 @@ export function StudentFeeDetails() {
     <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-ink">{s.name}</h1>
-        <Link
-          className="text-sm text-brand hover:underline"
-          to="/fees-database"
-        >
-          ← Fees Database
-        </Link>
+        <div className="flex items-center gap-3">
+          {role === "admin" && (
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              Edit Old Fees
+            </Button>
+          )}
+          <Link
+            className="text-sm text-brand hover:underline"
+            to="/fees-database"
+          >
+            ← Fees Database
+          </Link>
+        </div>
       </div>
+      {editing && (
+        <EditOldFeesDialog student={s} onClose={() => setEditing(false)} />
+      )}
 
       <Card title="Student">
         <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -224,7 +246,16 @@ export function StudentFeeDetails() {
               <tbody className="divide-y divide-line">
                 {SUMMARY_ROWS.map(([key, label]) => (
                   <tr key={key}>
-                    <td className="px-4 py-2">{label}</td>
+                    <td className="px-4 py-2">
+                      {label}
+                      {sum[key].importedPaise !== undefined &&
+                        sum[key].importedPaise !== sum[key].billedPaise && (
+                          <span className="block text-xs text-ink-muted">
+                            Imported {money(sum[key].importedPaise)}, corrected
+                            by the Admin
+                          </span>
+                        )}
+                    </td>
                     <td className="px-4 py-2 text-right">
                       {money(sum[key].billedPaise)}
                     </td>
@@ -268,6 +299,41 @@ export function StudentFeeDetails() {
           </div>
         )}
       </Card>
+
+      {d.oldFeeCorrections?.length > 0 && (
+        <Card title="Old fee corrections">
+          <Table
+            columns={[
+              {
+                key: "date",
+                header: "Effective date",
+                render: (r) => r.effectiveDate,
+              },
+              { key: "cat", header: "Fee", render: (r) => r.label },
+              {
+                key: "prev",
+                header: "Previous",
+                align: "right",
+                render: (r) => money(r.previousPaise),
+              },
+              {
+                key: "new",
+                header: "New total",
+                align: "right",
+                render: (r) => money(r.newPaise),
+              },
+              { key: "why", header: "Reason", render: (r) => r.reason },
+              {
+                key: "by",
+                header: "By",
+                render: (r) => r.createdByName ?? "-",
+              },
+            ]}
+            rows={d.oldFeeCorrections}
+            rowKey={(r) => r.id}
+          />
+        </Card>
+      )}
 
       <Card title="Payment history">
         <FilterBar>

@@ -128,9 +128,24 @@ function Copy({ r, copyName, duplicate, cancelled }) {
       <div className="words">{rupeesInWords(r.totalPaise)}</div>
       <div className="line">
         <span>
-          Payment mode <b>{MODE_LABEL[r.mode]}</b>
+          Payment mode{" "}
+          <b>
+            {r.mode === "split"
+              ? r.payments
+                  .map(
+                    (p) =>
+                      `${MODE_LABEL[p.mode]} ${formatINR(p.amountPaise, { hideZeroPaise: true })}`,
+                  )
+                  .join(" + ")
+              : MODE_LABEL[r.mode]}
+          </b>
         </span>
-        <span>{r.reference ? `Reference ${r.reference}` : ""}</span>
+        <span>
+          {r.payments
+            ?.filter((p) => p.reference)
+            .map((p) => `Reference ${p.reference}`)
+            .join(", ") || (r.reference ? `Reference ${r.reference}` : "")}
+        </span>
         <span>
           Balance due after this receipt{" "}
           <b>{formatINR(r.dueAfterPaise ?? 0, { hideZeroPaise: true })}</b>

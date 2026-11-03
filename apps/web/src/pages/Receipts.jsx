@@ -24,8 +24,7 @@ const KINDS = [
 const MODES = [
   { value: "", label: "All modes" },
   { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI" },
-  { value: "qr", label: "QR" },
+  { value: "upi", label: "UPI / QR" },
 ];
 const STATUSES = [
   { value: "", label: "All receipts" },
@@ -152,7 +151,11 @@ export function Receipts() {
       render: (r) => (r.kind === "school" ? "School" : "Transport"),
     },
     { key: "month", header: "Month", render: (r) => r.monthLabel || "-" },
-    { key: "mode", header: "Mode", render: (r) => r.mode.toUpperCase() },
+    {
+      key: "mode",
+      header: "Mode",
+      render: (r) => (r.mode === "split" ? "CASH + UPI" : r.mode.toUpperCase()),
+    },
     {
       key: "amount",
       header: "Amount",
@@ -206,8 +209,8 @@ export function Receipts() {
         <StatCard label="School fees" value={money(t?.byKind?.school)} />
         <StatCard label="Transport fees" value={money(t?.byKind?.transport)} />
         <StatCard
-          label="Cash / UPI / QR"
-          value={`${money(t?.byMode?.cash)} / ${money(t?.byMode?.upi)} / ${money(t?.byMode?.qr)}`}
+          label="Cash / UPI-QR"
+          value={`${money(t?.byMode?.cash)} / ${money(t?.byMode?.upi)}`}
         />
       </div>
 

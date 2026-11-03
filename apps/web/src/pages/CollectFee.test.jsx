@@ -69,6 +69,19 @@ describe("Collect Fee", () => {
     api.mockReset();
   });
 
+  it("shows a friendly picture before a student is searched, and removes it once typing starts", async () => {
+    api.mockResolvedValue({ rows: [] });
+    show();
+    expect(screen.getByTestId("find-student-art")).toBeInTheDocument();
+    expect(
+      screen.getByText("Find a student to get started"),
+    ).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("Search student"), "aa");
+    await waitFor(() =>
+      expect(screen.queryByTestId("find-student-art")).toBeNull(),
+    );
+  });
+
   it("finds a student, collects, sends an Idempotency-Key and opens the receipt", async () => {
     api.mockImplementation(async (url, opts) => {
       if (String(url).startsWith("/api/students?")) return { rows: [student] };

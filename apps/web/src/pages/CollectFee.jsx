@@ -45,6 +45,81 @@ const MODES = [
   { value: "upi", label: "UPI / QR" },
 ];
 
+/** Doodle shown before a student is chosen, so the screen is not blank. Drawn inline (no download). */
+function FindStudentArt() {
+  return (
+    <div
+      className="flex flex-col items-center gap-2 py-6 text-center"
+      data-testid="find-student-art"
+    >
+      <svg
+        width="260"
+        height="150"
+        viewBox="0 0 260 150"
+        fill="none"
+        aria-hidden="true"
+      >
+        <g
+          stroke="currentColor"
+          className="text-brand"
+          strokeWidth="2"
+          strokeLinecap="round"
+        >
+          <path d="M126 10v8M108 16l5 6M144 16l-5 6" opacity=".6" />
+          <rect
+            x="22"
+            y="48"
+            width="78"
+            height="52"
+            rx="8"
+            transform="rotate(-6 22 48)"
+            fill="#eef2ff"
+            opacity=".8"
+          />
+          <rect
+            x="160"
+            y="48"
+            width="78"
+            height="52"
+            rx="8"
+            transform="rotate(6 238 48)"
+            fill="#eef2ff"
+            opacity=".8"
+          />
+          <rect x="70" y="36" width="120" height="86" rx="12" fill="#fff" />
+          <rect x="82" y="50" width="34" height="34" rx="6" fill="#dbeafe" />
+          <circle cx="99" cy="62" r="6" />
+          <path d="M89 80c2-7 18-7 20 0" />
+          <path d="M126 56h50M126 68h40M126 80h46" opacity=".6" />
+          <path d="M82 100h96" opacity=".4" />
+          <circle cx="170" cy="36" r="14" fill="#2563eb" stroke="none" />
+          <path
+            d="M162 35l8-4 8 4-8 4zM165 38v4c3 2 7 2 10 0v-4"
+            stroke="#fff"
+            strokeWidth="1.6"
+          />
+        </g>
+      </svg>
+      <p className="text-lg font-semibold text-ink">
+        Find a student to get started
+      </p>
+      <p className="text-sm text-ink-muted">
+        Fee details and payment options will appear here.
+      </p>
+      <div className="mt-1 flex flex-wrap justify-center gap-2 text-sm text-ink">
+        {["Name", "Scholar No.", "Mobile"].map((t) => (
+          <span
+            key={t}
+            className="rounded-full border border-line bg-app px-3 py-1"
+          >
+            {t}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** Cashier: find a student, pick School fees or Transport fees, enter amounts, take payment. */
 export function CollectFee() {
   const [search, setSearch] = useState("");
@@ -104,9 +179,12 @@ export function CollectFee() {
               autoFocus
             />
             {q.length < 2 && (
-              <p className="text-sm text-ink-muted">
-                Type at least 2 letters or digits.
-              </p>
+              <>
+                <p className="text-sm text-ink-muted">
+                  Type at least 2 letters or digits.
+                </p>
+                <FindStudentArt />
+              </>
             )}
             {found.isFetching && <Spinner label="Searching" />}
             {found.isError && (

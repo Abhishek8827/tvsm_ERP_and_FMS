@@ -36,7 +36,7 @@ describe("data cleaner plan", () => {
     for (const n of [
       'Receipt', 'ReceiptCancellation', 'LedgerEntry', 'ExpenseVoucher', 'ExpensePayment',
       'PettyEntry', 'Student', 'Charge', 'TransferCertificate', 'BonafideCertificate',
-      'Counter', 'AuditLog', 'DayClose', 'WhatsappMessage', 'NewAdmission',
+      'Counter', 'AuditLog', 'DayClose', 'WhatsappMessage', 'NewAdmission', 'OldFeeAdjustment',
     ]) expect(names('wipe'), n).toContain(n); // prettier-ignore
   });
   it("removes only DEMO banks, and zeroes the opening figures kept in settings", () => {

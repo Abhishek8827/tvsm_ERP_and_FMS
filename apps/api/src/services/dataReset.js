@@ -15,6 +15,7 @@ import { ExpenseVoucher } from "../models/ExpenseVoucher.js";
 import { FeeStructure } from "../models/FeeStructure.js";
 import { LedgerEntry } from "../models/LedgerEntry.js";
 import { NewAdmission } from "../models/NewAdmission.js";
+import { OldFeeAdjustment } from "../models/OldFeeAdjustment.js";
 import { PettyEntry } from "../models/PettyEntry.js";
 import { Rebate } from "../models/Rebate.js";
 import { Receipt } from "../models/Receipt.js";
@@ -83,6 +84,7 @@ export const PLAN = [
   },
   { name: "NewAdmission", model: NewAdmission, action: "wipe" },
   { name: "Charge", model: Charge, action: "wipe" },
+  { name: "OldFeeAdjustment", model: OldFeeAdjustment, action: "wipe" },
   { name: "Receipt", model: Receipt, action: "wipe" },
   { name: "ReceiptCancellation", model: ReceiptCancellation, action: "wipe" },
   { name: "Rebate", model: Rebate, action: "wipe" },

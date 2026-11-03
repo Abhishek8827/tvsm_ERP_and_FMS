@@ -22,6 +22,7 @@ import { certificatesRouter } from "./routes/certificates.js";
 import { dayCloseRouter } from "./routes/dayClose.js";
 import { feeStructureRouter } from "./routes/feeStructure.js";
 import { feesDatabaseRouter } from "./routes/feesDatabase.js";
+import { oldFeeAdjustmentsRouter } from "./routes/oldFeeAdjustments.js";
 import { healthRouter } from "./routes/health.js";
 import { ledgerRouter } from "./routes/ledger.js";
 import { moneyRouter } from "./routes/money.js";
@@ -135,6 +136,7 @@ export function createApp(env, logger, auth) {
       rebatesRouter,
       oldDuesImportRouter,
       feesDatabaseRouter,
+      oldFeeAdjustmentsRouter,
       certificatesRouter,
       dayCloseRouter,
       cashbookRouter,

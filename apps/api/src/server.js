@@ -11,6 +11,7 @@ import {
   makeStudentStore,
   makeUserStore,
 } from "./services/stores.js";
+import { makeOldFeeStore } from "./services/oldFeeStore.js";
 import { makeRebateStore } from "./services/rebateStore.js";
 import { makeAdmissionStore } from "./services/admissionStore.js";
 import { startAuditRetentionJob } from "./services/auditRetention.js";
@@ -63,6 +64,7 @@ async function main() {
         receiptStore,
         moneyStore: makeMoneyStore(),
         rebateStore: makeRebateStore(),
+        oldFeeStore: makeOldFeeStore(),
         dayCloseStore: makeDayCloseStore(),
         cashbookStore: makeCashbookStore(),
         reportsStore: makeReportsStore(),

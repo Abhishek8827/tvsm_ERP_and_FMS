@@ -249,3 +249,47 @@ export function parseStudentSheet(sheet) {
   }
   return { students, errors };
 }
+
+// Fields a re-upload may FILL when the school record has nothing there yet. Name, class, status,
+// transport and RTE already always have a value, so they are never touched by an import.
+export const FILLABLE_FIELDS = [
+  "fatherName",
+  "motherName",
+  "section",
+  "address",
+  "gender",
+  "dateOfBirth",
+  "contactNo",
+  "category",
+  "caste",
+  "samagraId",
+  "aadhaar",
+  "bankAccount",
+  "ifsc",
+  "nationality",
+  "firstAdmissionDate",
+  "firstAdmissionClass",
+  "pen",
+  "aparId",
+  "formNo",
+];
+const UPPER = new Set(["section", "ifsc"]);
+const isEmpty = (v) =>
+  v === undefined || v === null || (typeof v === "string" && v.trim() === "");
+
+/**
+ * What a new file can ADD to a student that already exists: only the fields that are empty on
+ * the record and filled in the file. A value already saved is never replaced.
+ */
+export function missingFieldsPatch(existing, data) {
+  const patch = {};
+  for (const k of FILLABLE_FIELDS) {
+    if (isEmpty(existing[k]) && !isEmpty(data[k])) {
+      patch[k] =
+        UPPER.has(k) && typeof data[k] === "string"
+          ? data[k].toUpperCase()
+          : data[k];
+    }
+  }
+  return patch;
+}

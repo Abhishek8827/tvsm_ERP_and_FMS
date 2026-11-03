@@ -8,6 +8,7 @@ import { recordAudit } from "../services/audit.js";
 import { postPlans } from "../services/feePlan.js";
 import {
   TEMPLATE_HEADERS,
+  missingFieldsPatch,
   parseStudentSheet,
 } from "../services/studentImport.js";
 import { AppError } from "../utils/errors.js";
@@ -22,8 +23,9 @@ const query = z.object({ commit: z.enum(["true", "false"]).default("false") });
  *  - GET  /students/import-template      downloads the empty template
  *  - POST /students/import?commit=false   checks the file and reports problems (saves nothing)
  *  - POST /students/import?commit=true    saves the good rows; rows with problems are skipped and listed
- * Students that already exist (same SCH. number) are never changed or duplicated, so running the
- * same import twice is harmless (rule 5).
+ * Students that already exist (same SCH. number) are never duplicated and nothing already saved is
+ * replaced: a re-upload only FILLS fields that are still empty on the record (Admin decision), so
+ * running the same file twice changes nothing the second time (rule 5).
  */
 export function studentImportRouter(deps, authenticate) {
   const router = Router();
@@ -94,38 +96,67 @@ export function studentImportRouter(deps, authenticate) {
         );
         const errors = [...parsed.errors];
         const ready = [];
+        const found = existing.size
+          ? new Map(
+              (
+                await deps.studentStore.findByAdmissionNos(tenantId, [
+                  ...existing,
+                ])
+              ).map((d) => [d.admissionNo, d]),
+            )
+          : new Map();
+        // Students already in the system: the file may only ADD what is missing on the record.
+        const updates = [];
+        let unchanged = 0;
         for (const s of parsed.students) {
-          if (existing.has(s.data.admissionNo))
-            errors.push({
-              row: s.row,
-              message: `SCH. ${s.data.admissionNo} already exists (skipped)`,
-            });
-          else ready.push(s);
+          if (!existing.has(s.data.admissionNo)) {
+            ready.push(s);
+            continue;
+          }
+          const doc = found.get(s.data.admissionNo);
+          const patch = doc ? missingFieldsPatch(doc, s.data) : {};
+          if (Object.keys(patch).length) updates.push({ id: doc._id, patch });
+          else unchanged += 1;
         }
         errors.sort((a, b) => a.row - b.row);
 
         let created = 0;
+        let updated = 0;
+        const fieldsFilled = {};
         let feePlan = null;
-        if (commit === "true" && ready.length > 0) {
-          created = await deps.studentStore.createMany(
-            tenantId,
-            ready.map((s) => s.data),
-          );
-          feePlan = await postPlans({
-            deps,
-            tenantId,
-            students: await deps.studentStore.findByAdmissionNos(
+        if (commit === "true" && (ready.length > 0 || updates.length > 0)) {
+          if (ready.length > 0) {
+            created = await deps.studentStore.createMany(
               tenantId,
-              ready.map((s) => s.data.admissionNo),
-            ),
-            fy: getFinancialYear(new Date()),
-          });
+              ready.map((s) => s.data),
+            );
+            feePlan = await postPlans({
+              deps,
+              tenantId,
+              students: await deps.studentStore.findByAdmissionNos(
+                tenantId,
+                ready.map((s) => s.data.admissionNo),
+              ),
+              fy: getFinancialYear(new Date()),
+            });
+          }
+          for (const u of updates) {
+            if (
+              (await deps.studentStore.fillMissing(tenantId, u.id, u.patch)) > 0
+            ) {
+              updated += 1;
+              for (const k of Object.keys(u.patch))
+                fieldsFilled[k] = (fieldsFilled[k] ?? 0) + 1;
+            }
+          }
           await recordAudit(deps, req, {
             action: "create",
             entity: "student_import",
             newValue: {
               rowsInFile: sheet.length - 1,
               created,
+              updated,
+              fieldsFilled,
               skipped: errors.length,
             },
           });
@@ -135,6 +166,9 @@ export function studentImportRouter(deps, authenticate) {
           rowsInFile: parsed.students.length + parsed.errors.length,
           ready: ready.length,
           created,
+          toUpdate: updates.length,
+          updated,
+          unchanged,
           feePlan,
           skipped: errors.length,
           errors: errors.slice(0, 200),

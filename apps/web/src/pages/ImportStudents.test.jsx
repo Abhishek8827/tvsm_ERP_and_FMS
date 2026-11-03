@@ -70,6 +70,32 @@ describe("ImportStudents", () => {
     );
   });
 
+  it("existing students: shows how many get missing data filled and offers to fill them", async () => {
+    const preview = {
+      committed: false,
+      rowsInFile: 5,
+      ready: 0,
+      toUpdate: 3,
+      unchanged: 2,
+      created: 0,
+      skipped: 0,
+      errors: [],
+    };
+    api.mockResolvedValue(preview);
+    show();
+    await userEvent.upload(screen.getByLabelText("Excel file"), file);
+    await userEvent.click(screen.getByRole("button", { name: "Check file" }));
+    expect(
+      await screen.findByRole("button", {
+        name: "Fill missing data for 3 students",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/2 existing students already have everything/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Nothing to import")).toBeNull();
+  });
+
   it("shows the server message when the file is rejected", async () => {
     api.mockRejectedValue(
       new Error("Required column missing: SCH.. Use the template."),

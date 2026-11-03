@@ -12,10 +12,18 @@ import {
   useToast,
 } from "../components/ui";
 
+function importLabel(r) {
+  const fill = r.toUpdate ?? 0;
+  if (fill === 0) return `Import ${r.ready} students`;
+  if (r.ready === 0) return `Fill missing data for ${fill} students`;
+  return `Import ${r.ready} new students and fill ${fill} existing`;
+}
+
 /**
  * Admin: import students from the school's Excel sheet.
  * Step 1 "Check file" saves nothing and lists every problem row.
- * Step 2 "Import" saves the good rows. Rows that already exist are skipped, so it is safe to retry.
+ * Step 2 "Import" saves the new students. A student that already exists is never replaced: the file
+ * only FILLS fields that are still empty on the record, so it is safe to upload again and again.
  */
 export function ImportStudents() {
   const { notify } = useToast();
@@ -31,7 +39,10 @@ export function ImportStudents() {
       setResult(res);
       if (res.committed) {
         await queryClient.invalidateQueries({ queryKey: ["students"] });
-        notify(`${res.created} students imported.`, "success");
+        notify(
+          `${res.created} students imported, ${res.updated ?? 0} existing students completed.`,
+          "success",
+        );
       }
     },
     onError: (e) => notify(e.message, "error"),
@@ -71,7 +82,8 @@ export function ImportStudents() {
           Use the school's column names. SCH. is the admission number. For bus
           students put the village in ADDRESS and TRANSPORT = YES. REMARK = RTE
           marks an RTE student. INACTIVE students need INACTIVE STATUS as "with
-          TC" or "without TC". AGE is not needed.
+          TC" or "without TC". AGE is not needed. A student who is already saved
+          is never replaced: a new file only fills the fields that are empty.
         </p>
         <div className="mt-3">
           <Button variant="secondary" onClick={() => void downloadTemplate()}>
@@ -108,18 +120,39 @@ export function ImportStudents() {
               : "Check result (nothing saved yet)"
           }
         >
-          <div className="grid gap-3 sm:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-4">
             <StatCard label="Rows in file" value={result.rowsInFile} />
             <StatCard
-              label={result.committed ? "Imported" : "Ready to import"}
+              label={
+                result.committed ? "New students imported" : "New students"
+              }
               value={result.committed ? result.created : result.ready}
+            />
+            <StatCard
+              label={
+                result.committed
+                  ? "Existing students completed"
+                  : "Existing: missing data"
+              }
+              value={
+                result.committed
+                  ? (result.updated ?? 0)
+                  : (result.toUpdate ?? 0)
+              }
+              caption="Only empty fields are filled"
             />
             <StatCard
               label="Skipped"
               value={result.skipped}
-              caption="Problems or already exist"
+              caption="Rows with problems"
             />
           </div>
+          {result.unchanged > 0 && (
+            <p className="mt-2 text-sm text-ink-muted">
+              {result.unchanged} existing students already have everything this
+              file offers.
+            </p>
+          )}
 
           {result.feePlan && (
             <div className="mt-4 rounded-lg border border-line bg-app p-3 text-sm">
@@ -174,22 +207,24 @@ export function ImportStudents() {
             </p>
           )}
 
-          {!result.committed && result.ready === 0 && (
-            <div className="mt-4">
-              <EmptyState
-                title="Nothing to import"
-                description="Fix the rows above in Excel and choose the file again."
-              />
-            </div>
-          )}
-          {!result.committed && result.ready > 0 && (
+          {!result.committed &&
+            result.ready === 0 &&
+            !(result.toUpdate > 0) && (
+              <div className="mt-4">
+                <EmptyState
+                  title="Nothing to import"
+                  description="Fix the rows above in Excel and choose the file again."
+                />
+              </div>
+            )}
+          {!result.committed && (result.ready > 0 || result.toUpdate > 0) && (
             <div className="mt-4 flex items-center gap-3">
               <Button
                 loading={send.isPending && send.variables?.commit === "true"}
                 disabled={send.isPending}
                 onClick={() => send.mutate({ commit: "true" })}
               >
-                Import {result.ready} students
+                {importLabel(result)}
               </Button>
               {result.skipped > 0 && (
                 <Badge tone="warning">

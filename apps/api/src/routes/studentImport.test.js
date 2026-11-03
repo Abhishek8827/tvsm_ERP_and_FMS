@@ -28,6 +28,7 @@ const users = Object.fromEntries(
 );
 function build(existing = []) {
   const saved = [];
+  const filled = [];
   const audit = [];
   const auth = {
     verifyToken: async (t) => ({ uid: t, role: t, tenantId: TENANT }),
@@ -39,18 +40,28 @@ function build(existing = []) {
     feeStore: { get: async () => null },
     chargeStore: { postMany: async () => 0 },
     studentStore: {
-      existingAdmissionNos: async () => new Set(existing),
+      existingAdmissionNos: async () =>
+        new Set(existing.map((e) => e.admissionNo ?? e)),
       findByAdmissionNos: async (_t, list) =>
-        saved
+        [...saved, ...existing.filter((e) => typeof e === "object")]
           .filter((d) => list.includes(d.admissionNo))
-          .map((d, i) => ({ ...d, _id: `s${i}` })),
+          .map((d, i) => ({ _id: `s${i}`, ...d })),
+      fillMissing: async (_t, id, patch) => {
+        filled.push({ id, patch });
+        return 1;
+      },
       createMany: async (_t, docs) => {
         saved.push(...docs);
         return docs.length;
       },
     },
   };
-  return { app: createApp(env, createLogger("silent"), auth), saved, audit };
+  return {
+    app: createApp(env, createLogger("silent"), auth),
+    saved,
+    audit,
+    filled,
+  };
 }
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 
@@ -160,15 +171,68 @@ describe("student Excel import", () => {
     });
   });
 
-  it("students that already exist are skipped, never changed (safe to run twice)", async () => {
-    const { app, saved } = build(["1053"]);
+  it("students that already exist get only their EMPTY fields filled; saved values are never replaced", async () => {
+    const { app, saved, filled, audit } = build([
+      {
+        admissionNo: "1053",
+        name: "Aarav",
+        fatherName: "Rajesh",
+        contactNo: "",
+      },
+    ]);
     const file = await xlsx([
-      row({ "SCH.": 1053, "STUDENT'S NAME": "Aarav", CLASS: "LKG" }),
+      row({
+        "SCH.": 1053,
+        "STUDENT'S NAME": "Someone Else",
+        CLASS: "UKG",
+        "FATHER NAME": "Different Father",
+        "CONTACT NO.": "9876543210",
+        "MOTHER NAME": "Sita",
+      }),
+    ]);
+    const check = await send(app, file, false);
+    expect(check.body).toMatchObject({
+      ready: 0,
+      toUpdate: 1,
+      updated: 0,
+      skipped: 0,
+    });
+    expect(filled).toHaveLength(0); // checking saves nothing
+    const res = await send(app, file, true);
+    expect(res.body).toMatchObject({ created: 0, updated: 1, skipped: 0 });
+    expect(saved).toHaveLength(0);
+    expect(filled).toHaveLength(1);
+    // name, class and the saved father name are untouched; only the two empty fields are filled
+    expect(filled[0].patch).toEqual({
+      contactNo: "9876543210",
+      motherName: "Sita",
+    });
+    expect(audit.at(-1).newValue).toMatchObject({
+      updated: 1,
+      fieldsFilled: { contactNo: 1, motherName: 1 },
+    });
+  });
+
+  it("a student that already has everything the file offers is left alone (safe to run twice)", async () => {
+    const { app, filled } = build([
+      { admissionNo: "1053", name: "Aarav", fatherName: "Rajesh" },
+    ]);
+    const file = await xlsx([
+      row({
+        "SCH.": 1053,
+        "STUDENT'S NAME": "Aarav",
+        CLASS: "LKG",
+        "FATHER NAME": "Rajesh",
+      }),
     ]);
     const res = await send(app, file, true);
-    expect(res.body).toMatchObject({ created: 0, skipped: 1 });
-    expect(res.body.errors[0].message).toMatch(/already exists/);
-    expect(saved).toHaveLength(0);
+    expect(res.body).toMatchObject({
+      created: 0,
+      updated: 0,
+      unchanged: 1,
+      skipped: 0,
+    });
+    expect(filled).toHaveLength(0);
   });
 
   it("rejects a file without the required columns and a non-Excel file", async () => {

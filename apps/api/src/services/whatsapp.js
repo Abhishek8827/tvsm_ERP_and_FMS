@@ -68,7 +68,7 @@ export function receiptParams(r) {
     r.number,
     istDate(r.issuedAt),
     rupees(r.totalPaise),
-    MODE[r.mode] ?? r.mode,
+    r.mode === "split" ? "Cash + UPI" : (MODE[r.mode] ?? r.mode),
     rupees(r.dueAfterPaise),
   ].map(clean);
 }

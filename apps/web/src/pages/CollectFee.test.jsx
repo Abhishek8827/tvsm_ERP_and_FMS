@@ -146,6 +146,51 @@ describe("Collect Fee", () => {
     });
   });
 
+  it("split payment: cash + UPI must add up to the total, then posts payments[]", async () => {
+    api.mockImplementation(async (url) => {
+      if (String(url).startsWith("/api/students?")) return { rows: [student] };
+      if (url === "/api/banks/options") return banksReply();
+      if (url === "/api/receipts")
+        return { id: "r1", number: "S-FY2026-27/0001" };
+      return dues();
+    });
+    show();
+    await pickStudent();
+    await userEvent.type(await screen.findByLabelText(/Tuition fees/), "3500");
+    await userEvent.click(screen.getByLabelText(/more than one mode/));
+    await userEvent.type(screen.getByLabelText(/Cash amount/), "2000");
+    await userEvent.type(screen.getByLabelText(/UPI \/ QR amount/), "1000");
+    await userEvent.type(
+      screen.getByLabelText(/UPI \/ QR reference/),
+      "UTR123456",
+    );
+    expect(
+      await screen.findByText(/Still to assign: ₹500/),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Collect/ })).toBeDisabled();
+    await userEvent.clear(screen.getByLabelText(/UPI \/ QR amount/));
+    await userEvent.type(screen.getByLabelText(/UPI \/ QR amount/), "1500");
+    expect(
+      await screen.findByText("Payments match the total."),
+    ).toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: /Collect/ })).toBeEnabled(),
+    );
+    await userEvent.click(screen.getByRole("button", { name: /Collect/ }));
+    await screen.findByText("Receipt page");
+    const post = api.mock.calls.find((c) => c[0] === "/api/receipts");
+    expect(post[1].body.mode).toBeUndefined();
+    expect(post[1].body.payments).toEqual([
+      { mode: "cash", amountPaise: 200000 },
+      {
+        mode: "upi",
+        amountPaise: 150000,
+        bankId: "b1",
+        reference: "UTR123456",
+      },
+    ]);
+  });
+
   it("without a default bank the Cashier must choose one for UPI / QR", async () => {
     api.mockImplementation(async (url) => {
       if (String(url).startsWith("/api/students?")) return { rows: [student] };

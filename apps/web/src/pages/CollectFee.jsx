@@ -286,6 +286,10 @@ function CollectForm({ student, kind }) {
     received: "",
     reference: "",
     bankId: "", // '' = use the bank the Admin set as default for this mode
+    // Split payment: one receipt paid with cash + one or more UPI / QR parts.
+    split: false,
+    cashPart: "",
+    upiParts: [{ amount: "", bankId: "", reference: "" }],
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
@@ -326,19 +330,53 @@ function CollectForm({ student, kind }) {
       p.tc.paise +
       p.other.paise +
       p.late.paise;
-  const needsRef = f.mode !== "cash";
+  const needsRef = f.mode !== "cash" && !f.split;
   // UPI / QR money lands in a bank account: the Cashier picks it (the Admin's default is preselected).
   const banks = useQuery({
     queryKey: ["banks", "options"],
     queryFn: () => api("/api/banks/options"),
-    enabled: needsRef,
+    enabled: needsRef || f.split,
   });
   const bankList = banks.data?.banks ?? [];
+  const defaultBank =
+    bankList.find((b) => b.defaultForModes.includes("upi"))?.id || "";
   const bankId =
     f.bankId ||
     bankList.find((b) => b.defaultForModes.includes(f.mode))?.id ||
     "";
+  // Split payment parts (amounts are typed in rupees, like every other box on this screen).
+  const cashSplit = parse(f.cashPart);
+  const upiSplit = f.upiParts.map((u) => ({
+    ...u,
+    amt: parse(u.amount),
+    bank: u.bankId || defaultBank,
+  }));
+  const splitBad =
+    f.split && (cashSplit.error || upiSplit.some((u) => u.amt.error));
+  const splitSum =
+    f.split && !splitBad
+      ? cashSplit.paise + upiSplit.reduce((n, u) => n + u.amt.paise, 0)
+      : 0;
+  const splitLeft =
+    f.split && total !== null && !splitBad ? total - splitSum : null;
+  const setPart = (i, patch) =>
+    set({
+      upiParts: f.upiParts.map((u, j) => (j === i ? { ...u, ...patch } : u)),
+    });
+  const splitMissing =
+    (splitBad && "Enter valid amounts in the payment boxes.") ||
+    (splitLeft !== null &&
+      splitLeft !== 0 &&
+      (splitLeft > 0
+        ? `Payments are short by ${formatINR(splitLeft, { hideZeroPaise: true })}.`
+        : `Payments are more than the total by ${formatINR(-splitLeft, { hideZeroPaise: true })}.`)) ||
+    (upiSplit.some((u) => u.amt.paise > 0 && !u.bank) &&
+      "Choose the bank account for each UPI part.") ||
+    (upiSplit.some((u) => u.amt.paise > 0 && u.reference.trim().length < 4) &&
+      "Enter the UPI / QR reference for each UPI part.") ||
+    null;
   const missing =
+    (f.split && splitMissing) ||
     (needsRef &&
       !bankId &&
       "Choose the bank account that received the money.") ||
@@ -362,9 +400,27 @@ function CollectForm({ student, kind }) {
         body: {
           studentId: student.id,
           kind,
-          mode: f.mode,
-          reference: needsRef ? f.reference.trim() : undefined,
-          bankId: needsRef ? bankId : undefined,
+          ...(f.split
+            ? {
+                payments: [
+                  ...(cashSplit.paise > 0
+                    ? [{ mode: "cash", amountPaise: cashSplit.paise }]
+                    : []),
+                  ...upiSplit
+                    .filter((u) => u.amt.paise > 0)
+                    .map((u) => ({
+                      mode: "upi",
+                      amountPaise: u.amt.paise,
+                      bankId: u.bank,
+                      reference: u.reference.trim(),
+                    })),
+                ],
+              }
+            : {
+                mode: f.mode,
+                reference: needsRef ? f.reference.trim() : undefined,
+                bankId: needsRef ? bankId : undefined,
+              }),
           input: {
             oldPaise: p.old.paise,
             newPaise: p.current.paise,
@@ -447,7 +503,7 @@ function CollectForm({ student, kind }) {
   const shortBy = receivedPaise !== null && total > 0 && receivedPaise < total;
   const change =
     receivedPaise !== null && total !== null ? receivedPaise - total : null;
-  const cashShort = f.mode === "cash" && shortBy;
+  const cashShort = f.mode === "cash" && !f.split && shortBy;
   const blocker =
     missing || (cashShort && "Amount received is less than the total.") || null;
   const ready = canSubmit && !cashShort && !(received && received.error);
@@ -589,13 +645,114 @@ function CollectForm({ student, kind }) {
               Total to collect:{" "}
               {total === null ? "-" : formatINR(total, { hideZeroPaise: true })}
             </p>
-            <Select
-              label="Payment mode"
-              options={MODES}
-              value={f.mode}
-              onChange={(e) => set({ mode: e.target.value, bankId: "" })}
-            />
-            {f.mode === "cash" && (
+            <label className="flex items-center gap-2 text-sm text-ink">
+              <input
+                type="checkbox"
+                checked={f.split}
+                onChange={(e) => set({ split: e.target.checked })}
+              />
+              Pay with more than one mode (split payment)
+            </label>
+            {f.split && (
+              <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
+                <Input
+                  label="Cash amount (₹)"
+                  inputMode="decimal"
+                  placeholder="0"
+                  value={f.cashPart}
+                  error={cashSplit.error}
+                  onChange={(e) => set({ cashPart: e.target.value })}
+                />
+                {f.upiParts.map((u, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-col gap-2 border-t border-line pt-3"
+                  >
+                    <Input
+                      label={`UPI / QR amount ${f.upiParts.length > 1 ? i + 1 : ""} (₹)`}
+                      inputMode="decimal"
+                      placeholder="0"
+                      value={u.amount}
+                      error={upiSplit[i].amt.error}
+                      onChange={(e) => setPart(i, { amount: e.target.value })}
+                    />
+                    <Select
+                      label="Bank account"
+                      value={u.bankId || defaultBank}
+                      onChange={(e) => setPart(i, { bankId: e.target.value })}
+                      options={[
+                        {
+                          value: "",
+                          label: banks.isPending
+                            ? "Loading banks..."
+                            : bankList.length
+                              ? "Choose a bank"
+                              : "No bank account yet. Ask the Admin to add one.",
+                        },
+                        ...bankList.map((b) => ({
+                          value: b.id,
+                          label: `${b.name}${b.last4 ? ` ••••${b.last4}` : ""}`,
+                        })),
+                      ]}
+                    />
+                    <Input
+                      label="UPI / QR reference no."
+                      value={u.reference}
+                      onChange={(e) =>
+                        setPart(i, { reference: e.target.value })
+                      }
+                    />
+                    {f.upiParts.length > 1 && (
+                      <Button
+                        variant="secondary"
+                        onClick={() =>
+                          set({
+                            upiParts: f.upiParts.filter((_, j) => j !== i),
+                          })
+                        }
+                      >
+                        Remove this UPI part
+                      </Button>
+                    )}
+                  </div>
+                ))}
+                {f.upiParts.length < 3 && (
+                  <Button
+                    variant="secondary"
+                    onClick={() =>
+                      set({
+                        upiParts: [
+                          ...f.upiParts,
+                          { amount: "", bankId: "", reference: "" },
+                        ],
+                      })
+                    }
+                  >
+                    Add another UPI / QR part
+                  </Button>
+                )}
+                {splitLeft !== null && (
+                  <p
+                    className={`text-sm font-medium ${splitLeft === 0 ? "text-ink" : "text-danger"}`}
+                  >
+                    {splitLeft === 0
+                      ? "Payments match the total."
+                      : splitLeft > 0
+                        ? `Still to assign: ${formatINR(splitLeft, { hideZeroPaise: true })}`
+                        : `Over by: ${formatINR(-splitLeft, { hideZeroPaise: true })}`}
+                  </p>
+                )}
+              </div>
+            )}
+            {!f.split && (
+              <Select
+                label="Payment mode"
+                options={MODES}
+                value={f.mode}
+                onChange={(e) => set({ mode: e.target.value, bankId: "" })}
+              />
+            )}
+            {f.mode === "cash" && !f.split && (
               <>
                 <Input
                   label="Amount received (₹)"

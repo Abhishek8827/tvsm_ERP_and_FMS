@@ -31,6 +31,7 @@ import { ReceiptView } from "./pages/ReceiptView";
 import { Receipts } from "./pages/Receipts";
 import { ImportStudents } from "./pages/ImportStudents";
 import { Login } from "./pages/Login";
+import { StudentFeeDetails } from "./pages/StudentFeeDetails";
 import { StudentProfile } from "./pages/StudentProfile";
 import { StudentForm } from "./pages/StudentForm";
 import { Students } from "./pages/Students";
@@ -131,6 +132,10 @@ export function App() {
           <Route path="/expenses/:id" element={<ExpenseVoucher />} />
         )}
         <Route path="/fees-database" element={<FeesDatabase />} />
+        <Route
+          path="/fees-database/students/:id"
+          element={<StudentFeeDetails />}
+        />
         {(role === "admin" || role === "principal") && (
           <Route path="/rebates" element={<Rebates />} />
         )}

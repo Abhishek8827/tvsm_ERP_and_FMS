@@ -98,6 +98,7 @@ function build({ charges: custom, bus = false, receipts = [] } = {}) {
         return receipts;
       },
     },
+    oldFeeStore: { listForStudent: async () => [] },
     rebateStore: {
       activeForStudents: async () => [],
       create: async ({ build: b, reason, kind }) => {

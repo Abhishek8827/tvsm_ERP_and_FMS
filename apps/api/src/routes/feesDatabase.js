@@ -22,6 +22,8 @@ import {
   totalsOf,
 } from "../services/feesDatabase.js";
 import { AppError, notFound } from "../utils/errors.js";
+import { shapeAdjustment } from "./oldFeeAdjustments.js";
+import { splitsOf } from "../services/receiptSplits.js";
 
 const XLSX =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
@@ -407,7 +409,7 @@ export function feesDatabaseRouter(deps, authenticate) {
       );
       if (!student) throw notFound("Student");
       const chart = await deps.feeStore.get(tenantId, fy);
-      const [chargeRows, counted, all] = await Promise.all([
+      const [chargeRows, counted, all, corrections] = await Promise.all([
         deps.chargeStore.listForStudent(tenantId, student._id, fy),
         deps.receiptStore.listForStudent(tenantId, student._id, fy),
         deps.receiptStore.listByStudent(tenantId, student._id, {
@@ -416,6 +418,7 @@ export function feesDatabaseRouter(deps, authenticate) {
           to: q.to,
           mode: q.mode,
         }),
+        deps.oldFeeStore.listForStudent(tenantId, student._id, fy),
       ]);
       const charges = chargeRows.map((c) => ({
         id: String(c._id),
@@ -424,6 +427,11 @@ export function feesDatabaseRouter(deps, authenticate) {
         dueDate: c.dueDate,
         amount: c.amountPaise,
       }));
+      // What was IMPORTED as the old fee (before any Admin correction), kept apart from today's total.
+      const imported = (head) =>
+        chargeRows
+          .filter((c) => c.head === head)
+          .reduce((n, c) => n + (c.importedPaise ?? c.amountPaise), 0);
       const dues = computeDues({
         charges,
         credits: creditsFromReceipts(counted),
@@ -477,6 +485,12 @@ export function feesDatabaseRouter(deps, authenticate) {
           transportPaise: transport,
           otherPaise: r.totalPaise - school - transport,
           mode: r.mode,
+          payments: splitsOf(r).map((p) => ({
+            mode: p.mode,
+            amountPaise: p.amountPaise,
+            reference: p.reference ?? null,
+            bankName: p.bankName ?? null,
+          })),
           reference: r.reference ?? null,
           bankName: r.bankName ?? null,
           cashierName: r.cashierName ?? null,
@@ -516,8 +530,14 @@ export function feesDatabaseRouter(deps, authenticate) {
         },
         planPosted: charges.length > 0,
         summary: {
-          oldSchool: group(["old_fees"]),
-          oldTransport: group(["transport_old"]),
+          oldSchool: {
+            ...group(["old_fees"]),
+            importedPaise: imported("old_fees"),
+          },
+          oldTransport: {
+            ...group(["transport_old"]),
+            importedPaise: imported("transport_old"),
+          },
           currentSchool: group(["tuition", "admission", "form"]),
           currentTransport: group(["transport"]),
           totals: {
@@ -528,6 +548,7 @@ export function feesDatabaseRouter(deps, authenticate) {
             lateFeePaise: dues.totals.lateFee,
           },
         },
+        oldFeeCorrections: corrections.map(shapeAdjustment),
         payments,
         // Cancelled receipts are listed but never counted as money received.
         paymentTotals: {

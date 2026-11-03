@@ -15,10 +15,14 @@ import {
 import { requireRole } from "../middleware/requireRole.js";
 import { recordAudit } from "../services/audit.js";
 import { postAdvanceMonths } from "../services/feePlan.js";
+import {
+  finishPayments,
+  paymentFields,
+  resolvePayments,
+  splitsOf,
+} from "../services/receiptSplits.js";
 import { AppError, notFound } from "../utils/errors.js";
 
-// UPI and QR payments must carry the bank's reference so they can be matched with the statement.
-const MODES_NEEDING_REFERENCE = ["upi"];
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
 const paise = z.number().int().min(0).max(100_000_000);
 const kindField = z.enum(MODULES);
@@ -36,10 +40,8 @@ const issueBody = z.object({
     lateFeePaise: paise.optional(),
     lateFeeRemark: z.string().trim().max(200).optional(),
   }),
-  mode: z.enum(["cash", "upi"]),
-  reference: z.string().trim().max(60).optional(),
-  // Which bank account the UPI / QR money went to (compulsory for UPI / QR).
-  bankId: objectId.optional(),
+  // How it is paid: one `mode` (+ reference / bank), or `payments[]` to split between modes.
+  ...paymentFields,
 });
 const idemKey = z
   .string({ error: "Idempotency-Key header is required" })
@@ -96,6 +98,13 @@ const shapeReceipt = (r, extra = {}) => ({
   mode: r.mode,
   reference: r.reference ?? null,
   bankName: r.bankName ?? null,
+  // Always a list (older single-mode receipts are shown as one payment).
+  payments: splitsOf(r).map((p) => ({
+    mode: p.mode,
+    amountPaise: p.amountPaise,
+    reference: p.reference ?? null,
+    bankName: p.bankName ?? null,
+  })),
   cashierName: r.cashierName ?? null,
   issuedAt: r.issuedAt,
   status: r.status ?? statusOf(r.cancellation),
@@ -215,34 +224,12 @@ export function receiptsRouter(deps, authenticate) {
       try {
         const key = idemKey.parse(req.get("Idempotency-Key"));
         const body = issueBody.parse(req.body);
-        if (
-          MODES_NEEDING_REFERENCE.includes(body.mode) &&
-          (body.reference ?? "").length < 4
-        )
-          throw new AppError(
-            "REFERENCE_REQUIRED",
-            422,
-            "Enter the UPI / QR reference number.",
-            {
-              reference: "Reference number is required",
-            },
-          );
         const tenantId = req.user.tenantId;
-        let bank = null;
-        if (MODES_NEEDING_REFERENCE.includes(body.mode)) {
-          bank = body.bankId
-            ? await deps.moneyStore.findActiveBank(tenantId, body.bankId)
-            : null;
-          if (!bank)
-            throw new AppError(
-              "BANK_REQUIRED",
-              422,
-              "Choose the bank account that received the money.",
-              {
-                bankId: "Choose the bank account",
-              },
-            );
-        }
+        const payDraft = await resolvePayments({
+          body,
+          tenantId,
+          findBank: (t, id) => deps.moneyStore.findActiveBank(t, id),
+        });
         // A closed day takes no more receipts (the Admin can reopen it with a reason).
         if (await deps.dayCloseStore.isClosed(tenantId, todayIst()))
           throw new AppError(
@@ -311,10 +298,7 @@ export function receiptsRouter(deps, authenticate) {
               dueAfterPaise: plan.dueAfterPaise,
               dueAfterOldPaise: plan.dueAfterOldPaise,
               dueAfterNewPaise: plan.dueAfterNewPaise,
-              mode: body.mode,
-              reference: body.mode === "cash" ? undefined : body.reference,
-              bankId: bank ? String(bank._id) : undefined,
-              bankName: bank?.name,
+              ...finishPayments(payDraft, plan.totalPaise),
               cashierId: String(req.user.id),
               cashierName: req.user.name,
               student: {
@@ -342,6 +326,10 @@ export function receiptsRouter(deps, authenticate) {
                   kind: saved.kind,
                   totalPaise: saved.totalPaise,
                   mode: saved.mode,
+                  payments: saved.payments?.map((p) => ({
+                    mode: p.mode,
+                    amountPaise: p.amountPaise,
+                  })),
                   studentId: String(saved.studentId),
                 },
               },
@@ -472,8 +460,17 @@ export function receiptsRouter(deps, authenticate) {
           sum(r, ["tc"]),
           sum(r, ["other"]),
           rupees(r.totalPaise),
-          r.mode.toUpperCase(),
-          r.reference ?? "",
+          splitsOf(r)
+            .map((p) =>
+              r.mode === "split"
+                ? `${p.mode.toUpperCase()} ${p.amountPaise / 100}`
+                : p.mode.toUpperCase(),
+            )
+            .join(" + "),
+          splitsOf(r)
+            .map((p) => p.reference ?? "")
+            .filter(Boolean)
+            .join(", "),
           r.cashierName ?? "",
           r.status === "cancelled" ? "Cancelled" : "Valid",
         ]);

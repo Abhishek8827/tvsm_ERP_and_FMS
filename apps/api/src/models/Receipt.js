@@ -20,6 +20,17 @@ const lineSchema = new mongoose.Schema(
   { _id: false, tenantScope: false },
 );
 
+const paymentSchema = new mongoose.Schema(
+  {
+    mode: { type: String, enum: ["cash", "upi"], required: true },
+    amountPaise: { type: Number, required: true, min: 1 },
+    reference: { type: String },
+    bankId: { type: String },
+    bankName: { type: String },
+  },
+  { _id: false, tenantScope: false },
+);
+
 const receiptSchema = new mongoose.Schema(
   {
     kind: {
@@ -55,7 +66,10 @@ const receiptSchema = new mongoose.Schema(
     // Split of dueAfterPaise for the printed receipt (older receipts do not have it).
     dueAfterOldPaise: { type: Number, min: 0 },
     dueAfterNewPaise: { type: Number, min: 0 },
-    mode: { type: String, enum: ["cash", "upi"], required: true },
+    // 'split' = paid with more than one mode; the money is in `payments` (older receipts have
+    // no `payments`, only this single mode / bank).
+    mode: { type: String, enum: ["cash", "upi", "split"], required: true },
+    payments: { type: [paymentSchema], default: undefined },
     reference: { type: String },
     // Which bank account a UPI / QR payment went to (Step 6). Cash has none.
     bankId: { type: String },

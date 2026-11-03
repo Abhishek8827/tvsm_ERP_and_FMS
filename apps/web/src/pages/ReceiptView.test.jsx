@@ -79,20 +79,23 @@ describe("Receipt view", () => {
   it("prints a Student copy and an Office copy with the number, title, month and total", async () => {
     api.mockResolvedValue(receipt);
     show({ fresh: true });
-    expect(await screen.findAllByText("SCHOOL FEES RECEIPT")).toHaveLength(2);
-    expect(screen.getByText("STUDENT COPY")).toBeInTheDocument();
-    expect(screen.getByText("OFFICE COPY")).toBeInTheDocument();
+    expect(await screen.findAllByText("FEE RECEIPT")).toHaveLength(2);
+    expect(screen.getByText(/STUDENT COPY/)).toBeInTheDocument();
+    expect(screen.getByText(/OFFICE COPY/)).toBeInTheDocument();
     expect(screen.getAllByText("S-FY2026-27/2054")).toHaveLength(2);
-    // The school's own letterhead (both copies): name, registration, DISE code, e-mail, mobiles.
+    // Letterhead as in the Figma receipt design: name, address, affiliation no. and school code.
     expect(
       screen.getAllByText("THAKUR VIRENDRA SINGH MEMORIAL SCHOOL"),
     ).toHaveLength(2);
-    expect(screen.getAllByText("Reg. N0. 03/04/02/22332/20")).toHaveLength(2);
-    expect(screen.getAllByText("DISE CODE - 23480513302")).toHaveLength(2);
-    expect(screen.getAllByText("M.No. - 9575926900/ 9644995511")).toHaveLength(
+    expect(
+      screen.getAllByText(
+        /MPBSE Affiliation No\. 572078 · School Code 23480513302/,
+      ),
+    ).toHaveLength(2);
+    expect(screen.getAllByText("Total received")).toHaveLength(2);
+    expect(screen.getAllByText(/Balance due after this receipt/)).toHaveLength(
       2,
     );
-    expect(screen.getAllByText("Month: June")).toHaveLength(2);
     expect(screen.queryByText("DUPLICATE")).toBeNull();
   });
 
@@ -144,7 +147,7 @@ describe("Receipt view", () => {
     expect(await screen.findByText("Receipt not found.")).toBeInTheDocument();
   });
 
-  it("shows old dues and new dues separately, and one address (village is the same thing)", async () => {
+  it("shows old dues and new dues separately, and no second village field", async () => {
     api.mockResolvedValue({
       ...receipt,
       dueAfterOldPaise: 50000,
@@ -154,7 +157,6 @@ describe("Receipt view", () => {
     show();
     expect((await screen.findAllByText(/Old Dues/)).length).toBe(2);
     expect(screen.getAllByText(/New Dues/).length).toBe(2);
-    expect(screen.getAllByText(/Add\.: Ward 4/).length).toBe(2);
     expect(screen.queryByText(/Khakner/)).not.toBeInTheDocument();
   });
 

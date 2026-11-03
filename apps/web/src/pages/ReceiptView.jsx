@@ -2,8 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
-import { classLabel, formatINR, rupeesInWords } from "@erp/shared";
-import { LETTERHEAD_CSS, letterheadLines } from "../lib/letterhead";
+import { classLabel, formatINR, rupeesInWords, SCHOOL } from "@erp/shared";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { WhatsappStatus } from "../components/WhatsappStatus";
@@ -17,10 +16,6 @@ import {
   useToast,
 } from "../components/ui";
 
-const TITLE = {
-  school: "SCHOOL FEES RECEIPT",
-  transport: "TRANSPORT FEES RECEIPT",
-};
 // Rows printed on the receipt, in the order of the school's paper receipt book.
 const ROWS = {
   school: [
@@ -49,7 +44,7 @@ const when = (iso) =>
     minute: "2-digit",
   });
 
-/** One quarter-A4 copy (Student copy or Office copy). */
+/** One copy (Student copy or Office copy), laid out like the Figma "Fee Receipt (A4 half)" design. */
 function Copy({ r, copyName, duplicate, cancelled }) {
   const rows = ROWS[r.kind];
   const amountOf = (heads) => {
@@ -58,98 +53,90 @@ function Copy({ r, copyName, duplicate, cancelled }) {
   };
   const otherLabel = r.lines.find((l) => l.head === "other")?.label;
   const s = r.student;
-  const lh = letterheadLines();
+  const periodRows = new Set(["tuition", "transport"]);
+  const shown = rows
+    .map(([key, label, heads]) => ({ key, label, amount: amountOf(heads) }))
+    .filter((x) => x.amount !== null);
   return (
     <div className="copy">
-      <div className="lh sm">
-        <div className="lh-top">
-          <img src="/logo.jpg" alt="" />
-          <div className="lh-t">
-            <span className="lh-name">{lh.name}</span>
-            <div className="lh-s">{lh.society}</div>
-            <div className="lh-s">{lh.reg}</div>
-            <div className="lh-s a">{lh.address}</div>
+      <div className="rh">
+        <img src="/logo.jpg" alt="" />
+        <div>
+          <div className="rh-name">{SCHOOL.name}</div>
+          <div className="rh-addr">
+            {SCHOOL.addressLine} · MPBSE Affiliation No. {SCHOOL.affiliationNo}{" "}
+            · School Code {SCHOOL.schoolCode}
           </div>
         </div>
-        <div className="lh-rule" />
-        <div className="lh-info">
-          {lh.info.map((t) => (
-            <span key={t}>{t}</span>
-          ))}
-        </div>
-        <div className="lh-rule" />
       </div>
-      <div className="title">{TITLE[r.kind]}</div>
+      <div className="title">FEE RECEIPT</div>
       <div className="tags">
-        <span>{copyName}</span>
+        <span>
+          {copyName} ·{" "}
+          {r.kind === "transport" ? "Transport fees" : "School fees"}
+        </span>
         {cancelled && <span className="dup">CANCELLED</span>}
         {duplicate && <span className="dup">DUPLICATE</span>}
       </div>
-      <div className="line">
+      <div className="grid2">
         <span>
-          No. <b>{r.number}</b>
-        </span>
-        <span>Date: {when(r.issuedAt)}</span>
-      </div>
-      <div className="line">
-        <span>
-          Student: <b>{s.name}</b>
+          Receipt No. <b>{r.number}</b>
         </span>
         <span>
-          Sch. <b>{s.admissionNo}</b>
+          Student <b>{s.name}</b>
         </span>
-      </div>
-      <div className="line">
+        <span>Date and time {when(r.issuedAt)}</span>
         <span>
-          Class: {classLabel(s.classKey)}
+          Admission No. <b>{s.admissionNo}</b>
+        </span>
+        <span>Academic year {r.fy}</span>
+        <span>
+          Class / Section {classLabel(s.classKey)}
           {s.section ? `-${s.section}` : ""}
         </span>
-        <span>Session: {r.fy}</span>
+        <span />
+        <span>Father&apos;s name {s.fatherName || "-"}</span>
       </div>
-      {s.fatherName && <div className="line">Father: {s.fatherName}</div>}
-      <div className="line">
-        <span>Add.: {s.address || s.village || "-"}</span>
-        <span>Mob.: {s.contactNo ?? ""}</span>
-      </div>
-      <div className="line">Month: {r.monthLabel || "-"}</div>
       <table>
         <thead>
           <tr>
-            <th style={{ width: "9%" }}>S.No</th>
-            <th>Particulars</th>
-            <th style={{ width: "28%" }}>Amount (₹)</th>
+            <th>Fee head</th>
+            <th style={{ width: "30%" }}>Period</th>
+            <th style={{ width: "24%" }}>Amount (₹)</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map(([key, label, heads], i) => {
-            const amount = amountOf(heads);
-            return (
-              <tr key={key}>
-                <td>{i + 1}</td>
-                <td>
-                  {key === "other" && otherLabel
-                    ? `Other: ${otherLabel}`
-                    : label}
-                </td>
-                <td className="num">
-                  {amount === null
-                    ? ""
-                    : formatINR(amount, { hideZeroPaise: true }).replace(
-                        "₹",
-                        "",
-                      )}
-                </td>
-              </tr>
-            );
-          })}
+          {shown.map((x) => (
+            <tr key={x.key}>
+              <td>
+                {x.key === "other" && otherLabel
+                  ? `Other: ${otherLabel}`
+                  : x.label}
+              </td>
+              <td>{periodRows.has(x.key) ? r.monthLabel || "-" : "-"}</td>
+              <td className="num">
+                {formatINR(x.amount, { hideZeroPaise: true }).replace("₹", "")}
+              </td>
+            </tr>
+          ))}
         </tbody>
       </table>
       <div className="total">
-        <span>Total Fees Paid</span>
+        <span>Total received</span>
         <b>{formatINR(r.totalPaise, { hideZeroPaise: true })}</b>
       </div>
       <div className="words">{rupeesInWords(r.totalPaise)}</div>
       <div className="line">
+        <span>
+          Payment mode <b>{MODE_LABEL[r.mode]}</b>
+        </span>
+        <span>{r.reference ? `Reference ${r.reference}` : ""}</span>
+        <span>
+          Balance due after this receipt{" "}
+          <b>{formatINR(r.dueAfterPaise ?? 0, { hideZeroPaise: true })}</b>
+        </span>
+      </div>
+      <div className="line sub">
         <span>
           Old Dues:{" "}
           <b>{formatINR(r.dueAfterOldPaise ?? 0, { hideZeroPaise: true })}</b>
@@ -159,20 +146,12 @@ function Copy({ r, copyName, duplicate, cancelled }) {
           <b>{formatINR(r.dueAfterNewPaise ?? 0, { hideZeroPaise: true })}</b>
         </span>
       </div>
-      <div className="line">
-        <span />
-        <span>
-          Mode: {MODE_LABEL[r.mode]}
-          {r.reference ? ` · Ref: ${r.reference}` : ""}
-        </span>
+      <div className="note">
+        Fees once paid are non-refundable except as per school policy.
+        {r.cashierName ? ` Cashier: ${r.cashierName}` : ""}
       </div>
-      <div className="note">Note: Fees once paid are non-refundable.</div>
-      <div className="signs">
-        <span>Depositor&apos;s Sign</span>
-        <span>
-          Authorised Sign
-          {r.cashierName ? <small> ({r.cashierName})</small> : null}
-        </span>
+      <div className="note">
+        Computer generated receipt. Reprints are marked DUPLICATE.
       </div>
     </div>
   );
@@ -180,22 +159,27 @@ function Copy({ r, copyName, duplicate, cancelled }) {
 
 // Layout of the receipt, used on screen AND inside the clean print page.
 const SHEET_CSS = `
-${LETTERHEAD_CSS}
 .sheet{display:flex;width:210mm;height:148.5mm;background:#fff;color:#000;font-size:8.5pt;line-height:1.25}
 .copy{width:105mm;height:148.5mm;padding:5mm;box-sizing:border-box;border-right:1px dashed #666;display:flex;flex-direction:column;gap:1.4mm}
 .copy:last-child{border-right:0}
-.title{text-align:center;font-weight:700;font-size:10pt;border:1px solid #000;padding:1mm 0;letter-spacing:.3px}
+.rh{display:flex;align-items:center;gap:2mm;border-bottom:1.5px solid #1e3a8a;padding-bottom:1.5mm}
+.rh img{width:11mm;height:11mm;object-fit:contain;flex:none}
+.rh-name{font-weight:800;font-size:9pt;color:#1e3a8a;line-height:1.15}
+.rh-addr{font-size:6pt;color:#333;line-height:1.25}
+.title{text-align:center;font-weight:700;font-size:10pt;letter-spacing:.6px}
 .tags{display:flex;justify-content:space-between;font-size:7.5pt;font-weight:700}
 .dup{border:1.5px solid #b00;color:#b00;padding:0 2mm;transform:rotate(-4deg)}
-.line{display:flex;justify-content:space-between;gap:2mm}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:.6mm 3mm;font-size:7.8pt}
+.line{display:flex;justify-content:space-between;gap:2mm;font-size:7.8pt}
+.line.sub{font-size:7pt;color:#333}
 table{width:100%;border-collapse:collapse;font-size:8pt}
 th,td{border:1px solid #000;padding:.7mm 1.2mm}
-th{text-align:left}
+th{text-align:left;background:#eef2ff}
 .num{text-align:right}
 .total{display:flex;justify-content:space-between;border:1px solid #000;padding:1mm 1.5mm;font-size:9.5pt}
 .words{font-size:7.5pt;font-style:italic}
-.note{font-size:7pt}
-.signs{margin-top:auto;display:flex;justify-content:space-between;font-size:7.5pt;padding-top:7mm}
+.note{font-size:6.5pt;color:#333}
+.note:last-child{margin-top:auto}
 `;
 // Only for the clean print page: A4 sheet with no margins, nothing else.
 const PAGE_CSS = `@page{size:A4 portrait;margin:0}html,body{margin:0;background:#fff}`;

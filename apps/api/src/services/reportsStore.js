@@ -3,11 +3,13 @@ import { Charge } from "../models/Charge.js";
 import { ExpensePayment } from "../models/ExpensePayment.js";
 import { ExpenseVoucher } from "../models/ExpenseVoucher.js";
 import { LedgerEntry } from "../models/LedgerEntry.js";
+import { OldFeeAdjustment } from "../models/OldFeeAdjustment.js";
 import { PettyEntry } from "../models/PettyEntry.js";
 import { Rebate } from "../models/Rebate.js";
 import { Receipt } from "../models/Receipt.js";
 import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
 import { ReportSettings } from "../models/ReportSettings.js";
+import { SPLIT_STAGES, splitsOf } from "./receiptSplits.js";
 
 const EXPENSE_TYPES = ["expense_payment", "payment_reversal"];
 const BEGINNING = "2000-01-01";
@@ -144,10 +146,11 @@ export function makeReportsStore() {
               issuedAt: { $lt: istStartOfDay(addDaysToDateString(asOn, 1)) },
             },
           },
+          ...SPLIT_STAGES,
           {
             $group: {
-              _id: { mode: "$mode", bankId: "$bankId" },
-              paise: { $sum: "$totalPaise" },
+              _id: { mode: "$pay.mode", bankId: "$pay.bankId" },
+              paise: { $sum: "$pay.amountPaise" },
             },
           },
         ]),
@@ -179,10 +182,15 @@ export function makeReportsStore() {
         { $match: { "c.dueDate": { $lte: asOn } } },
         { $group: { _id: null, paise: { $sum: `$${lines}.amountPaise` } } },
       ];
-      const [billed, paid, rebated] = await Promise.all([
+      const [billed, corrected, paid, rebated] = await Promise.all([
         Charge.aggregate([
           { $match: { tenantId, dueDate: { $lte: asOn } } },
           { $group: { _id: null, paise: { $sum: "$amountPaise" } } },
+        ]),
+        // The Admin's old-fee corrections (positive or negative) on top of the imported charges.
+        OldFeeAdjustment.aggregate([
+          { $match: { tenantId, dueDate: { $lte: asOn } } },
+          { $group: { _id: null, paise: { $sum: "$deltaPaise" } } },
         ]),
         Receipt.aggregate([
           { $match: { ...live, issuedAt: { $lt: end } } },
@@ -198,7 +206,8 @@ export function makeReportsStore() {
       ]);
       return Math.max(
         0,
-        (billed[0]?.paise ?? 0) -
+        (billed[0]?.paise ?? 0) +
+          (corrected[0]?.paise ?? 0) -
           (paid[0]?.paise ?? 0) -
           (rebated[0]?.paise ?? 0),
       );
@@ -279,21 +288,24 @@ export function makeReportsStore() {
         payment_reversal: "Expense payment reversed",
       };
       return [
-        ...receipts.map((r) => ({
-          id: String(r._id),
-          at: r.issuedAt,
-          date: undefined,
-          type: "Fee receipt",
-          ref: r.number,
-          particulars:
-            `${r.student?.name ?? ""} (${r.student?.admissionNo ?? ""})`.trim(),
-          account:
-            r.mode === "cash"
-              ? "Cash"
-              : (r.bankName ?? "Online (no bank chosen)"),
-          inPaise: r.totalPaise,
-          outPaise: 0,
-        })),
+        // One Day Book line per payment, so each account's money is on its own line.
+        ...receipts.flatMap((r) =>
+          splitsOf(r).map((s, i) => ({
+            id: `${r._id}${i ? `-${i}` : ""}`,
+            at: r.issuedAt,
+            date: undefined,
+            type: "Fee receipt",
+            ref: r.number,
+            particulars:
+              `${r.student?.name ?? ""} (${r.student?.admissionNo ?? ""})`.trim(),
+            account:
+              s.mode === "cash"
+                ? "Cash"
+                : (s.bankName ?? "Online (no bank chosen)"),
+            inPaise: s.amountPaise,
+            outPaise: 0,
+          })),
+        ),
         ...ledger.map((e) => {
           const p = pay.get(String(e.refId));
           const q = pet.get(String(e.refId));

@@ -23,6 +23,7 @@ import { LedgerEntry } from "../models/LedgerEntry.js";
 import { PettyEntry } from "../models/PettyEntry.js";
 import { Receipt } from "../models/Receipt.js";
 import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
+import { SPLIT_STAGES } from "./receiptSplits.js";
 
 const isDuplicateKey = (err) => err?.code === 11000;
 const isRetryable = (err) =>
@@ -83,10 +84,11 @@ async function receiptTotals(tenantId, session) {
     .lean();
   const rows = await Receipt.aggregate([
     { $match: { tenantId, _id: { $nin: gone.map((g) => g.receiptId) } } },
+    ...SPLIT_STAGES,
     {
       $group: {
-        _id: { mode: "$mode", bankId: "$bankId" },
-        paise: { $sum: "$totalPaise" },
+        _id: { mode: "$pay.mode", bankId: "$pay.bankId" },
+        paise: { $sum: "$pay.amountPaise" },
       },
     },
   ]).session(session);

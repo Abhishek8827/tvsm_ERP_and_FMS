@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { Outlet, useLocation } from "react-router-dom";
-import { navForRole, navLayoutForRole, SCHOOL } from "@erp/shared";
+import { Link, Outlet, useLocation } from "react-router-dom";
+import { navLayoutForRole, SCHOOL } from "@erp/shared";
 import { useAuth } from "../auth/AuthContext";
 import { NavGroup, NavItem } from "../components/ui";
 import { Clock } from "./Clock";
 import { Footer } from "./Footer";
 import { firstName, greetingFor } from "./greeting";
-import { NavSearch } from "./NavSearch";
 
 const ROLE_LABEL = {
   admin: "Admin",
@@ -54,6 +53,51 @@ function Hamburger({ className = "", ...props }) {
           strokeLinecap="round"
         />
       </svg>
+    </button>
+  );
+}
+
+function PinIcon() {
+  return (
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <path
+        d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6zM12 15v5"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Pin icon + label. Pinned = the sidebar stays open; unpinned = it hides and floats on demand. */
+function PinButton({ pinned, className = "", onClick }) {
+  return (
+    <button
+      type="button"
+      aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
+      aria-pressed={pinned}
+      title={
+        pinned
+          ? "Unpin sidebar (it will hide by itself)"
+          : "Pin sidebar (keep it open)"
+      }
+      onClick={onClick}
+      className={`items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold uppercase tracking-wider text-white transition-colors min-h-10 ${
+        pinned
+          ? "border-white/40 bg-white/20"
+          : "border-white/25 text-white/80 hover:bg-white/10"
+      } ${className}`}
+    >
+      <PinIcon />
+      {pinned ? "Pinned" : "Pin sidebar"}
     </button>
   );
 }
@@ -190,6 +234,7 @@ export function AppShell() {
           aria-label="Sidebar"
           className="hidden w-64 shrink-0 flex-col gap-3 px-3 pb-4 pt-4 md:flex"
         >
+          <PinButton pinned className="flex" onClick={toggleSidebar} />
           {menu}
           {account}
         </aside>
@@ -207,17 +252,15 @@ export function AppShell() {
             id="mobile-menu"
             className="relative flex h-full w-72 max-w-[85%] flex-col gap-3 bg-linear-to-b from-sidebar to-brand px-3 pb-4 pt-4"
           >
-            <button
-              type="button"
+            <PinButton
+              pinned={false}
+              className="hidden md:flex"
               onClick={() => {
                 write(SIDEBAR_KEY, false);
                 setHidden(false);
                 setDrawer(false);
               }}
-              className="hidden min-h-10 items-center justify-center rounded-xl border border-white/25 px-3 text-xs font-semibold uppercase tracking-wider text-white/80 hover:bg-white/10 md:flex"
-            >
-              Pin sidebar
-            </button>
+            />
             {menu}
             {account}
           </div>
@@ -256,16 +299,34 @@ export function AppShell() {
             <span className="hidden sm:inline">{SCHOOL.name}</span>
           </h1>
           <div className="flex min-w-0 items-center justify-end gap-3">
-            <NavSearch
-              items={navForRole(role)}
-              className="hidden w-44 xl:block 2xl:w-56"
-            />
+            <Link
+              to="/"
+              aria-label="Home"
+              title="Home: go to the Dashboard"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/15"
+            >
+              <svg
+                width="22"
+                height="22"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="M4 11l8-7 8 7M6 10v10h4v-6h4v6h4V10"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </Link>
             <div className="hidden sm:block">
               <Clock />
             </div>
           </div>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-4xl md:rounded-tr-none">
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-[2rem] md:rounded-tr-none">
           <main className="min-w-0 flex-1 p-4 md:p-8">
             <Outlet />
           </main>

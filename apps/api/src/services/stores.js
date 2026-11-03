@@ -748,6 +748,40 @@ export function makeReceiptStore() {
         .lean();
       return [...rows, ...(await rebateCredits(tenantId, studentId, fy))];
     },
+    // Student fee details: EVERY receipt of one student (cancelled ones too, with who cancelled
+    // and why), newest first. Cancelled receipts are marked so they are never counted as money in.
+    async listByStudent(tenantId, studentId, { fy, from, to, mode } = {}) {
+      const match = { tenantId, studentId };
+      if (fy) match.fy = fy;
+      if (mode) match.mode = mode;
+      if (from || to) {
+        match.issuedAt = {};
+        if (from) match.issuedAt.$gte = istStartOfDay(from);
+        if (to) match.issuedAt.$lt = istStartOfDay(addDaysToDateString(to, 1));
+      }
+      const rows = await Receipt.find(match)
+        .sort({ issuedAt: -1, seq: -1 })
+        .limit(500)
+        .lean();
+      const marks = await ReceiptCancellation.find({
+        tenantId,
+        receiptId: { $in: rows.map((r) => r._id) },
+        status: { $in: ["requested", "cancelled"] },
+      }).lean();
+      const byReceipt = new Map(marks.map((m) => [String(m.receiptId), m]));
+      return rows.map((r) => {
+        const c = byReceipt.get(String(r._id));
+        return {
+          ...r,
+          status: !c
+            ? "valid"
+            : c.status === "cancelled"
+              ? "cancelled"
+              : "cancel_requested",
+          cancellation: c ?? null,
+        };
+      });
+    },
     // Fees Database: payment lines of every receipt that still counts, for many students at once.
     async linesForStudents(tenantId, studentIds, fy) {
       const gone = await cancelledReceiptIds(tenantId);

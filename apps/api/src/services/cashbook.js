@@ -5,6 +5,8 @@
  *  (per bank), 6 transport vendor account.
  * Identity that always holds for an account:  closing = opening + receipts + other - expenses.
  */
+import { splitsOf } from "./receiptSplits.js";
+
 const sum = (rows, f) => rows.reduce((n, r) => n + f(r), 0);
 const EXPENSE_TYPES = ["expense_payment", "payment_reversal"];
 
@@ -30,13 +32,22 @@ export function buildCashbook({
     classKey: r.student?.classKey ?? "",
     section: r.student?.section ?? "",
     name: r.student?.name ?? "",
-    cashPaise: r.mode === "cash" ? r.totalPaise : 0,
-    onlinePaise: r.mode === "cash" ? 0 : r.totalPaise,
+    cashPaise: sum(
+      splitsOf(r).filter((s) => s.mode === "cash"),
+      (s) => s.amountPaise,
+    ),
+    onlinePaise: sum(
+      splitsOf(r).filter((s) => s.mode !== "cash"),
+      (s) => s.amountPaise,
+    ),
     mode: r.mode,
+    // bank names of every online payment (a split receipt can have more than one)
     bankName:
-      r.mode === "cash"
-        ? null
-        : (r.bankName ?? bankName.get(String(r.bankId)) ?? null),
+      splitsOf(r)
+        .filter((s) => s.mode !== "cash")
+        .map((s) => s.bankName ?? bankName.get(String(s.bankId)) ?? null)
+        .filter(Boolean)
+        .join(", ") || null,
     duePaise: r.dueAfterPaise ?? 0,
   });
   const section = (kind) => {
@@ -95,9 +106,10 @@ export function buildCashbook({
       closingPaise: open + receiptPaise + other - spent,
     };
   };
+  const allSplits = receipts.flatMap((r) => splitsOf(r));
   const cashReceipts = sum(
-    receipts.filter((r) => r.mode === "cash"),
-    (r) => r.totalPaise,
+    allSplits.filter((s) => s.mode === "cash"),
+    (s) => s.amountPaise,
   );
   const cash = block("cash", cashReceipts);
 
@@ -107,12 +119,12 @@ export function buildCashbook({
     if (k.startsWith("bank:")) bankIds.add(k.slice(5));
   for (const e of ledgerDay)
     if (e.account.startsWith("bank:")) bankIds.add(e.account.slice(5));
-  for (const r of receipts)
-    if (r.mode !== "cash" && r.bankId) bankIds.add(String(r.bankId));
+  for (const s of allSplits)
+    if (s.mode !== "cash" && s.bankId) bankIds.add(String(s.bankId));
   const banksOut = [...bankIds].map((id) => {
     const rec = sum(
-      receipts.filter((r) => r.mode !== "cash" && String(r.bankId) === id),
-      (r) => r.totalPaise,
+      allSplits.filter((s) => s.mode !== "cash" && String(s.bankId) === id),
+      (s) => s.amountPaise,
     );
     return {
       id,
@@ -124,8 +136,8 @@ export function buildCashbook({
     banks: banksOut,
     // UPI / QR receipts with no bank chosen (old receipts) are not in any bank's balance.
     unassignedPaise: sum(
-      receipts.filter((r) => r.mode !== "cash" && !r.bankId),
-      (r) => r.totalPaise,
+      allSplits.filter((s) => s.mode !== "cash" && !s.bankId),
+      (s) => s.amountPaise,
     ),
     openingPaise: sum(banksOut, (b) => b.openingPaise),
     receiptsPaise: sum(banksOut, (b) => b.receiptsPaise),

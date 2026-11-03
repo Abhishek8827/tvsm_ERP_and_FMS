@@ -5,6 +5,7 @@ import { ExpensePayment } from "../models/ExpensePayment.js";
 import { LedgerEntry } from "../models/LedgerEntry.js";
 import { Receipt } from "../models/Receipt.js";
 import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
+import { SPLIT_STAGES } from "./receiptSplits.js";
 
 const EXPENSE_TYPES = ["expense_payment", "payment_reversal"];
 
@@ -21,6 +22,15 @@ const accountOf = (r) =>
     : r.bankId
       ? `bank:${r.bankId}`
       : "online:unassigned";
+const stagesByAccount = [
+  ...SPLIT_STAGES,
+  {
+    $group: {
+      _id: { mode: "$pay.mode", bankId: "$pay.bankId" },
+      paise: { $sum: "$pay.amountPaise" },
+    },
+  },
+];
 
 /** Data access for the Cashbook (read-only, apart from the settings). */
 export function makeCashbookStore() {
@@ -86,12 +96,7 @@ export function makeCashbookStore() {
         ]),
         Receipt.aggregate([
           { $match: { ...live, issuedAt: { $lt: from } } },
-          {
-            $group: {
-              _id: { mode: "$mode", bankId: "$bankId" },
-              paise: { $sum: "$totalPaise" },
-            },
-          },
+          ...stagesByAccount,
         ]),
         DayClose.findOne({ tenantId, date })
           .select("status closedByName closedAt")
@@ -130,7 +135,8 @@ export function makeCashbookStore() {
                 issuedAt: { $gte: istStartOfDay(start), $lt: from },
               },
             },
-            { $group: { _id: null, paise: { $sum: "$totalPaise" } } },
+            ...SPLIT_STAGES,
+            { $group: { _id: null, paise: { $sum: "$pay.amountPaise" } } },
           ]),
           heads.length
             ? ExpensePayment.find({ tenantId, headName: { $in: heads } })

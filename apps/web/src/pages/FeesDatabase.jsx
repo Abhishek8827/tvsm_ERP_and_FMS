@@ -1,9 +1,4 @@
-import {
-  keepPreviousData,
-  useMutation,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { CLASSES, classLabel, formatINR, getFinancialYear } from "@erp/shared";
@@ -12,7 +7,6 @@ import { useAuth } from "../auth/AuthContext";
 import {
   Badge,
   Button,
-  Dialog,
   FilterBar,
   Input,
   Pagination,
@@ -22,6 +16,7 @@ import {
   useToast,
 } from "../components/ui";
 import { errorText } from "../lib/rupees";
+import { EditOldFeesDialog } from "./EditOldFeesDialog";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const ANY = { value: "", label: "Any" };
@@ -410,7 +405,7 @@ function buildColumnDefs({ head }) {
 /**
  * Fees Database: every student with what was billed, paid, rebated and is due (worked out by
  * the same fee engine as Collect Fee). Everyone can look; the Cashier cannot export; only the
- * Admin can waive a late fee. Fees are posted automatically every month, and rebates have their
+ * Admin can edit old fees. Fees are posted automatically every month, and rebates have their
  * own module.
  */
 export function FeesDatabase() {
@@ -425,7 +420,7 @@ export function FeesDatabase() {
   const [dir, setDir] = useState("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [waiveFor, setWaiveFor] = useState(null);
+  const [editFor, setEditFor] = useState(null);
   const [pickCols, setPickCols] = useState(false);
   const [visible, setVisible] = useState(readCols); // null = the defaults
 
@@ -532,12 +527,11 @@ export function FeesDatabase() {
     columns.push({
       key: "act",
       header: "",
-      render: (r) =>
-        r.lateFeePaise > 0 ? (
-          <Button variant="secondary" onClick={() => setWaiveFor(r)}>
-            Waive late fee
-          </Button>
-        ) : null,
+      render: (r) => (
+        <Button variant="secondary" onClick={() => setEditFor(r)}>
+          Edit Old Fees
+        </Button>
+      ),
     });
   const pageSizeNo = data?.pageSize ?? pageSize;
   const rows = data?.rows?.map((r, i) => ({
@@ -821,112 +815,9 @@ export function FeesDatabase() {
         />
       )}
 
-      {waiveFor && (
-        <WaiveDialog
-          row={waiveFor}
-          fy={data?.fy}
-          onClose={() => setWaiveFor(null)}
-        />
+      {editFor && (
+        <EditOldFeesDialog student={editFor} onClose={() => setEditFor(null)} />
       )}
     </div>
-  );
-}
-
-/** Late-fee relaxation: the Admin picks the overdue months to waive and writes the reason. */
-function WaiveDialog({ row, fy, onClose }) {
-  const { notify } = useToast();
-  const queryClient = useQueryClient();
-  const [picked, setPicked] = useState(null); // null = all months ticked
-  const [reason, setReason] = useState("");
-  const ledger = useQuery({
-    queryKey: ["ledger", row.id, fy],
-    queryFn: () => api(`/api/students/${row.id}/ledger?fy=${fy}`),
-  });
-  const late = (ledger.data?.instalments ?? []).filter((i) => i.lateFee > 0);
-  const chosen = picked ?? late.map((i) => i.period);
-  const total = late
-    .filter((i) => chosen.includes(i.period))
-    .reduce((n, i) => n + i.lateFee, 0);
-  const save = useMutation({
-    mutationFn: () =>
-      api(`/api/students/${row.id}/late-fee-waivers`, {
-        method: "POST",
-        body: { fy, periods: chosen, reason: reason.trim() },
-      }),
-    onSuccess: async () => {
-      for (const key of ["fees-database", "dues", "ledger", "dashboard"])
-        await queryClient.invalidateQueries({ queryKey: [key] });
-      notify("Late fee waived.", "success");
-      onClose();
-    },
-    onError: (e) => notify(errorText(e), "error"),
-  });
-  const toggle = (p) =>
-    setPicked(
-      chosen.includes(p) ? chosen.filter((x) => x !== p) : [...chosen, p],
-    );
-  return (
-    <Dialog
-      open
-      title={`Waive late fee: ${row.name}`}
-      onClose={onClose}
-      footer={
-        <>
-          <Button
-            variant="secondary"
-            onClick={onClose}
-            disabled={save.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            disabled={chosen.length === 0 || reason.trim().length < 3}
-            loading={save.isPending}
-            onClick={() => save.mutate()}
-          >
-            Waive {money(total)}
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        {ledger.isPending && (
-          <p className="text-ink-muted">Loading the months…</p>
-        )}
-        {ledger.isError && (
-          <p className="text-danger">{errorText(ledger.error)}</p>
-        )}
-        {ledger.data && late.length === 0 && (
-          <p className="text-ink-muted">
-            No late fee is pending for this student.
-          </p>
-        )}
-        {late.length > 0 && (
-          <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-sm font-medium">
-              Months with a late fee
-            </legend>
-            {late.map((i) => (
-              <label key={i.period} className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={chosen.includes(i.period)}
-                  onChange={() => toggle(i.period)}
-                />
-                {i.period} · {money(i.lateFee)}
-              </label>
-            ))}
-          </fieldset>
-        )}
-        <Input
-          label="Reason (required)"
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-        />
-        <p className="text-xs text-ink-muted">
-          The waiver is recorded with your reason and can be reversed later.
-        </p>
-      </div>
-    </Dialog>
   );
 }

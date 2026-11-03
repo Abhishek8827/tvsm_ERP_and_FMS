@@ -56,7 +56,7 @@ describe("Fees Database", () => {
     expect(screen.queryByRole("button", { name: /Apply fees/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Add rebate/ })).toBeNull();
   });
-  it("Cashier can only look: no export, no waive", async () => {
+  it("Cashier can only look: no export, no edit", async () => {
     mockRole = "cashier";
     show();
     expect(await screen.findByText("Asha")).toBeInTheDocument();
@@ -149,54 +149,128 @@ describe("Fees Database", () => {
     expect(await screen.findByText(/boom/)).toBeInTheDocument();
   });
 
-  it("shows the late fee in its own column, and Admin can waive it with a reason", async () => {
-    mockRole = "admin";
-    api.mockImplementation(async (url) => {
-      if (String(url).startsWith("/api/fees-database"))
-        return { ...data, rows: [row({ lateFeePaise: 10000 })], total: 1 };
-      if (String(url).includes("/ledger"))
-        return {
-          instalments: [
-            { period: "jun", lateFee: 10000 },
-            { period: "jul", lateFee: 10000 },
-          ],
-        };
-      return { ok: true };
-    });
-    show();
-    expect(
-      await screen.findByRole("columnheader", { name: "Late fee (penalty)" }),
-    ).toBeInTheDocument();
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Waive late fee" }),
-    );
-    const dialog = await screen.findByRole("dialog");
-    const waive = await within(dialog).findByRole("button", { name: /^Waive/ });
-    expect(waive).toBeDisabled(); // reason missing
-    await userEvent.type(
-      within(dialog).getByLabelText(/Reason/),
-      "Family problem",
-    );
-    await userEvent.click(within(dialog).getByLabelText(/jul/));
-    await userEvent.click(waive);
-    const call = api.mock.calls.find((c) =>
-      String(c[0]).endsWith("/late-fee-waivers"),
-    );
-    expect(call[1].body).toEqual({
-      fy: "2026-27",
-      periods: ["jun"],
-      reason: "Family problem",
-    });
+  const oldFee = (over = {}) => ({
+    billedPaise: 500000,
+    importedPaise: 500000,
+    paidPaise: 100000,
+    concessionPaise: 0,
+    outstandingPaise: 400000,
+    ...over,
   });
-  it("Cashier never gets the waive button", async () => {
-    mockRole = "cashier";
+  const detailsReply = {
+    fy: "2026-27",
+    summary: {
+      oldSchool: oldFee(),
+      oldTransport: oldFee({ billedPaise: 0, importedPaise: 0, paidPaise: 0 }),
+    },
+  };
+
+  it("shows the late fee in its own column; there is no Waive late fee button any more", async () => {
+    mockRole = "admin";
     api.mockResolvedValue({
       ...data,
       rows: [row({ lateFeePaise: 10000 })],
       total: 1,
     });
     show();
-    expect(await screen.findByText("Asha")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Waive late fee" })).toBeNull();
+    expect(
+      await screen.findByRole("columnheader", { name: "Late fee (penalty)" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Waive/ })).toBeNull();
+  });
+
+  it("Admin edits the old fee: types the new total, a reason is compulsory, and the server gets paise", async () => {
+    mockRole = "admin";
+    api.mockImplementation(async (url) => {
+      if (String(url).startsWith("/api/fees-database"))
+        return { ...data, rows: [row()], total: 1 };
+      if (String(url).includes("/fee-details")) return detailsReply;
+      return { id: "a1" };
+    });
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Edit Old Fees" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(/Already paid or rebated/),
+    ).toBeInTheDocument();
+    const save = within(dialog).getByRole("button", {
+      name: "Save correction",
+    });
+    expect(save).toBeDisabled();
+    await userEvent.type(
+      within(dialog).getByLabelText(/New total old fee/),
+      "3000",
+    );
+    expect(save).toBeDisabled(); // reason missing
+    await userEvent.type(
+      within(dialog).getByLabelText(/Reason/),
+      "Joined mid session",
+    );
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("Fee category"),
+      "transport",
+    );
+    await userEvent.click(save);
+    const call = api.mock.calls.find((c) =>
+      String(c[0]).endsWith("/old-fee-adjustments"),
+    );
+    expect(call[1].body).toMatchObject({
+      fy: "2026-27",
+      category: "transport",
+      newTotalPaise: 300000,
+      reason: "Joined mid session",
+    });
+  });
+
+  it("shows the server message when the new total is below what was paid", async () => {
+    mockRole = "admin";
+    api.mockImplementation(async (url, opts) => {
+      if (String(url).startsWith("/api/fees-database"))
+        return { ...data, rows: [row()], total: 1 };
+      if (String(url).includes("/fee-details")) return detailsReply;
+      if (opts?.method === "POST")
+        throw Object.assign(
+          new Error("Rs 1,000 has already been paid against this old fee."),
+          {
+            status: 409,
+            fields: { newTotalPaise: "Lower than already paid" },
+          },
+        );
+      return {};
+    });
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Edit Old Fees" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(
+      await within(dialog).findByLabelText(/New total old fee/),
+      "500",
+    );
+    await userEvent.type(
+      within(dialog).getByLabelText(/Reason/),
+      "Wrong import",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save correction" }),
+    );
+    expect(
+      await within(dialog).findByText("Lower than already paid"),
+    ).toBeInTheDocument();
+  });
+
+  it("Cashier and Principal never get the Edit Old Fees button", async () => {
+    for (const r of ["cashier", "principal"]) {
+      mockRole = r;
+      api.mockResolvedValue({ ...data, rows: [row()], total: 1 });
+      const { unmount } = show();
+      expect(await screen.findByText("Asha")).toBeInTheDocument();
+      expect(
+        screen.queryByRole("button", { name: "Edit Old Fees" }),
+      ).toBeNull();
+      unmount();
+    }
   });
 });

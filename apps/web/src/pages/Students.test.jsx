@@ -38,19 +38,6 @@ const list = {
     },
   ],
 };
-const strength = {
-  classes: [
-    {
-      classKey: "1",
-      active: 3,
-      inactive: 0,
-      sections: {
-        A: { active: 2, inactive: 0 },
-        B: { active: 1, inactive: 0 },
-      },
-    },
-  ],
-};
 function show() {
   return render(
     <QueryClientProvider
@@ -66,10 +53,7 @@ function show() {
     </QueryClientProvider>,
   );
 }
-const urls = () =>
-  api.mock.calls
-    .map((c) => String(c[0]))
-    .filter((u) => !u.includes("/strength"));
+const urls = () => api.mock.calls.map((c) => String(c[0]));
 
 describe("Students list", () => {
   beforeEach(() => {
@@ -78,32 +62,15 @@ describe("Students list", () => {
     api.mockImplementation(async (url) => {
       if (String(url).includes("bulk-delete"))
         return { deleted: 1, requested: 1 };
-      if (String(url).includes("/strength")) return strength;
       return list;
     });
   });
 
-  it("shows class strength in three rows and clicking a class filters the list", async () => {
+  it("shows no student counts, the address next to contact, and section options", async () => {
     show();
-    await userEvent.click(
-      await screen.findByRole("button", { name: "1st strength" }),
-    );
-    await vi.waitFor(() =>
-      expect(urls().some((u) => u.includes("classKey=1"))).toBe(true),
-    );
-    expect(screen.getByText("Pre-primary")).toBeInTheDocument();
-    expect(screen.getByText("Primary")).toBeInTheDocument();
-    expect(screen.getByText("Middle / Higher")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "1st strength" }),
-    ).toHaveTextContent("A:2 B:1");
-  });
-
-  it("shows active, inactive and grand totals, the address next to contact, and section options", async () => {
-    show();
-    expect(await screen.findByText("Active students")).toBeInTheDocument();
-    expect(screen.getByText("Inactive students")).toBeInTheDocument();
-    expect(screen.getByText("Grand total")).toBeInTheDocument();
+    expect(await screen.findByText("Asha")).toBeInTheDocument();
+    expect(screen.queryByText("Active students")).toBeNull();
+    expect(screen.queryByText("Grand total")).toBeNull();
     expect(screen.getByText("SIWAL")).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "B" })).toBeInTheDocument();
   });

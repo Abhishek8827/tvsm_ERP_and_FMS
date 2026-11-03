@@ -158,16 +158,6 @@ export function studentsRouter(deps, authenticate) {
     }
   });
 
-  router.get("/students/strength", ...read, async (req, res, next) => {
-    try {
-      res.json({
-        classes: await deps.studentStore.strength(req.user.tenantId),
-      });
-    } catch (err) {
-      next(err);
-    }
-  });
-
   // Admin only. PERMANENT delete (Admin decision), so the scholar number becomes free again.
   // One audit entry per student is written BEFORE anything is removed (critical: if the audit
   // cannot be saved, nothing is deleted). Step 4 must also refuse to delete a student who has

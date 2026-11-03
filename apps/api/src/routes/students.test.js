@@ -41,14 +41,6 @@ function build() {
         sections: ["A", "B"],
       };
     },
-    strength: async () => [
-      {
-        classKey: "1",
-        active: 2,
-        inactive: 1,
-        sections: { A: { active: 2, inactive: 1 } },
-      },
-    ],
     findById: async (_t, id) => db.find((s) => String(s._id) === id) ?? null,
     findManyByIds: async (_t, ids) =>
       db.filter((s) => ids.includes(String(s._id))),
@@ -119,19 +111,6 @@ const valid = {
 describe("students API", () => {
   it("401 without a token", async () => {
     expect((await request(build().app).get("/api/students")).status).toBe(401);
-  });
-  it("strength: every role can read it, and it is not mistaken for a student id", async () => {
-    const { app } = build();
-    expect((await request(app).get("/api/students/strength")).status).toBe(401);
-    for (const r of ["admin", "principal", "cashier"]) {
-      const res = await request(app).get("/api/students/strength").set(as(r));
-      expect(res.status).toBe(200);
-      expect(res.body.classes[0]).toMatchObject({
-        classKey: "1",
-        active: 2,
-        inactive: 1,
-      });
-    }
   });
   it("403 when Principal or Cashier tries to create", async () => {
     const { app } = build();

@@ -16,6 +16,12 @@ import {
 } from "@erp/shared";
 import { requireRole } from "../middleware/requireRole.js";
 import { recordAudit } from "../services/audit.js";
+import {
+  finishPayments,
+  paymentFields,
+  resolvePayments,
+  splitsOf,
+} from "../services/receiptSplits.js";
 import { AppError, notFound } from "../utils/errors.js";
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Invalid id");
@@ -68,9 +74,7 @@ const payBody = z.object({
     formPaise: paise.optional(),
     admissionPaise: paise.optional(),
   }),
-  mode: z.enum(["cash", "upi"]),
-  reference: text(60).optional(),
-  bankId: objectId.optional(),
+  ...paymentFields,
 });
 const listQuery = z.object({
   session: z.string().optional(), // a session, or "all"
@@ -86,6 +90,10 @@ const shapeReceipt = (r) => ({
   number: r.number,
   issuedAt: iso(r.issuedAt),
   mode: r.mode,
+  payments: splitsOf(r).map((p) => ({
+    mode: p.mode,
+    amountPaise: p.amountPaise,
+  })),
   totalPaise: r.totalPaise,
   lines: r.lines.map((l) => ({ head: l.head, amountPaise: l.amountPaise })),
 });
@@ -530,30 +538,11 @@ export function admissionsRouter(deps, authenticate) {
       const key = idemKey.parse(req.get("Idempotency-Key"));
       const body = payBody.parse(req.body);
       const tenantId = req.user.tenantId;
-      if (body.mode === "upi" && (body.reference ?? "").length < 4)
-        throw new AppError(
-          "REFERENCE_REQUIRED",
-          422,
-          "Enter the UPI / QR reference number.",
-          {
-            reference: "Reference number is required",
-          },
-        );
-      let bank = null;
-      if (body.mode === "upi") {
-        bank = body.bankId
-          ? await deps.moneyStore.findActiveBank(tenantId, body.bankId)
-          : null;
-        if (!bank)
-          throw new AppError(
-            "BANK_REQUIRED",
-            422,
-            "Choose the bank account that received the money.",
-            {
-              bankId: "Choose the bank account",
-            },
-          );
-      }
+      const payDraft = await resolvePayments({
+        body,
+        tenantId,
+        findBank: (t, id) => deps.moneyStore.findActiveBank(t, id),
+      });
       const a = await load(tenantId, req.params.id);
       if (a.status === "cancelled")
         throw new AppError(
@@ -598,10 +587,7 @@ export function admissionsRouter(deps, authenticate) {
             totalPaise: plan.totalPaise,
             monthLabel: "",
             dueAfterPaise: plan.dueAfterPaise,
-            mode: body.mode,
-            reference: body.mode === "cash" ? undefined : body.reference,
-            bankId: bank ? String(bank._id) : undefined,
-            bankName: bank?.name,
+            ...finishPayments(payDraft, plan.totalPaise),
             cashierId: String(req.user.id),
             cashierName: req.user.name,
             student: {

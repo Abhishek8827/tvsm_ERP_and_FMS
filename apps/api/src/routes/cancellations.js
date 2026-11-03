@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { requireRole } from "../middleware/requireRole.js";
 import { recordAudit } from "../services/audit.js";
+import { splitsOf } from "../services/receiptSplits.js";
 import { AppError } from "../utils/errors.js";
 
 const objectId = z.string().regex(/^[a-f\d]{24}$/i, "Bad id");
@@ -28,6 +29,10 @@ const shape = (c) => ({
     number: c.receipt.number,
     kind: c.receipt.kind,
     mode: c.receipt.mode,
+    payments: splitsOf(c.receipt).map((p) => ({
+      mode: p.mode,
+      amountPaise: p.amountPaise,
+    })),
     totalPaise: c.receipt.totalPaise,
     issuedAt: c.receipt.issuedAt,
     studentName: c.receipt.student?.name ?? null,

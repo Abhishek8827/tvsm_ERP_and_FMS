@@ -9,6 +9,8 @@ import {
 import { AuditLog } from "../models/AuditLog.js";
 import { Charge } from "../models/Charge.js";
 import { Counter } from "../models/Counter.js";
+import { OldFeeAdjustment } from "../models/OldFeeAdjustment.js";
+import { applyOldFeeAdjustments } from "./oldFees.js";
 import { DayClose } from "../models/DayClose.js";
 import { FeeStructure } from "../models/FeeStructure.js";
 import { BonafideCertificate } from "../models/BonafideCertificate.js";
@@ -21,6 +23,7 @@ import { Student } from "../models/Student.js";
 import { User } from "../models/User.js";
 import { AppError } from "../utils/errors.js";
 import { lockDay } from "./dayCloseStore.js";
+import { SPLIT_STAGES } from "./receiptSplits.js";
 
 /**
  * Thin data-access layer. Routes and middleware depend on these small objects (not on Mongoose
@@ -467,6 +470,11 @@ export function makeFeeStore() {
   };
 }
 
+const adjustmentsFor = (tenantId, fy, studentIds) =>
+  OldFeeAdjustment.find({ tenantId, fy, studentId: { $in: studentIds } })
+    .select("studentId head deltaPaise")
+    .lean();
+
 export function makeChargeStore() {
   return {
     // Used only when students are permanently deleted: their unpaid fee plan goes with them.
@@ -512,12 +520,30 @@ export function makeChargeStore() {
       );
       return result.upsertedCount;
     },
-    listForStudents: (tenantId, studentIds, fy) =>
-      Charge.find({ tenantId, fy, studentId: { $in: studentIds } })
+    // Old-fee charges come back with the Admin's corrections applied (the imported charge itself
+    // is never edited), so every screen and every receipt sees the corrected amount.
+    async listForStudents(tenantId, studentIds, fy) {
+      const rows = await Charge.find({
+        tenantId,
+        fy,
+        studentId: { $in: studentIds },
+      })
         .select("studentId head period dueDate amountPaise")
-        .lean(),
-    listForStudent: (tenantId, studentId, fy) =>
-      Charge.find({ tenantId, studentId, fy }).sort({ dueDate: 1 }).lean(),
+        .lean();
+      return applyOldFeeAdjustments(
+        rows,
+        await adjustmentsFor(tenantId, fy, studentIds),
+      );
+    },
+    async listForStudent(tenantId, studentId, fy) {
+      const rows = await Charge.find({ tenantId, studentId, fy })
+        .sort({ dueDate: 1 })
+        .lean();
+      return applyOldFeeAdjustments(
+        rows,
+        await adjustmentsFor(tenantId, fy, [studentId]),
+      );
+    },
     // Adds only the charges that do not exist yet; returns how many were new.
     async postMany(tenantId, studentId, fy, charges) {
       const result = await Charge.bulkWrite(
@@ -753,7 +779,7 @@ export function makeReceiptStore() {
     async listByStudent(tenantId, studentId, { fy, from, to, mode } = {}) {
       const match = { tenantId, studentId };
       if (fy) match.fy = fy;
-      if (mode) match.mode = mode;
+      if (mode) match.$or = [{ mode }, { "payments.mode": mode }];
       if (from || to) {
         match.issuedAt = {};
         if (from) match.issuedAt.$gte = istStartOfDay(from);
@@ -803,7 +829,7 @@ export function makeReceiptStore() {
         if (to) match.issuedAt.$lt = istStartOfDay(addDaysToDateString(to, 1));
       }
       if (kind) match.kind = kind;
-      if (mode) match.mode = mode;
+      if (mode) match.$and = [{ $or: [{ mode }, { "payments.mode": mode }] }];
       if (q?.trim()) {
         const rx = { $regex: escapeRegex(q.trim()), $options: "i" };
         match.$or = [
@@ -831,11 +857,13 @@ export function makeReceiptStore() {
         Receipt.countDocuments(rowMatch),
         Receipt.aggregate([
           { $match: { ...match, _id: { $nin: cancelled } } },
+          ...SPLIT_STAGES,
           {
             $group: {
-              _id: { kind: "$kind", mode: "$mode" },
-              paise: { $sum: "$totalPaise" },
-              count: { $sum: 1 },
+              _id: { kind: "$kind", mode: "$pay.mode" },
+              paise: { $sum: "$pay.amountPaise" },
+              // a split receipt is one receipt: count it once (on its first payment row)
+              count: { $sum: { $cond: [{ $eq: ["$payIdx", 0] }, 1, 0] } },
             },
           },
         ]),
@@ -944,7 +972,9 @@ export function makeReceiptStore() {
             tenantId,
             _id: { $in: rows.map((r) => r.receiptId) },
           })
-            .select("number kind mode totalPaise issuedAt student cashierName")
+            .select(
+              "number kind mode payments totalPaise issuedAt student cashierName",
+            )
             .lean()
         : [];
       const byId = new Map(receipts.map((r) => [String(r._id), r]));

@@ -166,8 +166,13 @@ describe.skipIf(!haveDb)("new admissions on a real database", () => {
       store.admit({ tenantId: T, id: admission._id, scholarNo: "99", user }),
     ).rejects.toMatchObject({ code: "SCHOLAR_NO_CHANGED" });
     expect(await Student.countDocuments({ tenantId: T })).toBe(1);
-    expect((await NewAdmission.findById(admission._id).lean()).status).toBe(
-      "pending",
-    );
+    expect(
+      (
+        await NewAdmission.findOne({
+          tenantId: T,
+          _id: admission._id,
+        }).lean()
+      ).status,
+    ).toBe("pending");
   });
 });

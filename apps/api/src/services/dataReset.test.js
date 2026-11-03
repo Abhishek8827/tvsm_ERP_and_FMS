@@ -15,7 +15,9 @@ describe("data cleaner plan", () => {
     const files = readdirSync(new URL("../models/", import.meta.url))
       .filter(
         (f) =>
-          f.endsWith(".js") && !f.endsWith(".test.js") && f !== "immutable.js",
+          f.endsWith(".js") &&
+          !f.endsWith(".test.js") &&
+          f.toLowerCase() !== "immutable.js",
       )
       .map((f) => f.replace(".js", ""))
       .sort();

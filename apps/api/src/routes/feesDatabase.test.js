@@ -261,6 +261,20 @@ describe("Fees Database columns and lists", () => {
     });
     expect(asha.dueNowPaise).toBe(200000);
   });
+  it("receivable counts only the months that are due, so it always matches the due", async () => {
+    const { app } = build({
+      charges: [
+        tui(1, "2026-06-15"),
+        tui(2, "2026-07-15"),
+        tui(3, "2026-08-15"),
+      ],
+    });
+    const asha = (
+      await request(app).get("/api/fees-database?upto=2026-07").set(as("admin"))
+    ).body.rows.find((x) => x.name === "Asha");
+    expect(asha.cols.newSchoolReceivable).toBe(200000); // not 300000: August is not due yet
+    expect(asha.cols.newSchoolDue).toBe(200000);
+  });
   it('"dues up to" a month ignores later months', async () => {
     const { app } = build({
       charges: [

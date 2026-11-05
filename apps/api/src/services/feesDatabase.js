@@ -144,18 +144,19 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       dueNowPaise: all.totals.dueNow,
       overduePaise: all.totals.overdue,
       lateFeePaise: all.totals.lateFee,
-      // The columns of the school's own sheet. "Due" = due till the chosen day (never future months).
+      // The columns of the school's own sheet. Receivable, paid and due ALL count only the instalments
+      // that have fallen due by the chosen day (so receivable - paid - rebate = due, never 6 vs 5 months).
       cols: {
         oldSchoolDue: sumHeads(["old_fees"], "dueNow"),
         oldBusDue: sumHeads(["transport_old"], "dueNow"),
-        newSchoolReceivable: sumHeads(["tuition"], "billed"),
-        newBusReceivable: sumHeads(["transport"], "billed"),
-        admReceivable: sumHeads(["admission"], "billed"),
-        formReceivable: sumHeads(["form"], "billed"),
-        newSchoolPaid: sumHeads(["tuition"], "paid"),
-        newBusPaid: sumHeads(["transport"], "paid"),
-        admPaid: sumHeads(["admission"], "paid"),
-        formPaid: sumHeads(["form"], "paid"),
+        newSchoolReceivable: sumHeads(["tuition"], "tillBilled"),
+        newBusReceivable: sumHeads(["transport"], "tillBilled"),
+        admReceivable: sumHeads(["admission"], "tillBilled"),
+        formReceivable: sumHeads(["form"], "tillBilled"),
+        newSchoolPaid: sumHeads(["tuition"], "tillPaid"),
+        newBusPaid: sumHeads(["transport"], "tillPaid"),
+        admPaid: sumHeads(["admission"], "tillPaid"),
+        formPaid: sumHeads(["form"], "tillPaid"),
         schoolRebate: sumHeads(["old_fees", "tuition", "form"], "rebate"),
         transportRebate: sumHeads(["transport_old", "transport"], "rebate"),
         admissionRebate: sumHeads(["admission"], "rebate"),

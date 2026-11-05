@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import {
   classLabel,
   formatINR,
@@ -124,13 +124,26 @@ function FindStudentArt() {
 export function CollectFee() {
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
-  const [student, setStudent] = useState(null);
+  const [picked, setPicked] = useState(null);
+  const [dismissed, setDismissed] = useState(false);
   const [kind, setKind] = useState("school");
 
   useEffect(() => {
     const t = setTimeout(() => setQ(search.trim()), 300);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Fees Database / Student Fee Details open this screen with ?student=<id> already chosen.
+  const [params] = useSearchParams();
+  const preId = params.get("student");
+  const pre = useQuery({
+    queryKey: ["collect-student", preId],
+    queryFn: () => api(`/api/students/${preId}`),
+    enabled: !!preId,
+    retry: false,
+  });
+  const student =
+    picked ?? (!dismissed && pre.data?.status === "active" ? pre.data : null);
 
   const found = useQuery({
     queryKey: ["collect-search", q],
@@ -140,12 +153,24 @@ export function CollectFee() {
   });
 
   return (
-    <div className="flex max-w-6xl flex-col gap-4">
-      <h1 className="text-2xl font-semibold text-ink">Collect Fee</h1>
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+      <h1 className="text-center text-2xl font-semibold text-ink">
+        Collect Fee
+      </h1>
+      {preId && pre.isError && (
+        <p role="alert" className="text-center text-sm text-danger">
+          That student could not be opened. Search for the student below.
+        </p>
+      )}
+      {preId && pre.data && pre.data.status !== "active" && !student && (
+        <p role="alert" className="text-center text-sm text-danger">
+          {pre.data.name} is inactive, so fees cannot be collected.
+        </p>
+      )}
 
-      <Card title="Student">
+      <Card title="Student" center>
         {student ? (
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col items-center gap-3 text-center">
             <div>
               <p className="font-medium text-ink">
                 {student.name}{" "}
@@ -162,7 +187,8 @@ export function CollectFee() {
             <Button
               variant="secondary"
               onClick={() => {
-                setStudent(null);
+                setPicked(null);
+                setDismissed(true);
                 setSearch("");
               }}
             >
@@ -170,7 +196,7 @@ export function CollectFee() {
             </Button>
           </div>
         ) : (
-          <div className="flex flex-col gap-3">
+          <div className="mx-auto flex w-full max-w-xl flex-col gap-3 text-center">
             <Input
               label="Search student"
               placeholder="Name, father, mobile or scholar number"
@@ -205,7 +231,7 @@ export function CollectFee() {
                   <li key={s.id}>
                     <button
                       type="button"
-                      onClick={() => setStudent(s)}
+                      onClick={() => setPicked(s)}
                       className="flex w-full flex-wrap items-center justify-between gap-2 px-4 py-3 text-left hover:bg-app"
                     >
                       <span className="font-medium text-ink">
@@ -230,7 +256,11 @@ export function CollectFee() {
 
       {student && (
         <>
-          <div role="tablist" aria-label="Fee type" className="flex gap-2">
+          <div
+            role="tablist"
+            aria-label="Fee type"
+            className="flex justify-center gap-2"
+          >
             {[
               ["school", "School Fees"],
               ["transport", "Transport Fees"],
@@ -464,7 +494,7 @@ function CollectForm({ student, kind }) {
 
   if (d && d.planPosted === false)
     return (
-      <Card title="Fees not posted yet">
+      <Card title="Fees not posted yet" center>
         <p className="text-sm text-ink-muted">
           This student has no fees posted for {d.fy}, so nothing can be
           collected. Fees are posted automatically every month, so the Admin
@@ -576,7 +606,7 @@ function CollectForm({ student, kind }) {
           )}
         </Card>
 
-        <Card title="Fees to collect">
+        <Card title="Fees to collect" center>
           <div className="grid gap-3 sm:grid-cols-2">
             {rem[oldHead] > 0 &&
               amountBox("old", "Old fees (₹)", rem[oldHead], {
@@ -639,9 +669,9 @@ function CollectForm({ student, kind }) {
       </div>
 
       <div className="lg:sticky lg:top-4">
-        <Card title="Payment">
+        <Card title="Payment" center>
           <div className="flex flex-col gap-3">
-            <p className="text-2xl font-semibold text-ink">
+            <p className="text-center text-2xl font-semibold text-ink">
               Total to collect:{" "}
               {total === null ? "-" : formatINR(total, { hideZeroPaise: true })}
             </p>

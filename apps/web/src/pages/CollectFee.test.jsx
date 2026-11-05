@@ -39,7 +39,7 @@ const dues = (over = {}) => ({
   ],
   ...over,
 });
-function show() {
+function show(path = "/") {
   return render(
     <QueryClientProvider
       client={
@@ -47,7 +47,7 @@ function show() {
       }
     >
       <ToastProvider>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[path]}>
           <Routes>
             <Route path="/" element={<CollectFee />} />
             <Route path="/receipts/:id" element={<p>Receipt page</p>} />
@@ -80,6 +80,27 @@ describe("Collect Fee", () => {
     await waitFor(() =>
       expect(screen.queryByTestId("find-student-art")).toBeNull(),
     );
+  });
+
+  it("opens with the student already chosen when the link has ?student=", async () => {
+    api.mockImplementation(async (url) => {
+      if (url === "/api/students/s1") return student;
+      if (String(url).includes("/dues")) return dues();
+      throw new Error(`unexpected ${url}`);
+    });
+    show("/?student=s1");
+    expect(await screen.findByText(/Aarav Sharma/)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Tuition fees/)).toBeInTheDocument();
+    expect(screen.queryByLabelText("Search student")).toBeNull();
+  });
+  it("does not preselect an inactive student", async () => {
+    api.mockImplementation(async (url) => {
+      if (url === "/api/students/s1") return { ...student, status: "inactive" };
+      throw new Error(`unexpected ${url}`);
+    });
+    show("/?student=s1");
+    expect(await screen.findByText(/is inactive/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Search student")).toBeInTheDocument();
   });
 
   it("finds a student, collects, sends an Idempotency-Key and opens the receipt", async () => {

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../components/ui";
@@ -155,39 +155,19 @@ describe("Reports screen", () => {
     );
   });
 
-  it("only the Admin sees Opening balances, and saving needs a reason", async () => {
-    show();
-    await screen.findByText("Salaries");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Opening balances" }),
-    );
-    const dialog = await screen.findByRole("dialog");
-    const save = within(dialog).getByRole("button", { name: "Save" });
-    await waitFor(() =>
-      expect(within(dialog).getByLabelText("Fixed assets (₹)")).toHaveValue(
-        "1000.00",
-      ),
-    );
-    expect(save).toBeDisabled();
-    await userEvent.type(
-      within(dialog).getByLabelText("Reason for this entry"),
-      "Opening figures",
-    );
-    await userEvent.click(save);
-    await waitFor(() =>
-      expect(api).toHaveBeenCalledWith(
-        "/api/reports/settings",
-        expect.objectContaining({ method: "PUT" }),
-      ),
-    );
-  });
-
-  it("the Principal has no Opening balances button", async () => {
-    mockRole = "principal";
+  it("Opening balances moved to System Settings: no button here for anyone", async () => {
     show();
     await screen.findByText("Salaries");
     expect(
       screen.queryByRole("button", { name: "Opening balances" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("has the School & Bus fees summary tab (moved from the Dashboard)", async () => {
+    show();
+    await screen.findByText("Salaries");
+    expect(
+      screen.getByRole("tab", { name: "School & Bus fees summary" }),
+    ).toBeInTheDocument();
   });
 });

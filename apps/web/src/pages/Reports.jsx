@@ -1,12 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { formatINR, paiseToRupeesString } from "@erp/shared";
+import { formatINR } from "@erp/shared";
 import { api } from "../api/client";
-import { useAuth } from "../auth/AuthContext";
 import {
   Button,
   Card,
-  Dialog,
   ErrorState,
   Input,
   Pagination,
@@ -17,8 +15,9 @@ import {
   useToast,
 } from "../components/ui";
 import { printHtml } from "../lib/printHtml";
+import { FeeSummaryTables } from "./FeeSummaryTables";
 import { REPORT_CSS, reportHtml } from "../lib/reportsHtml";
-import { errorText, parseRupees, todayInput } from "../lib/rupees";
+import { errorText, todayInput } from "../lib/rupees";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const TABS = [
@@ -26,6 +25,8 @@ const TABS = [
   { key: "balance-sheet", label: "Balance Sheet" },
   { key: "trial-balance", label: "Trial Balance" },
   { key: "day-book", label: "Day Book" },
+  // School fees and Bus fees by class and section (moved here from the Dashboard).
+  { key: "fee-summary", label: "School & Bus fees summary" },
 ];
 const COMPARE = [
   { value: "none", label: "None" },
@@ -283,121 +284,11 @@ function DayBook({ r, page, pageSize, onPage, onPageSize }) {
   );
 }
 
-function OpeningBalances({ onClose }) {
-  const { notify } = useToast();
-  const qc = useQueryClient();
-  const q = useQuery({
-    queryKey: ["report-settings"],
-    queryFn: () => api("/api/reports/settings"),
-  });
-  const [fixed, setFixed] = useState(null);
-  const [capital, setCapital] = useState(null);
-  const [reason, setReason] = useState("");
-  const fixedText = fixed ?? paiseToRupeesString(q.data?.fixedAssetsPaise ?? 0);
-  const capitalText = capital ?? paiseToRupeesString(q.data?.capitalPaise ?? 0);
-  const f = parseRupees(fixedText);
-  const c = parseRupees(capitalText);
-  const save = useMutation({
-    mutationFn: () =>
-      api("/api/reports/settings", {
-        method: "PUT",
-        body: {
-          fixedAssetsRupees: fixedText,
-          capitalRupees: capitalText,
-          reason,
-        },
-      }),
-    onSuccess: () => {
-      notify("Opening balances saved", "success");
-      void qc.invalidateQueries({ queryKey: ["report-settings"] });
-      void qc.invalidateQueries({ queryKey: ["report"] });
-      onClose();
-    },
-    onError: (e) => notify(errorText(e), "error"),
-  });
-  const bad = f.error || c.error || reason.trim().length < 3;
-  return (
-    <Dialog
-      open
-      onClose={onClose}
-      title="Opening balances"
-      footer={
-        <>
-          <Button variant="secondary" type="button" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            form="opening-form"
-            disabled={!!bad || save.isPending || !q.data}
-          >
-            {save.isPending ? "Saving…" : "Save"}
-          </Button>
-        </>
-      }
-    >
-      <p className="mb-3 text-sm text-ink-muted">
-        Fixed assets and the capital / reserve fund are entered once. Every
-        change is kept with its reason.
-      </p>
-      {q.isPending && <Spinner label="Loading" />}
-      {q.isError && (
-        <ErrorState
-          message={errorText(q.error)}
-          onRetry={() => void q.refetch()}
-        />
-      )}
-      {q.data && (
-        <form
-          id="opening-form"
-          className="flex flex-col gap-3"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (!bad) save.mutate();
-          }}
-        >
-          <Input
-            label="Fixed assets (₹)"
-            inputMode="decimal"
-            value={fixedText}
-            error={f.error}
-            onChange={(e) => setFixed(e.target.value)}
-          />
-          <Input
-            label="Capital / reserve fund (₹)"
-            inputMode="decimal"
-            value={capitalText}
-            error={c.error}
-            onChange={(e) => setCapital(e.target.value)}
-          />
-          <Input
-            label="Reason for this entry"
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-          />
-          {q.data.history.length > 0 && (
-            <ul className="max-h-32 overflow-auto text-xs text-ink-muted">
-              {q.data.history.map((h) => (
-                <li key={`${h.at}`}>
-                  {stamp(h.at)}, {h.byName ?? "Admin"}: assets{" "}
-                  {money(h.fixedAssetsPaise)}, capital {money(h.capitalPaise)},{" "}
-                  {h.reason}
-                </li>
-              ))}
-            </ul>
-          )}
-        </form>
-      )}
-    </Dialog>
-  );
-}
-
 /**
  * Reports (cash basis): Income & Expenditure, Balance Sheet, Trial Balance, Day Book. Every
  * figure is computed on the server from receipts, payments, petty cash and the money ledger.
  */
 export function Reports() {
-  const { role } = useAuth();
   const { notify } = useToast();
   const [tab, setTab] = useState("income-expenditure");
   const [draft, setDraft] = useState({
@@ -408,7 +299,6 @@ export function Reports() {
   const [applied, setApplied] = useState(draft);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [opening, setOpening] = useState(false);
   const set = (k) => (e) => setDraft((d) => ({ ...d, [k]: e.target.value }));
   const invalid = !draft.from || !draft.to || draft.from > draft.to;
 
@@ -429,6 +319,7 @@ export function Reports() {
       applied,
       tab === "day-book" ? [page, pageSize] : null,
     ],
+    enabled: tab !== "fee-summary",
     queryFn: () => {
       const p = params();
       if (tab === "day-book") {
@@ -599,25 +490,24 @@ export function Reports() {
           <h1 className="text-2xl font-semibold text-ink">Reports</h1>
         </div>
         <div className="flex flex-wrap gap-2">
-          {role === "admin" && (
-            <Button variant="secondary" onClick={() => setOpening(true)}>
-              Opening balances
-            </Button>
+          {tab !== "fee-summary" && (
+            <>
+              <Button
+                variant="secondary"
+                disabled={!r}
+                onClick={() => void print()}
+              >
+                Print (A4)
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!r}
+                onClick={() => void exportXlsx()}
+              >
+                Export to Excel
+              </Button>
+            </>
           )}
-          <Button
-            variant="secondary"
-            disabled={!r}
-            onClick={() => void print()}
-          >
-            Print (A4)
-          </Button>
-          <Button
-            variant="secondary"
-            disabled={!r}
-            onClick={() => void exportXlsx()}
-          >
-            Export to Excel
-          </Button>
         </div>
       </div>
 
@@ -647,7 +537,9 @@ export function Reports() {
         ))}
       </div>
 
+      {tab === "fee-summary" && <FeeSummaryTables />}
       <form
+        hidden={tab === "fee-summary"}
         className="flex flex-wrap items-end gap-3"
         onSubmit={(e) => {
           e.preventDefault();
@@ -691,8 +583,10 @@ export function Reports() {
         </p>
       )}
 
-      {query.isPending && <Spinner label="Loading report" />}
-      {query.isError && (
+      {tab !== "fee-summary" && query.isPending && (
+        <Spinner label="Loading report" />
+      )}
+      {tab !== "fee-summary" && query.isError && (
         <ErrorState
           message={errorText(query.error)}
           onRetry={() => void query.refetch()}
@@ -714,10 +608,9 @@ export function Reports() {
         />
       )}
       <p className="text-xs text-ink-muted">
-        Fixed assets and capital come from the opening balances entered at
-        setup. Have your accountant review these layouts before go-live.
+        Fixed assets and capital come from System Settings (Accounts & opening
+        balances). Have your accountant review these layouts before go-live.
       </p>
-      {opening && <OpeningBalances onClose={() => setOpening(false)} />}
     </div>
   );
 }

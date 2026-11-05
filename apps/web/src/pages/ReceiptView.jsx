@@ -5,8 +5,8 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { classLabel, formatINR, rupeesInWords, SCHOOL } from "@erp/shared";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
-import { WhatsappStatus } from "../components/WhatsappStatus";
 import { printHtml } from "../lib/printHtml";
+import { receiptMessage, waLink } from "../lib/whatsapp";
 import {
   Badge,
   Button,
@@ -295,8 +295,10 @@ export function ReceiptView() {
   const cancelled = r.status === "cancelled";
   const original = fresh && !printedOnce && !cancelled;
   const canReprint = role === "cashier" || role === "admin";
-  const phone = r.student.contactNo ? `91${r.student.contactNo}` : null;
-  const message = `TVSM School: fee receipt ${r.number} of ${formatINR(r.totalPaise, { hideZeroPaise: true })} received for ${r.student.name} (Sch. ${r.student.admissionNo}) on ${when(r.issuedAt)}. Thank you.`;
+  const waHref = waLink(
+    r.student.contactNo,
+    receiptMessage(r, when(r.issuedAt)),
+  );
 
   return (
     <div className="flex flex-col gap-4">
@@ -334,10 +336,10 @@ export function ReceiptView() {
               </Button>
             )
           )}
-          {phone ? (
+          {waHref ? (
             <a
               className="inline-flex min-h-10 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-ink hover:bg-app"
-              href={`https://wa.me/${phone}?text=${encodeURIComponent(message)}`}
+              href={waHref}
               target="_blank"
               rel="noreferrer"
             >
@@ -347,7 +349,7 @@ export function ReceiptView() {
             <Button
               variant="secondary"
               disabled
-              title="No mobile number saved for this student"
+              title="No valid mobile number saved for this student"
             >
               Send on WhatsApp
             </Button>
@@ -393,7 +395,6 @@ export function ReceiptView() {
           </p>
         </div>
       )}
-      <WhatsappStatus kind="receipt" refId={r.id} canRetry={canReprint} />
       {r.status === "cancel_requested" && (
         <div className="no-print flex items-center gap-2">
           <Badge tone="warning">Cancellation requested</Badge>

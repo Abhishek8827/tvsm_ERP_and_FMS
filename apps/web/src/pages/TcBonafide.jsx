@@ -27,7 +27,7 @@ import {
 } from "../components/ui";
 import { CERT_CSS, bonafideHtml, tcHtml } from "../lib/certificateHtml";
 import { printHtml } from "../lib/printHtml";
-import { WhatsappStatus } from "../components/WhatsappStatus";
+import { tcMessage, waLink } from "../lib/whatsapp";
 import { approveAfter } from "../lib/approveAfter";
 import { errorText, todayInput } from "../lib/rupees";
 
@@ -818,12 +818,7 @@ function TcIssued({ isAdmin, initialQ = "" }) {
           view?.status === "cancelled" ? (
             <Badge tone="danger">Cancelled: {view.cancelReason}</Badge>
           ) : view?.status === "issued" ? (
-            <WhatsappStatus
-              kind="tc"
-              refId={view.id}
-              canRetry={isAdmin}
-              waitingText="WhatsApp: the parent is told when the original is printed."
-            />
+            <TcWhatsappButton tc={view} />
           ) : null
         }
       />
@@ -1484,6 +1479,35 @@ function CertTab({ kind, isAdmin }) {
  * TC & Bonafide. The Admin issues (asks and approves in one go), then prints and signs.
  * The Cashier can only look.
  */
+/** wa.me button for an issued TC: looks up the parent's mobile on the student record. */
+function TcWhatsappButton({ tc }) {
+  const st = useQuery({
+    queryKey: ["student", tc.studentId],
+    queryFn: () => api(`/api/students/${tc.studentId}`),
+  });
+  const href = waLink(st.data?.contactNo, tcMessage(tc));
+  if (href)
+    return (
+      <a
+        className="inline-flex min-h-10 items-center rounded-lg border border-line bg-surface px-4 text-sm font-medium text-ink hover:bg-app"
+        href={href}
+        target="_blank"
+        rel="noreferrer"
+      >
+        Send on WhatsApp
+      </a>
+    );
+  return (
+    <Button
+      variant="secondary"
+      disabled
+      title="No valid mobile number saved for this student"
+    >
+      {st.isLoading ? "Loading..." : "Send on WhatsApp"}
+    </Button>
+  );
+}
+
 export function TcBonafide() {
   const { role } = useAuth();
   const isAdmin = role === "admin";

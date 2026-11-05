@@ -14,7 +14,6 @@ import {
   StatCard,
 } from "../components/ui";
 import { BackupReminder } from "../components/BackupReminder";
-import { QuickTiles } from "./QuickTiles";
 /**
  * Step 1 dashboard intentionally shows NO business numbers: there is no data yet, and rule 1
  * forbids placeholders. The only live information is the API/database health from /api/health.
@@ -292,7 +291,7 @@ export function Dashboard() {
         <h1 className="text-2xl font-semibold">Dashboard</h1>
       </div>
       {role === "admin" && <BackupReminder />}
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
+      <div className="grid gap-6">
         <div className="flex min-w-0 flex-col gap-4">
           {role === "cashier" && <TodayCollection />}
           {(role === "admin" || role === "principal") && <Overview />}
@@ -320,9 +319,6 @@ export function Dashboard() {
             )}
           </Card>
         </div>
-        <aside className="xl:sticky xl:top-0 xl:self-start">
-          <QuickTiles />
-        </aside>
       </div>
     </div>
   );

@@ -1,17 +1,17 @@
 /* Design tokens from the Figma variables (TDD 12.4). Values are "R G B" so Tailwind can add alpha. */
 :root {
-  --bg-app: 238 244 255; /* #EEF4FF light blue page */
+  --bg-app: 239 246 255; /* blue-100 #eff6ff page */
   --bg-surface: 255 255 255; /* #FFFFFF */
-  --bg-sidebar: 31 58 138; /* #1F3A8A deep blue (sidebar + top bar frame) */
-  --brand: 36 87 197; /* #2457C5 same blue as the login page */
-  --brand-dark: 31 58 138; /* #1F3A8A */
-  --success: 30 142 90; /* #1E8E5A */
-  --warning: 183 121 31; /* #B7791F */
-  --danger: 197 48 48; /* #C53030 */
-  --info: 43 108 176; /* #2B6CB0 */
-  --text: 20 32 46; /* #14202E */
-  --text-muted: 92 108 126; /* secondary text, 5.4:1 on white */
-  --border: 214 224 240;
+  --bg-sidebar: 30 58 138; /* blue-900 #1e3a8a sidebar */
+  --brand: 37 99 235; /* blue-600 #2563eb */
+  --brand-dark: 30 64 175; /* blue-800 #1e40af */
+  --success: 22 163 74; /* green-600 #16a34a */
+  --warning: 180 83 9; /* amber-700 #b45309 (amber-500 is too light for text) */
+  --danger: 220 38 38; /* red-600 #dc2626 */
+  --info: 79 70 229; /* indigo-600 #4f46e5 */
+  --text: 15 23 42; /* slate-900 #0f172a */
+  --text-muted: 100 116 139; /* slate-600 #64748b */
+  --border: 226 232 240; /* slate-300 #e2e8f0 */
 }
 
 /* Shared "glass" look: translucent white cards over a soft gradient page. Changing these three
@@ -19,6 +19,6 @@
 :root {
   --glass: 255 255 255 / 0.78;
   --glass-border: 255 255 255 / 0.7;
-  --page-glow-1: 36 87 197 / 0.16;
-  --page-glow-2: 124 58 237 / 0.1;
+  --page-glow-1: 37 99 235 / 0.14;
+  --page-glow-2: 147 51 234 / 0.08;
 }

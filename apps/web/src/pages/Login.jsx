@@ -21,8 +21,8 @@ function Field({ label, error, trailing, ...input }) {
           id={id}
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? `${id}-err` : undefined}
-          className={`min-h-12 w-full rounded-xl border bg-white px-3.5 text-base text-ink outline-none transition-shadow focus:border-[#2457C5] focus:ring-4 focus:ring-[#2457C5]/10 ${
-            error ? "border-danger" : "border-[#C7D2E2] hover:border-[#8EA5C5]"
+          className={`min-h-12 w-full rounded-xl border bg-white px-3.5 text-base text-ink outline-none transition-shadow focus:border-[#2563eb] focus:ring-4 focus:ring-[#2563eb]/10 ${
+            error ? "border-danger" : "border-[#cbd5e1] hover:border-[#94a3b8]"
           } ${trailing ? "pr-16" : ""}`}
           {...input}
         />
@@ -70,7 +70,7 @@ export function Login() {
   return (
     <main
       className="relative flex min-h-dvh flex-col overflow-x-hidden lg:h-dvh lg:min-h-0 lg:items-center lg:justify-center lg:overflow-hidden lg:px-14 lg:py-5"
-      style={{ backgroundColor: "#EDF3FF", backgroundImage: BG }}
+      style={{ backgroundColor: "#eff6ff", backgroundImage: BG }}
     >
       {/* Phone / tablet: picture on top, the sign-in card is a sheet with round top corners.
           Desktop (lg): one big card, picture left, sign-in right. */}
@@ -83,12 +83,12 @@ export function Login() {
               className="h-16 w-16 shrink-0 object-contain mix-blend-multiply drop-shadow-[0_12px_24px_rgba(35,65,120,0.12)] sm:h-20 sm:w-20 lg:h-24 lg:w-24"
             />
             <div>
-              <h1 className="text-balance text-base font-extrabold leading-[1.12] tracking-tight text-[#19345F] sm:text-lg lg:text-[1.25rem] xl:text-[1.5rem]">
+              <h1 className="text-balance text-base font-extrabold leading-[1.12] tracking-tight text-[#1e3a8a] sm:text-lg lg:text-[1.25rem] xl:text-[1.5rem]">
                 TH. VIRENDRA SINGH MEMORIAL
                 <br />
                 SECONDARY SCHOOL
               </h1>
-              <p className="mt-1 text-[11px] font-bold tracking-[0.32em] text-[#4E6387] lg:mt-2 lg:text-xs">
+              <p className="mt-1 text-[11px] font-bold tracking-[0.32em] text-[#475569] lg:mt-2 lg:text-xs">
                 NEPANAGAR
               </p>
             </div>
@@ -101,12 +101,12 @@ export function Login() {
               className="h-full w-full object-contain object-center"
             />
           </div>
-          <span className="absolute bottom-5 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-[#2457C5]/10 bg-white px-6 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#2457C5] shadow-sm lg:block">
+          <span className="absolute bottom-5 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-[#2563eb]/10 bg-white px-6 py-2 text-xs font-bold uppercase tracking-[0.12em] text-[#2563eb] shadow-sm lg:block">
             School ERP System
           </span>
         </section>
 
-        <div className="relative z-10 -mt-7 flex flex-col justify-center rounded-t-4xl bg-linear-to-br from-[#2457C5] via-[#3568D4] to-[#1F3A8A] px-6 pb-6 pt-7 text-white shadow-[0_-12px_40px_rgba(36,87,197,0.25)] sm:px-12 lg:mt-0 lg:h-full lg:min-h-0 lg:rounded-3xl lg:py-8 lg:shadow-[0_24px_60px_rgba(36,87,197,0.28)]">
+        <div className="relative z-10 -mt-7 flex flex-col justify-center rounded-t-[2rem] bg-linear-to-br from-[#2563eb] via-[#3b82f6] to-[#1e3a8a] px-6 pb-6 pt-7 text-white shadow-[0_-12px_40px_rgba(37,99,235,0.25)] sm:px-12 lg:mt-0 lg:h-full lg:min-h-0 lg:rounded-3xl lg:py-8 lg:shadow-[0_24px_60px_rgba(37,99,235,0.28)]">
           <form
             onSubmit={onSubmit}
             noValidate
@@ -175,7 +175,7 @@ export function Login() {
                       showPassword ? "Hide password" : "Show password"
                     }
                     aria-pressed={showPassword}
-                    className="absolute inset-y-0 right-1 my-auto h-9 rounded-lg px-3 text-xs font-bold text-[#2457C5] hover:bg-[#2457C5]/10"
+                    className="absolute inset-y-0 right-1 my-auto h-9 rounded-lg px-3 text-xs font-bold text-[#2563eb] hover:bg-[#2563eb]/10"
                   >
                     {showPassword ? "Hide" : "Show"}
                   </button>
@@ -196,7 +196,7 @@ export function Login() {
               type="submit"
               disabled={busy}
               aria-busy={busy || undefined}
-              className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-white text-base font-bold text-[#2457C5] shadow-[0_10px_24px_rgba(20,46,110,0.24)] transition hover:-translate-y-0.5 hover:bg-[#EFF5FF] disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex min-h-13 items-center justify-center gap-2 rounded-2xl bg-white text-base font-bold text-[#2563eb] shadow-[0_10px_24px_rgba(30,58,138,0.24)] transition hover:-translate-y-0.5 hover:bg-[#eff6ff] disabled:cursor-not-allowed disabled:opacity-70"
             >
               {busy && (
                 <span
@@ -212,7 +212,7 @@ export function Login() {
           </p>
         </div>
       </div>
-      <p className="absolute bottom-2 left-0 right-0 hidden px-2 text-center text-xs leading-relaxed text-[#4E6387] lg:block">
+      <p className="absolute bottom-2 left-0 right-0 hidden px-2 text-center text-xs leading-relaxed text-[#475569] lg:block">
         © {SOFTWARE.year} · Developed by {SOFTWARE.madeBy} · All rights
         reserved.
       </p>

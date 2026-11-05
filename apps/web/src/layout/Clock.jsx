@@ -25,10 +25,10 @@ export function Clock() {
   return (
     <time
       dateTime={now.toISOString()}
-      className="whitespace-nowrap text-xs text-white/85 lg:text-sm"
+      className="whitespace-nowrap text-xs text-ink-muted lg:text-sm"
     >
-      {dateFmt.format(now)} <span className="text-white/50">|</span>{" "}
-      <span className="font-medium text-white">
+      {dateFmt.format(now)} <span className="text-line">|</span>{" "}
+      <span className="font-medium text-ink">
         {timeFmt.format(now).toUpperCase()}
       </span>
     </time>

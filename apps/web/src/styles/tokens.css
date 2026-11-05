@@ -13,3 +13,12 @@
   --text-muted: 92 108 126; /* secondary text, 5.4:1 on white */
   --border: 214 224 240;
 }
+
+/* Shared "glass" look: translucent white cards over a soft gradient page. Changing these three
+   lines restyles every page, because all cards, tables and fields use them. */
+:root {
+  --glass: 255 255 255 / 0.78;
+  --glass-border: 255 255 255 / 0.7;
+  --page-glow-1: 36 87 197 / 0.16;
+  --page-glow-2: 124 58 237 / 0.1;
+}

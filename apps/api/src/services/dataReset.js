@@ -24,7 +24,6 @@ import { ReportSettings } from "../models/ReportSettings.js";
 import { Student } from "../models/Student.js";
 import { TransferCertificate } from "../models/TransferCertificate.js";
 import { User } from "../models/User.js";
-import { WhatsappMessage } from "../models/WhatsappMessage.js";
 
 /**
  * "Make the application new": removes test data before the school starts using it for real.
@@ -102,7 +101,6 @@ export const PLAN = [
   { name: "TransferCertificate", model: TransferCertificate, action: "wipe" },
   { name: "BonafideCertificate", model: BonafideCertificate, action: "wipe" },
   { name: "CertificateRequest", model: CertificateRequest, action: "wipe" },
-  { name: "WhatsappMessage", model: WhatsappMessage, action: "wipe" },
   {
     name: "Counter",
     model: Counter,

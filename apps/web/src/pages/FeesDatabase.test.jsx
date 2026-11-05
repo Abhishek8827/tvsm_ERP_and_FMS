@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -52,50 +52,62 @@ describe("Fees Database", () => {
     expect(
       screen.getByRole("button", { name: "Export to Excel" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Fees not posted")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "View" }).length).toBe(2);
     expect(screen.queryByRole("button", { name: /Apply fees/ })).toBeNull();
     expect(screen.queryByRole("button", { name: /Add rebate/ })).toBeNull();
   });
-  it("Cashier can only look: no export, no edit", async () => {
+  it("Cashier can only look: no export, no edit; Collect Fee opens with the student", async () => {
     mockRole = "cashier";
     show();
     expect(await screen.findByText("Asha")).toBeInTheDocument();
+    expect(
+      screen.getAllByRole("link", { name: "Collect Fee" })[0],
+    ).toHaveAttribute("href", "/collect-fee?student=1");
     expect(
       screen.queryByRole("button", { name: "Export to Excel" }),
     ).toBeNull();
     expect(screen.queryByRole("button", { name: /Apply fees/ })).toBeNull();
   });
-  it("shows the school sheet columns; Address is hidden until ticked in Columns", async () => {
+  it("shows the Figma columns; the receivable / paid columns appear when ticked in Columns", async () => {
     mockRole = "admin";
     show();
     await screen.findByText("Asha");
     for (const h of [
-      "S.No",
-      "Sch. ID",
-      "Old school due",
-      "Old bus due",
-      "Total dues",
+      "Scholar ID",
+      "Address / Village",
+      "Contact No.",
+      "Old School Due",
+      "Old Bus Due",
+      "New School Due",
+      "New Bus Due",
+      "Total Dues",
+      "Late Fee (Penalty)",
       "Status",
+      "Actions",
     ])
       expect(
-        screen.getByRole("columnheader", { name: new RegExp(`^${h}$`, "i") }),
+        screen.getByRole("columnheader", {
+          name: new RegExp(`^${h.replace(/[()/.]/g, "\\$&")}$`, "i"),
+        }),
       ).toBeInTheDocument();
-    expect(screen.queryByRole("columnheader", { name: "Address" })).toBeNull();
     expect(
       screen.queryByRole("columnheader", { name: "Adm fees rec." }),
     ).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Columns" }));
-    await userEvent.click(screen.getByLabelText("Address"));
-    await userEvent.click(screen.getByLabelText("Adm fees rec."));
     expect(
-      screen.getByRole("columnheader", { name: "Address" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("columnheader", { name: "New School Receivable" }),
+    ).toBeNull();
+    await userEvent.click(screen.getByRole("button", { name: "Columns" }));
+    await userEvent.click(screen.getByLabelText("Adm fees rec."));
+    await userEvent.click(screen.getByLabelText("New school receivable"));
     expect(
       screen.getByRole("columnheader", { name: "Adm fees rec." }),
     ).toBeInTheDocument();
-    await userEvent.click(screen.getByLabelText("Old bus due"));
     expect(
-      screen.queryByRole("columnheader", { name: "Old bus due" }),
+      screen.getByRole("columnheader", { name: "New school receivable" }),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByLabelText("Old Bus Due"));
+    expect(
+      screen.queryByRole("columnheader", { name: "Old Bus Due" }),
     ).toBeNull();
   });
   it("quick lists send the right filters: defaulters, school paid + bus pending, transport only", async () => {
@@ -115,6 +127,9 @@ describe("Fees Database", () => {
       screen.getByRole("button", { name: "Only transport students" }),
     );
     await vi.waitFor(() => expect(last()).toContain("transport=true"));
+    await userEvent.click(screen.getByRole("button", { name: "All students" }));
+    await vi.waitFor(() => expect(last()).not.toContain("transport=true"));
+    expect(last()).not.toContain("feeStatus=");
   });
   it('"Dues up to" month is sent as upto=YYYY-MM', async () => {
     mockRole = "admin";
@@ -130,13 +145,11 @@ describe("Fees Database", () => {
       ).toBe(true),
     );
   });
-  it("advanced filters are sent to the server", async () => {
+  it("More filters are sent to the server", async () => {
     mockRole = "principal";
     show();
     await screen.findByText("Asha");
-    await userEvent.click(
-      screen.getByRole("button", { name: "Advanced filters" }),
-    );
+    await userEvent.click(screen.getByRole("button", { name: "More filters" }));
     await userEvent.selectOptions(screen.getByLabelText("Uses bus"), "true");
     expect(
       api.mock.calls.some((c) => String(c[0]).includes("transport=true")),
@@ -149,22 +162,6 @@ describe("Fees Database", () => {
     expect(await screen.findByText(/boom/)).toBeInTheDocument();
   });
 
-  const oldFee = (over = {}) => ({
-    billedPaise: 500000,
-    importedPaise: 500000,
-    paidPaise: 100000,
-    concessionPaise: 0,
-    outstandingPaise: 400000,
-    ...over,
-  });
-  const detailsReply = {
-    fy: "2026-27",
-    summary: {
-      oldSchool: oldFee(),
-      oldTransport: oldFee({ billedPaise: 0, importedPaise: 0, paidPaise: 0 }),
-    },
-  };
-
   it("shows the late fee in its own column; there is no Waive late fee button any more", async () => {
     mockRole = "admin";
     api.mockResolvedValue({
@@ -174,95 +171,13 @@ describe("Fees Database", () => {
     });
     show();
     expect(
-      await screen.findByRole("columnheader", { name: "Late fee (penalty)" }),
+      await screen.findByRole("columnheader", { name: "Late Fee (Penalty)" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Waive/ })).toBeNull();
   });
 
-  it("Admin edits the old fee: types the new total, a reason is compulsory, and the server gets paise", async () => {
-    mockRole = "admin";
-    api.mockImplementation(async (url) => {
-      if (String(url).startsWith("/api/fees-database"))
-        return { ...data, rows: [row()], total: 1 };
-      if (String(url).includes("/fee-details")) return detailsReply;
-      return { id: "a1" };
-    });
-    show();
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Edit Old Fees" }),
-    );
-    const dialog = await screen.findByRole("dialog");
-    expect(
-      await within(dialog).findByText(/Already paid or rebated/),
-    ).toBeInTheDocument();
-    const save = within(dialog).getByRole("button", {
-      name: "Save correction",
-    });
-    expect(save).toBeDisabled();
-    await userEvent.type(
-      within(dialog).getByLabelText(/New total old fee/),
-      "3000",
-    );
-    expect(save).toBeDisabled(); // reason missing
-    await userEvent.type(
-      within(dialog).getByLabelText(/Reason/),
-      "Joined mid session",
-    );
-    await userEvent.selectOptions(
-      within(dialog).getByLabelText("Fee category"),
-      "transport",
-    );
-    await userEvent.click(save);
-    const call = api.mock.calls.find((c) =>
-      String(c[0]).endsWith("/old-fee-adjustments"),
-    );
-    expect(call[1].body).toMatchObject({
-      fy: "2026-27",
-      category: "transport",
-      newTotalPaise: 300000,
-      reason: "Joined mid session",
-    });
-  });
-
-  it("shows the server message when the new total is below what was paid", async () => {
-    mockRole = "admin";
-    api.mockImplementation(async (url, opts) => {
-      if (String(url).startsWith("/api/fees-database"))
-        return { ...data, rows: [row()], total: 1 };
-      if (String(url).includes("/fee-details")) return detailsReply;
-      if (opts?.method === "POST")
-        throw Object.assign(
-          new Error("Rs 1,000 has already been paid against this old fee."),
-          {
-            status: 409,
-            fields: { newTotalPaise: "Lower than already paid" },
-          },
-        );
-      return {};
-    });
-    show();
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Edit Old Fees" }),
-    );
-    const dialog = await screen.findByRole("dialog");
-    await userEvent.type(
-      await within(dialog).findByLabelText(/New total old fee/),
-      "500",
-    );
-    await userEvent.type(
-      within(dialog).getByLabelText(/Reason/),
-      "Wrong import",
-    );
-    await userEvent.click(
-      within(dialog).getByRole("button", { name: "Save correction" }),
-    );
-    expect(
-      await within(dialog).findByText("Lower than already paid"),
-    ).toBeInTheDocument();
-  });
-
-  it("Cashier and Principal never get the Edit Old Fees button", async () => {
-    for (const r of ["cashier", "principal"]) {
+  it("nobody gets Edit Old Fees in the list: it lives on the Student Fee Details page", async () => {
+    for (const r of ["admin", "cashier", "principal"]) {
       mockRole = r;
       api.mockResolvedValue({ ...data, rows: [row()], total: 1 });
       const { unmount } = show();

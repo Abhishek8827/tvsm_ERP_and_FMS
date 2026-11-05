@@ -11,12 +11,10 @@ import {
   Input,
   Pagination,
   Select,
-  StatCard,
   Table,
   useToast,
 } from "../components/ui";
 import { errorText } from "../lib/rupees";
-import { EditOldFeesDialog } from "./EditOldFeesDialog";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 const ANY = { value: "", label: "Any" };
@@ -114,7 +112,7 @@ function params(f, extra = {}) {
   return p;
 }
 
-const COLS_KEY = "erp.feesDb.columns";
+const COLS_KEY = "erp.feesDb.columns.v2";
 const readCols = () => {
   try {
     const v = JSON.parse(localStorage.getItem(COLS_KEY) ?? "null");
@@ -137,15 +135,15 @@ function buildColumnDefs({ head }) {
       key: "sno",
       group: "Basic",
       label: "S.No",
-      show: true,
+      show: false,
       render: (r) => r._n,
     },
     {
       key: "adm",
       group: "Basic",
-      label: "Sch. ID",
+      label: "Scholar ID",
       show: true,
-      header: head("Sch. ID", "admissionNo"),
+      header: head("Scholar ID", "admissionNo"),
       render: (r) => r.admissionNo,
     },
     {
@@ -180,20 +178,20 @@ function buildColumnDefs({ head }) {
       key: "section",
       group: "Basic",
       label: "Section",
-      show: true,
+      show: false,
       render: (r) => r.section || "-",
     },
     {
       key: "address",
       group: "Basic",
-      label: "Address",
-      show: false,
+      label: "Address / Village",
+      show: true,
       render: (r) => r.address || "-",
     },
     {
       key: "contact",
       group: "Basic",
-      label: "Contact no.",
+      label: "Contact No.",
       show: true,
       render: (r) => r.contactNo || "-",
     },
@@ -201,13 +199,13 @@ function buildColumnDefs({ head }) {
       key: "bus",
       group: "Bus fees",
       label: "Transport",
-      show: true,
+      show: false,
       render: (r) => (r.usesTransport ? <Badge>Bus</Badge> : "-"),
     },
     {
       key: "oldSchool",
       group: "School fees",
-      label: "Old school due",
+      label: "Old School Due",
       show: true,
       align: "right",
       render: (r) => amt(c(r).oldSchoolDue),
@@ -215,7 +213,7 @@ function buildColumnDefs({ head }) {
     {
       key: "oldBus",
       group: "Bus fees",
-      label: "Old bus due",
+      label: "Old Bus Due",
       show: true,
       align: "right",
       render: (r) => amt(c(r).oldBusDue),
@@ -311,7 +309,7 @@ function buildColumnDefs({ head }) {
     {
       key: "schoolDue",
       group: "School fees",
-      label: "New school fees due",
+      label: "New School Due",
       show: true,
       align: "right",
       render: (r) => (r.planPosted ? amt(c(r).newSchoolDue) : "-"),
@@ -319,7 +317,7 @@ function buildColumnDefs({ head }) {
     {
       key: "busDue",
       group: "Bus fees",
-      label: "New bus fees due",
+      label: "New Bus Due",
       show: true,
       align: "right",
       render: (r) => (r.planPosted ? amt(c(r).newBusDue) : "-"),
@@ -343,16 +341,16 @@ function buildColumnDefs({ head }) {
     {
       key: "total",
       group: "Totals",
-      label: "Total dues",
+      label: "Total Dues",
       show: true,
       align: "right",
-      header: head("Total dues", "dueNow"),
+      header: head("Total Dues", "dueNow"),
       render: (r) => (r.planPosted ? <b>{money(r.dueNowPaise)}</b> : "-"),
     },
     {
       key: "late",
       group: "Totals",
-      label: "Late fee (penalty)",
+      label: "Late Fee (Penalty)",
       show: true,
       align: "right",
       render: (r) =>
@@ -387,7 +385,7 @@ function buildColumnDefs({ head }) {
       key: "feeState",
       group: "Totals",
       label: "Fee status",
-      show: true,
+      show: false,
       render: (r) =>
         !r.planPosted ? (
           <Badge tone="warning">Fees not posted</Badge>
@@ -402,6 +400,50 @@ function buildColumnDefs({ head }) {
   ];
 }
 
+const KPI_ICON = {
+  user: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20c0-4 4-6 8-6s8 2 8 6",
+  calendar: "M5 6h14v14H5zM5 10h14M9 3v5M15 3v5",
+  check: "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 12l3 3 5-6",
+  stack:
+    "M4 6c0-1.7 3.6-3 8-3s8 1.3 8 3-3.6 3-8 3-8-1.3-8-3zM4 6v6c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6",
+  alert: "M12 4l9 16H3zM12 10v4M12 17v.5",
+};
+const KPI_TONE = {
+  brand: "bg-brand/10 text-brand",
+  success: "bg-success/10 text-success",
+  danger: "bg-danger/10 text-danger",
+  warning: "bg-warning/15 text-warning",
+};
+
+/** A headline number with a coloured icon tile (the Figma Fees Database cards). */
+function Kpi({ tone, icon, label, value, caption }) {
+  return (
+    <div className="glass glass-lift flex items-center gap-3 rounded-card p-4 shadow-card hover:shadow-lift">
+      <span
+        aria-hidden="true"
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${KPI_TONE[tone]}`}
+      >
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <path
+            d={KPI_ICON[icon]}
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </span>
+      <div className="min-w-0">
+        <p className="truncate text-sm text-ink-muted">{label}</p>
+        <p className="truncate text-xl font-semibold text-ink">{value}</p>
+        {caption && (
+          <p className="truncate text-xs text-ink-muted">{caption}</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Fees Database: every student with what was billed, paid, rebated and is due (worked out by
  * the same fee engine as Collect Fee). Everyone can look; the Cashier cannot export; only the
@@ -410,8 +452,8 @@ function buildColumnDefs({ head }) {
  */
 export function FeesDatabase() {
   const { role } = useAuth();
-  const isAdmin = role === "admin";
   const canExport = role === "admin" || role === "principal";
+  const canCollect = role === "admin" || role === "cashier";
   const { notify } = useToast();
   const [filters, setFilters] = useState(INITIAL);
   const [search, setSearch] = useState("");
@@ -420,7 +462,6 @@ export function FeesDatabase() {
   const [dir, setDir] = useState("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [editFor, setEditFor] = useState(null);
   const [pickCols, setPickCols] = useState(false);
   const [visible, setVisible] = useState(readCols); // null = the defaults
 
@@ -523,16 +564,28 @@ export function FeesDatabase() {
       align: d.align,
       render: d.render,
     }));
-  if (isAdmin)
-    columns.push({
-      key: "act",
-      header: "",
-      render: (r) => (
-        <Button variant="secondary" onClick={() => setEditFor(r)}>
-          Edit Old Fees
-        </Button>
-      ),
-    });
+  columns.push({
+    key: "act",
+    header: "Actions",
+    render: (r) => (
+      <div className="flex gap-2">
+        {canCollect && r.status === "active" && (
+          <Link
+            to={`/collect-fee?student=${r.id}`}
+            className="inline-flex min-h-9 items-center rounded-lg border border-line bg-surface/80 px-3 text-sm font-medium text-ink shadow-sm hover:bg-surface hover:shadow-card"
+          >
+            Collect Fee
+          </Link>
+        )}
+        <Link
+          to={`/fees-database/students/${r.id}`}
+          className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-line bg-surface/80 px-3 text-sm font-medium text-ink shadow-sm hover:bg-surface hover:shadow-card"
+        >
+          View
+        </Link>
+      </div>
+    ),
+  });
   const pageSizeNo = data?.pageSize ?? pageSize;
   const rows = data?.rows?.map((r, i) => ({
     ...r,
@@ -548,16 +601,17 @@ export function FeesDatabase() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold text-ink">Fees Database</h1>
-          {data && (
-            <p className="text-sm text-ink-muted">
-              Financial year {data.fy}
-              {filters.upto &&
-                ` · dues up to ${monthOptions(fy)
-                  .find((m) => m.value === filters.upto)
-                  ?.label.replace("Up to ", "")}`}
-              {" · fees are added to every student automatically each month"}
-            </p>
-          )}
+          <p className="text-sm text-ink-muted">
+            Manage student fees, dues and payment history.
+            {data &&
+              ` Financial year ${data.fy}${
+                filters.upto
+                  ? ` · dues up to ${monthOptions(fy)
+                      .find((m) => m.value === filters.upto)
+                      ?.label.replace("Up to ", "")}`
+                  : ""
+              }.`}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -577,7 +631,7 @@ export function FeesDatabase() {
 
       {pickCols && (
         <div
-          className="rounded-card border border-line bg-surface p-4"
+          className="glass rounded-card p-4 shadow-card"
           aria-label="Choose columns"
         >
           <div className="mb-3 flex items-center justify-between">
@@ -621,26 +675,30 @@ export function FeesDatabase() {
 
       {t && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <StatCard
-            label="Students"
-            value={t.students}
-            caption="Matching the filters"
-          />
-          <StatCard
+          <Kpi tone="brand" icon="user" label="Students" value={t.students} />
+          <Kpi
+            tone="brand"
+            icon="calendar"
             label="Billed (till this month)"
             value={money(t.billedPaise)}
           />
-          <StatCard
+          <Kpi
+            tone="success"
+            icon="check"
             label="Paid"
             value={money(t.paidPaise)}
             caption={`Rebate ${money(t.rebatePaise)}`}
           />
-          <StatCard
+          <Kpi
+            tone="danger"
+            icon="stack"
             label="Total dues"
             value={money(t.dueNowPaise)}
             caption={`Overdue ${money(t.overduePaise)}`}
           />
-          <StatCard
+          <Kpi
+            tone="warning"
+            icon="alert"
             label="Late fee (penalty)"
             value={money(t.lateFeePaise)}
             caption="Shown separately, not in dues"
@@ -653,15 +711,38 @@ export function FeesDatabase() {
         role="group"
         aria-label="Quick lists"
       >
+        <button
+          type="button"
+          aria-pressed={!activePreset}
+          className={`min-h-9 rounded-full border px-3 text-sm shadow-sm transition ${
+            !activePreset
+              ? "border-brand bg-brand text-white shadow-glow"
+              : "border-line bg-surface/80 text-ink hover:bg-surface"
+          }`}
+          onClick={() => {
+            setFilters((f) => ({
+              ...f,
+              ...Object.fromEntries(
+                PRESETS.flatMap((p) => Object.keys(p.patch)).map((k) => [
+                  k,
+                  "",
+                ]),
+              ),
+            }));
+            setPage(1);
+          }}
+        >
+          All students
+        </button>
         {PRESETS.map((p) => (
           <button
             key={p.key}
             type="button"
             aria-pressed={activePreset === p.key}
-            className={`min-h-9 rounded-full border px-3 text-sm ${
+            className={`min-h-9 rounded-full border px-3 text-sm shadow-sm transition ${
               activePreset === p.key
-                ? "border-brand bg-brand text-white"
-                : "border-line bg-surface text-ink hover:bg-app"
+                ? "border-brand bg-brand text-white shadow-glow"
+                : "border-line bg-surface/80 text-ink hover:bg-surface"
             }`}
             onClick={() => {
               setFilters((f) =>
@@ -722,7 +803,7 @@ export function FeesDatabase() {
           className="text-sm font-medium text-brand hover:underline"
           onClick={() => setAdvanced((a) => !a)}
         >
-          {advanced ? "Hide advanced filters" : "Advanced filters"}
+          {advanced ? "Hide more filters" : "More filters"}
         </button>
         {advanced && (
           <div className="mt-2">
@@ -813,10 +894,6 @@ export function FeesDatabase() {
             setPage(1);
           }}
         />
-      )}
-
-      {editFor && (
-        <EditOldFeesDialog student={editFor} onClose={() => setEditFor(null)} />
       )}
     </div>
   );

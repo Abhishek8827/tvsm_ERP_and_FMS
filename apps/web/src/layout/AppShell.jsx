@@ -3,9 +3,11 @@ import { Link, Outlet, useLocation } from "react-router-dom";
 import { navLayoutForRole, SCHOOL } from "@erp/shared";
 import { useAuth } from "../auth/AuthContext";
 import { NavGroup, NavItem } from "../components/ui";
+import { Breadcrumbs } from "./Breadcrumbs";
 import { Clock } from "./Clock";
+import { NotificationBell } from "./NotificationBell";
 import { Footer } from "./Footer";
-import { firstName, greetingFor } from "./greeting";
+import { firstName } from "./greeting";
 
 const ROLE_LABEL = {
   admin: "Admin",
@@ -106,7 +108,7 @@ function PinButton({ pinned, className = "", onClick }) {
  * App shell. The sidebar and the top bar are ONE blue frame; the page sits in a light panel with
  * a round corner against it. Sidebar = menu only (no logo): standalone links and collapsible
  * categories, the signed-in person and Sign out at the bottom. Top bar = menu button, greeting,
- * school name in the middle, page search and the live IST clock. On phones the sidebar is a drawer.
+ * school name in the middle, Home, the Approvals bell (Admin) and the live IST clock. On phones the sidebar is a drawer.
  */
 export function AppShell() {
   const { user, role, signOut } = useAuth();
@@ -283,17 +285,23 @@ export function AppShell() {
               aria-expanded={!hidden || drawer}
               onClick={() => (hidden ? setDrawer(true) : toggleSidebar())}
             />
+            <span
+              aria-hidden="true"
+              className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-base font-medium text-sidebar shadow-bar sm:flex"
+            >
+              {(user.name ?? "?").trim().charAt(0).toUpperCase()}
+            </span>
             <p
               className="hidden truncate text-sm lg:block"
               data-testid="greeting"
             >
-              {greetingFor()},{" "}
+              Hello,{" "}
               <span className="font-semibold">{firstName(user.name)}</span>
             </p>
           </div>
           <h1
             data-testid="school-name"
-            className="max-w-[56vw] truncate text-center text-sm font-semibold tracking-wide sm:text-base md:max-w-none"
+            className="max-w-[56vw] truncate text-center text-sm font-bold tracking-wide drop-shadow-sm sm:text-base md:max-w-none lg:text-xl"
           >
             <span className="sm:hidden">TVSM School</span>
             <span className="hidden sm:inline">{SCHOOL.name}</span>
@@ -321,13 +329,15 @@ export function AppShell() {
                 />
               </svg>
             </Link>
+            <NotificationBell />
             <div className="hidden sm:block">
               <Clock />
             </div>
           </div>
         </header>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl bg-app md:rounded-tl-[2rem] md:rounded-tr-none">
+        <div className="page-bg flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl shadow-[inset_0_8px_18px_-12px_rgb(15_30_80/0.45)] md:rounded-tl-[2rem] md:rounded-tr-none">
           <main className="min-w-0 flex-1 p-4 md:p-8">
+            <Breadcrumbs />
             <Outlet />
           </main>
           <Footer />

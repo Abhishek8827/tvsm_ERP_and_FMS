@@ -1,22 +1,30 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AppShell } from "./AppShell";
 
 let role = "admin";
+let pending = { cancellations: 0, vouchers: 0, reversals: 0 };
+vi.mock("../api/client", () => ({ api: vi.fn(async () => ({ pending })) }));
 vi.mock("../auth/AuthContext", () => ({
   useAuth: () => ({ role, user: { name: "Abhishek Wani" }, signOut: () => {} }),
 }));
 
 function at(path) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
   return render(
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route element={<AppShell />}>
-          <Route path="*" element={<p>page</p>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route element={<AppShell />}>
+            <Route path="*" element={<p>page</p>} />
+          </Route>
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 const sidebar = () => within(screen.getByLabelText("Sidebar"));
@@ -43,9 +51,7 @@ describe("Shell", () => {
     expect(screen.getByTestId("school-name")).toHaveTextContent(
       "THAKUR VIRENDRA SINGH MEMORIAL SCHOOL",
     );
-    expect(screen.getByTestId("greeting")).toHaveTextContent(
-      /Good (morning|afternoon|evening), Abhishek/,
-    );
+    expect(screen.getByTestId("greeting")).toHaveTextContent(/Hello, Abhishek/);
     expect(screen.queryByTestId("header-role")).toBeNull();
     // the role is shown once, in the sidebar's account block
     expect(sidebar().getByText("Admin")).toBeInTheDocument();
@@ -120,10 +126,9 @@ describe("Shell", () => {
     role = "cashier";
     at("/receipts");
     expect(screen.queryByLabelText("Search pages")).toBeNull();
-    expect(screen.getByRole("link", { name: "Home" })).toHaveAttribute(
-      "href",
-      "/",
-    );
+    expect(
+      within(screen.getByRole("banner")).getByRole("link", { name: "Home" }),
+    ).toHaveAttribute("href", "/");
   });
   it("the docked sidebar has a pin button; unpinning hides it", () => {
     at("/");
@@ -166,5 +171,47 @@ describe("Shell", () => {
       "Reports & Audit",
       "Administration & Setup",
     ]);
+  });
+
+  it("the bell opens Approvals and shows a red dot only when something is waiting (Admin only)", async () => {
+    pending = { cancellations: 0, vouchers: 0, reversals: 0 };
+    const view = at("/");
+    expect(
+      await screen.findByRole("link", { name: /nothing waiting/ }),
+    ).toHaveAttribute("href", "/approvals");
+    expect(screen.queryByTestId("bell-dot")).toBeNull();
+    view.unmount();
+    pending = { cancellations: 1, vouchers: 2, reversals: 0 };
+    at("/");
+    expect(
+      await screen.findByRole("link", { name: /3 waiting/ }),
+    ).toBeInTheDocument();
+    expect(screen.getByTestId("bell-dot")).toBeInTheDocument();
+  });
+  it("the bell is not shown to the Cashier", () => {
+    role = "cashier";
+    at("/");
+    expect(screen.queryByRole("link", { name: /Approvals:/ })).toBeNull();
+  });
+  it("shows the breadcrumb trail on inner pages but not on the Dashboard", () => {
+    const dash = at("/");
+    expect(screen.queryByRole("navigation", { name: "Breadcrumb" })).toBeNull();
+    dash.unmount();
+    at("/fees-database/students/abc");
+    const trail = within(
+      screen.getByRole("navigation", { name: "Breadcrumb" }),
+    );
+    expect(trail.getByRole("link", { name: "Home" })).toHaveAttribute(
+      "href",
+      "/",
+    );
+    expect(trail.getByRole("link", { name: "Fees Database" })).toHaveAttribute(
+      "href",
+      "/fees-database",
+    );
+    expect(trail.getByText("Student Fee Details")).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
   });
 });

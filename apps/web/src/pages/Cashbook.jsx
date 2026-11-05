@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { classLabel, formatINR } from "@erp/shared";
 import { api } from "../api/client";
@@ -7,7 +7,6 @@ import {
   Badge,
   Button,
   Card,
-  Dialog,
   Input,
   StatCard,
   useToast,
@@ -15,7 +14,7 @@ import {
 import { ErrorState, Spinner } from "../components/ui";
 import { CASHBOOK_CSS, cashbookHtml } from "../lib/cashbookHtml";
 import { printHtml } from "../lib/printHtml";
-import { errorText, parseRupees, todayInput } from "../lib/rupees";
+import { errorText, todayInput } from "../lib/rupees";
 
 const money = (p) => formatINR(p ?? 0, { hideZeroPaise: true });
 
@@ -148,7 +147,6 @@ export function Cashbook() {
   const { role } = useAuth();
   const { notify } = useToast();
   const [date, setDate] = useState(todayInput());
-  const [settings, setSettings] = useState(false);
   const query = useQuery({
     queryKey: ["cashbook", date],
     enabled: !!date,
@@ -222,11 +220,6 @@ export function Cashbook() {
           >
             Export to Excel
           </Button>
-          {role === "admin" && (
-            <Button variant="secondary" onClick={() => setSettings(true)}>
-              Transport account settings
-            </Button>
-          )}
         </div>
       </div>
 
@@ -341,7 +334,6 @@ export function Cashbook() {
           </Card>
         </>
       )}
-      {settings && <SettingsDialog onClose={() => setSettings(false)} />}
     </div>
   );
 }
@@ -351,7 +343,7 @@ function TransportBlock({ t, isAdmin }) {
     return (
       <p className="text-sm text-ink-muted">
         {isAdmin
-          ? 'Not set up yet. Use "Transport account settings" to enter the opening amount and the expense heads.'
+          ? "Not set up yet. Use System Settings > Transport account to enter the opening amount and the expense heads."
           : "The Admin has not set up the transport account yet."}
       </p>
     );
@@ -391,121 +383,6 @@ function TransportBlock({ t, isAdmin }) {
           }))}
         />
       )}
-    </div>
-  );
-}
-
-function SettingsDialog({ onClose }) {
-  const q = useQuery({
-    queryKey: ["cashbook-settings"],
-    queryFn: () => api("/api/cashbook/settings"),
-  });
-  return (
-    <Dialog open title="Transport account settings" onClose={onClose}>
-      {q.isPending && <Spinner label="Loading" />}
-      {q.isError && (
-        <ErrorState
-          message={errorText(q.error)}
-          onRetry={() => void q.refetch()}
-        />
-      )}
-      {q.data && <SettingsForm data={q.data} onClose={onClose} />}
-    </Dialog>
-  );
-}
-
-function SettingsForm({ data, onClose }) {
-  const { notify } = useToast();
-  const qc = useQueryClient();
-  const [f, setF] = useState({
-    opening: String(data.transportOpeningPaise / 100),
-    startDate: data.transportStartDate ?? todayInput(),
-    heads: data.transportHeads,
-    reason: "",
-  });
-  const amount = parseRupees(f.opening);
-  const save = useMutation({
-    mutationFn: () =>
-      api("/api/cashbook/settings", {
-        method: "PUT",
-        body: {
-          openingRupees: f.opening,
-          startDate: f.startDate,
-          heads: f.heads,
-          reason: f.reason.trim(),
-        },
-      }),
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["cashbook"] });
-      await qc.invalidateQueries({ queryKey: ["cashbook-settings"] });
-      notify("Transport account saved.", "success");
-      onClose();
-    },
-    onError: (e) => notify(errorText(e), "error"),
-  });
-  const toggle = (h) =>
-    setF((x) => ({
-      ...x,
-      heads: x.heads.includes(h)
-        ? x.heads.filter((y) => y !== h)
-        : [...x.heads, h],
-    }));
-  return (
-    <div className="flex flex-col gap-3">
-      <Input
-        label="Account starts on"
-        type="date"
-        value={f.startDate}
-        onChange={(e) => setF({ ...f, startDate: e.target.value })}
-      />
-      <Input
-        label="Opening amount on that date (₹)"
-        inputMode="decimal"
-        value={f.opening}
-        error={amount.error}
-        onChange={(e) => setF({ ...f, opening: e.target.value })}
-      />
-      <fieldset className="flex flex-col gap-1">
-        <legend className="mb-1 text-sm font-medium">
-          Expense heads that are transport expense
-        </legend>
-        {data.expenseHeads.length === 0 && (
-          <p className="text-sm text-ink-muted">No expense heads exist yet.</p>
-        )}
-        {data.expenseHeads.map((h) => (
-          <label key={h} className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={f.heads.includes(h)}
-              onChange={() => toggle(h)}
-            />
-            {h}
-          </label>
-        ))}
-      </fieldset>
-      <Input
-        label="Reason for this change (required)"
-        value={f.reason}
-        onChange={(e) => setF({ ...f, reason: e.target.value })}
-      />
-      <p className="text-xs text-ink-muted">
-        Every change is kept in the history and the audit log. Income of this
-        account is the bus-fee receipts (cash and online).
-      </p>
-      <div className="flex justify-end gap-2">
-        <Button variant="secondary" onClick={onClose} disabled={save.isPending}>
-          Cancel
-        </Button>
-        <Button
-          loading={save.isPending}
-          disabled={
-            !!amount.error || f.reason.trim().length < 3 || !f.startDate
-          }
-          onClick={() => save.mutate()}
-        >
-          Save
-        </Button>
-      </div>
     </div>
   );
 }

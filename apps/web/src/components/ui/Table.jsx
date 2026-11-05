@@ -14,9 +14,9 @@ export function Table({
   if (!rows || rows.length === 0)
     return <EmptyState title={emptyTitle} description={emptyDescription} />;
   return (
-    <div className="overflow-x-auto rounded-card border border-line bg-surface">
+    <div className="glass overflow-x-auto rounded-card shadow-card">
       <table className="w-full text-left text-sm">
-        <thead className="bg-app text-xs uppercase tracking-wide text-ink-muted">
+        <thead className="bg-brand/[0.06] text-xs uppercase tracking-wide text-ink-muted">
           <tr>
             {columns.map((c) => (
               <th
@@ -31,7 +31,10 @@ export function Table({
         </thead>
         <tbody className="divide-y divide-line">
           {rows.map((row) => (
-            <tr key={rowKey(row)} className="hover:bg-app/60">
+            <tr
+              key={rowKey(row)}
+              className="transition-colors hover:bg-brand/[0.05]"
+            >
               {columns.map((c) => (
                 <td
                   key={c.key}

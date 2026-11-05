@@ -23,7 +23,7 @@ function FieldShell({ label, error, hint, id, required, children }) {
   );
 }
 const control =
-  "min-h-10 w-full rounded-lg border bg-surface px-3 text-sm text-ink placeholder:text-ink-muted disabled:bg-app";
+  "min-h-10 w-full rounded-lg border bg-surface/90 px-3 text-sm text-ink shadow-sm shadow-brand/5 transition placeholder:text-ink-muted hover:border-brand/40 focus:border-brand disabled:bg-app";
 /** Field-level error support (rule 15): the server's `fields` map is passed straight to `error`. */
 export const Input = forwardRef(function Input(
   { label, error, hint, id, className = "", ...rest },

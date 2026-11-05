@@ -22,7 +22,7 @@ export function Dialog({ open, title, onClose, children, footer }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
-        className="absolute inset-0 bg-black/50"
+        className="absolute inset-0 bg-sidebar/50 backdrop-blur-sm"
         onClick={onClose}
         aria-hidden
       />
@@ -32,7 +32,7 @@ export function Dialog({ open, title, onClose, children, footer }) {
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="relative w-full max-w-md rounded-card bg-surface p-6 shadow-xl"
+        className="relative w-full max-w-md rounded-card bg-surface p-6 shadow-lift ring-1 ring-white/60"
       >
         <h2 id={titleId} className="text-lg font-semibold text-ink">
           {title}

@@ -10,27 +10,27 @@ const dateFmt = new Intl.DateTimeFormat("en-IN", {
 const timeFmt = new Intl.DateTimeFormat("en-IN", {
   hour: "2-digit",
   minute: "2-digit",
-  second: "2-digit",
   hour12: true,
   timeZone: "Asia/Kolkata",
 });
 
-/** Live date and time in IST (the school's time), ticking every second. */
+/** Live date and time in IST (the school's time): "Tue, 03 Nov 2026 | 05:12 PM". */
 export function Clock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
+  // en-IN writes "Tue, 3 Nov 2026"-style text with a comma after the weekday; keep it as is.
   return (
     <time
       dateTime={now.toISOString()}
-      className="text-right text-xs leading-tight sm:text-sm"
+      className="whitespace-nowrap text-xs text-white/85 lg:text-sm"
     >
-      <span className="block font-medium text-white">
-        {timeFmt.format(now)}
+      {dateFmt.format(now)} <span className="text-white/50">|</span>{" "}
+      <span className="font-medium text-white">
+        {timeFmt.format(now).toUpperCase()}
       </span>
-      <span className="block text-white/70">{dateFmt.format(now)}</span>
     </time>
   );
 }

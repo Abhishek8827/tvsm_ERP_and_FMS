@@ -28,6 +28,10 @@ const summaryQuery = z.object({
   status: z.enum(["active", "inactive", "all"]).default("active"),
 });
 
+const strengthQuery = z.object({
+  status: z.enum(["active", "inactive", "all"]).default("active"),
+});
+
 /**
  * Admin / Principal overview: funds, fees, class-wise students and dues, pending approvals.
  * Every number is computed from the real records (nothing typed in). Transfer Certificates
@@ -91,6 +95,35 @@ export function adminDashboardRouter(deps, authenticate) {
             paise: todayReceipts.groups.reduce((n, g) => n + g.paise, 0),
             count: todayReceipts.groups.reduce((n, g) => n + g.count, 0),
           },
+        });
+      } catch (err) {
+        next(err);
+      }
+    },
+  );
+  // Class strength: how many students are in each class (active, inactive or all).
+  router.get(
+    "/dashboard/class-strength",
+    authenticate,
+    requireRole("admin", "principal"),
+    async (req, res, next) => {
+      try {
+        const { status } = strengthQuery.parse(req.query);
+        const students = await deps.studentStore.forFees(
+          req.user.tenantId,
+          status === "all" ? {} : { status },
+        );
+        const by = new Map();
+        for (const s of students)
+          by.set(s.classKey, (by.get(s.classKey) ?? 0) + 1);
+        const rows = CLASS_KEYS.filter((k) => by.has(k)).map((k) => ({
+          classKey: k,
+          students: by.get(k),
+        }));
+        res.json({
+          status,
+          rows,
+          totalStudents: rows.reduce((n, r) => n + r.students, 0),
         });
       } catch (err) {
         next(err);

@@ -26,7 +26,7 @@ const users = {
 };
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 
-function build() {
+function build(forFees = async () => []) {
   const deps = {
     verifyToken: async (t) => ({ uid: t, role: t, tenantId: TENANT }),
     userStore: {
@@ -38,7 +38,7 @@ function build() {
       overview: async () => ({ cashPaise: 1, pettyPaise: 2, banks: [] }),
       pendingCounts: async () => ({ vouchers: 3, reversals: 1 }),
     },
-    studentStore: { forFees: async () => [] },
+    studentStore: { forFees },
     feeStore: { get: async () => null },
     chargeStore: { listForStudents: async () => [] },
     receiptStore: {
@@ -80,6 +80,39 @@ describe("dashboard overview", () => {
       cancellations: 4,
     });
     expect(r.body.funds.cashPaise).toBe(1);
+  });
+});
+
+describe("dashboard class strength", () => {
+  const people = [
+    { classKey: "1", status: "active" },
+    { classKey: "1", status: "active" },
+    { classKey: "NURSERY", status: "active" },
+    { classKey: "1", status: "inactive" },
+  ];
+  const forFees = async (_t, f) =>
+    people.filter((p) => !f.status || p.status === f.status);
+  const get = (app, who, q = "") =>
+    request(app).get(`/api/dashboard/class-strength${q}`).set(as(who));
+  it("counts active students per class by default, in class order", async () => {
+    const r = await get(build(forFees), "admin");
+    expect(r.status).toBe(200);
+    expect(r.body.rows).toEqual([
+      { classKey: "NURSERY", students: 1 },
+      { classKey: "1", students: 2 },
+    ]);
+    expect(r.body.totalStudents).toBe(3);
+  });
+  it("can show inactive or all students", async () => {
+    const app = build(forFees);
+    expect((await get(app, "principal", "?status=inactive")).body.rows).toEqual(
+      [{ classKey: "1", students: 1 }],
+    );
+    expect((await get(app, "admin", "?status=all")).body.totalStudents).toBe(4);
+    expect((await get(app, "admin", "?status=zzz")).status).toBe(400);
+  });
+  it("is not for the Cashier", async () => {
+    expect((await get(build(forFees), "cashier")).status).toBe(403);
   });
 });
 

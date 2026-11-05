@@ -10,6 +10,7 @@ vi.mock("../auth/AuthContext", () => ({
 }));
 vi.mock("../api/client", () => ({ api: vi.fn() }));
 import { api } from "../api/client";
+import { Dashboard } from "./Dashboard";
 import { FeeSummaryTables } from "./FeeSummaryTables";
 import { QuickTiles } from "./QuickTiles";
 
@@ -111,5 +112,67 @@ describe("Quick access tiles", () => {
       "Approvals",
     ])
       expect(tiles.queryByRole("link", { name: n })).toBeNull();
+  });
+});
+
+describe("Dashboard (Admin)", () => {
+  const overview = {
+    fy: '2026-27',
+    funds: {
+      cashPaise: 1000000,
+      pettyPaise: 200000,
+      banks: [
+        { id: 'b1', name: 'IDFC', balancePaise: 5000000 },
+        { id: 'b2', name: 'Kotak', balancePaise: 1500000 },
+      ],
+    },
+    fees: { students: 10, billedPaise: 0, paidPaise: 0, rebatePaise: 0, dueNowPaise: 0, overduePaise: 0, outstandingPaise: 0 },
+    noPlanStudents: 0,
+    feePlan: null,
+    classes: [],
+    pending: { cancellations: 0, vouchers: 0, reversals: 0 },
+    today: { paise: 0, count: 0 },
+  }; // prettier-ignore
+  beforeEach(() => {
+    api.mockReset();
+    mockRole = "admin";
+    api.mockImplementation(async (url) => {
+      if (url === "/api/dashboard/overview") return overview;
+      if (String(url).startsWith('/api/dashboard/class-strength'))
+        return String(url).endsWith('inactive')
+          ? { status: 'inactive', rows: [{ classKey: '5', students: 2 }], totalStudents: 2 }
+          : { status: 'active', rows: [{ classKey: 'LKG', students: 31 }, { classKey: '1', students: 40 }], totalStudents: 71 }; // prettier-ignore
+      if (url === "/api/health") return { status: "ok", db: "connected" };
+      return {};
+    });
+  });
+  it("funds: each bank by name, then total cash + total online = total funds", async () => {
+    show(<Dashboard />);
+    expect(await screen.findByText("IDFC")).toBeInTheDocument();
+    expect(screen.getByText("Kotak")).toBeInTheDocument();
+    const totals = within(screen.getByTestId("funds-total"));
+    expect(totals.getByText("Total cash").nextSibling).toHaveTextContent(
+      "₹12,000",
+    );
+    expect(totals.getByText("Total online").nextSibling).toHaveTextContent(
+      "₹65,000",
+    );
+    expect(totals.getByText("Total funds").nextSibling).toHaveTextContent(
+      "₹77,000",
+    );
+  });
+  it("the School / Bus fee summary tables are no longer on the Dashboard", async () => {
+    show(<Dashboard />);
+    await screen.findByText("IDFC");
+    expect(screen.queryByText("SCHOOL FEES SUMMARY")).toBeNull();
+    expect(
+      api.mock.calls.some((c) => String(c[0]).includes("fee-summary")),
+    ).toBe(false);
+  });
+  it("class strength shows active students and switches to inactive", async () => {
+    show(<Dashboard />);
+    expect(await screen.findByText("71 students")).toBeInTheDocument();
+    await userEvent.selectOptions(screen.getByLabelText("Show"), "inactive");
+    expect(await screen.findByText("2 students")).toBeInTheDocument();
   });
 });

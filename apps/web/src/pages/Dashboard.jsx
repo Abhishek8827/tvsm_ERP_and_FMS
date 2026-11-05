@@ -4,9 +4,16 @@ import { classLabel, formatINR, todayIst } from "@erp/shared";
 import { api } from "../api/client";
 import { useAuth } from "../auth/AuthContext";
 import { errorText } from "../lib/rupees";
-import { Badge, Card, ErrorState, Spinner, StatCard } from "../components/ui";
+import { useState } from "react";
+import {
+  Badge,
+  Card,
+  ErrorState,
+  Select,
+  Spinner,
+  StatCard,
+} from "../components/ui";
 import { BackupReminder } from "../components/BackupReminder";
-import { FeeSummaryTables } from "./FeeSummaryTables";
 import { QuickTiles } from "./QuickTiles";
 /**
  * Step 1 dashboard intentionally shows NO business numbers: there is no data yet, and rule 1
@@ -56,6 +63,79 @@ function TodayCollection() {
   );
 }
 
+const STRENGTH_STATUS = [
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "all", label: "All" },
+];
+
+/** Mini table: how many students are in each class, for active / inactive / all students. */
+function ClassStrength() {
+  const [status, setStatus] = useState("active");
+  const q = useQuery({
+    queryKey: ["dashboard", "class-strength", status],
+    queryFn: () => api(`/api/dashboard/class-strength?status=${status}`),
+    retry: false,
+  });
+  return (
+    <Card
+      title="Class strength"
+      subtitle={q.data ? `${q.data.totalStudents} students` : undefined}
+      actions={
+        <Select
+          label="Show"
+          options={STRENGTH_STATUS}
+          value={status}
+          onChange={(e) => setStatus(e.target.value)}
+        />
+      }
+    >
+      {q.isPending && <Spinner label="Loading class strength" />}
+      {q.isError && (
+        <ErrorState
+          message={errorText(q.error)}
+          onRetry={() => void q.refetch()}
+        />
+      )}
+      {q.data &&
+        (q.data.rows.length === 0 ? (
+          <p className="text-sm text-ink-muted">
+            No {status === "all" ? "" : status} students.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="text-xs uppercase text-ink-muted">
+                <tr>
+                  <th className="py-2 pr-4 font-medium">Class</th>
+                  <th className="py-2 text-right font-medium">Students</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {q.data.rows.map((c) => (
+                  <tr key={c.classKey}>
+                    <td className="py-1.5 pr-4">{classLabel(c.classKey)}</td>
+                    <td className="py-1.5 text-right tabular-nums">
+                      {c.students}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-line font-semibold">
+                  <td className="py-2 pr-4">Total</td>
+                  <td className="py-2 text-right tabular-nums">
+                    {q.data.totalStudents}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        ))}
+    </Card>
+  );
+}
+
 /** Admin and Principal: funds, fees, class-wise students and what is waiting, all from real records. */
 function Overview() {
   const q = useQuery({
@@ -74,25 +154,58 @@ function Overview() {
     );
   const d = q.data;
   const bankTotal = d.funds.banks.reduce((n, b) => n + b.balancePaise, 0);
+  const cashTotal = (d.funds.cashPaise ?? 0) + (d.funds.pettyPaise ?? 0);
   return (
     <>
       <Card title="Funds">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard label="Cash in hand" value={money(d.funds.cashPaise)} />
-          <StatCard label="Petty cash" value={money(d.funds.pettyPaise)} />
+        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">
+          Bank accounts
+        </p>
+        {d.funds.banks.length === 0 ? (
+          <p className="text-sm text-ink-muted">No bank account added yet.</p>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {d.funds.banks.map((b) => (
+              <StatCard
+                key={b.id ?? b.name}
+                label={b.name}
+                value={money(b.balancePaise)}
+              />
+            ))}
+          </div>
+        )}
+        <div
+          className="mt-4 grid items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr]"
+          data-testid="funds-total"
+        >
           <StatCard
-            label="Banks"
+            label="Total cash"
+            value={money(cashTotal)}
+            caption={`Cash in hand ${money(d.funds.cashPaise)} + petty cash ${money(d.funds.pettyPaise)}`}
+          />
+          <span
+            aria-hidden="true"
+            className="hidden self-center text-2xl text-ink-muted sm:block"
+          >
+            +
+          </span>
+          <StatCard
+            label="Total online"
             value={money(bankTotal)}
-            caption={d.funds.banks
-              .map((b) => `${b.name} ${money(b.balancePaise)}`)
-              .join(" · ")}
+            caption="All bank accounts"
           />
-          <StatCard
-            label="Collected today"
-            value={money(d.today?.paise)}
-            caption={`${d.today?.count ?? 0} receipts`}
-          />
+          <span
+            aria-hidden="true"
+            className="hidden self-center text-2xl text-ink-muted sm:block"
+          >
+            =
+          </span>
+          <StatCard label="Total funds" value={money(cashTotal + bankTotal)} />
         </div>
+        <p className="mt-3 text-sm text-ink-muted">
+          Collected today: <b className="text-ink">{money(d.today?.paise)}</b> (
+          {d.today?.count ?? 0} receipts)
+        </p>
       </Card>
       <Card title={`Fees ${d.fy}`}>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -160,41 +273,7 @@ function Overview() {
           />
         </div>
       </Card>
-      <Card
-        title="Students class-wise"
-        subtitle={`${d.fees.students} active students`}
-      >
-        {d.classes.length === 0 ? (
-          <p className="text-sm text-ink-muted">No active students yet.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase text-ink-muted">
-                <tr>
-                  <th className="py-2 pr-4 font-medium">Class</th>
-                  <th className="py-2 pr-4 text-right font-medium">Students</th>
-                  <th className="py-2 text-right font-medium">
-                    Due till today
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {d.classes.map((c) => (
-                  <tr key={c.classKey}>
-                    <td className="py-2 pr-4">{classLabel(c.classKey)}</td>
-                    <td className="py-2 pr-4 text-right tabular-nums">
-                      {c.students}
-                    </td>
-                    <td className="py-2 text-right tabular-nums">
-                      {money(c.dueNowPaise)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+      <ClassStrength />
     </>
   );
 }
@@ -216,7 +295,6 @@ export function Dashboard() {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_21rem]">
         <div className="flex min-w-0 flex-col gap-4">
           {role === "cashier" && <TodayCollection />}
-          {(role === "admin" || role === "principal") && <FeeSummaryTables />}
           {(role === "admin" || role === "principal") && <Overview />}
           <Card title="System status">
             {health.isPending && <Spinner label="Checking the server" />}

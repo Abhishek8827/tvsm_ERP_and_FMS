@@ -3,6 +3,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { ToastProvider } from "../components/ui";
 import { StudentFeeDetails } from "./StudentFeeDetails";
 
 vi.mock("../api/client", () => ({ api: vi.fn() }));
@@ -55,15 +56,17 @@ function show() {
         new QueryClient({ defaultOptions: { queries: { retry: false } } })
       }
     >
-      <MemoryRouter initialEntries={["/fees-database/students/s1"]}>
-        <Routes>
-          <Route
-            path="/fees-database/students/:id"
-            element={<StudentFeeDetails />}
-          />
-          <Route path="/fees-database" element={<p>Fees Database page</p>} />
-        </Routes>
-      </MemoryRouter>
+      <ToastProvider>
+        <MemoryRouter initialEntries={["/fees-database/students/s1"]}>
+          <Routes>
+            <Route
+              path="/fees-database/students/:id"
+              element={<StudentFeeDetails />}
+            />
+            <Route path="/fees-database" element={<p>Fees Database page</p>} />
+          </Routes>
+        </MemoryRouter>
+      </ToastProvider>
     </QueryClientProvider>,
   );
 }
@@ -75,10 +78,39 @@ describe("Student fee details", () => {
     api.mockResolvedValue(details());
   });
 
-  it("shows the student, keeps school and bus dues (old and current) in separate lines, and the late fee apart", async () => {
+  it("shows the student card and the fee summary: old dues, current session, and the totals", async () => {
     show();
     expect(await screen.findByText("Aarav Sharma")).toBeInTheDocument();
     expect(screen.getByText("SANJAY NAGAR")).toBeInTheDocument();
+    for (const label of [
+      "Old School Fee",
+      "Old Bus Fee",
+      "Total Old Due",
+      "School Fee (Receivable)",
+      "Bus Fee (Receivable)",
+      "Total Current",
+      "Total Billed",
+      "Total Paid",
+      "Outstanding",
+      "Late Fee (Penalty)",
+      "Amount to be Paid",
+    ])
+      expect(screen.getByText(label)).toBeInTheDocument();
+    expect(screen.getByText("Total Old Due").nextSibling).toHaveTextContent(
+      "₹2,500",
+    );
+    expect(screen.getByText("Amount to be Paid").nextSibling).toHaveTextContent(
+      "₹11,000",
+    );
+    expect(
+      screen.getByText(/^Transport: Yes \(from 2026-06\)/),
+    ).toBeInTheDocument();
+  });
+
+  it("the Fee Ledger tab keeps school and bus dues (old and current) in separate lines", async () => {
+    show();
+    await screen.findByText("Aarav Sharma");
+    await userEvent.click(screen.getByRole("tab", { name: "Fee Ledger" }));
     for (const label of [
       "Old school fee dues (brought forward)",
       "Old bus fee dues (brought forward)",
@@ -87,7 +119,22 @@ describe("Student fee details", () => {
       "Late fee / penalty (separate)",
     ])
       expect(screen.getByText(label)).toBeInTheDocument();
-    expect(screen.getByText(/^Yes \(from 2026-06\)/)).toBeInTheDocument();
+  });
+
+  it("Admin and Cashier get Collect Fee (it opens with this student); the Principal does not", async () => {
+    show();
+    expect(
+      await screen.findByRole("link", { name: /Collect Fee/ }),
+    ).toHaveAttribute("href", "/collect-fee?student=s1");
+    expect(
+      screen.getByRole("link", { name: /Back to Fees Database/ }),
+    ).toHaveAttribute("href", "/fees-database");
+  });
+  it("Principal has no Collect Fee button", async () => {
+    mockRole = "principal";
+    show();
+    await screen.findByText("Aarav Sharma");
+    expect(screen.queryByRole("link", { name: /Collect Fee/ })).toBeNull();
   });
 
   it("lists every receipt with its school / transport split; a cancelled one shows who cancelled and why and is not counted", async () => {
@@ -123,13 +170,19 @@ describe("Student fee details", () => {
       }),
     ); // prettier-ignore
     show();
+    await screen.findByText("Aarav Sharma");
+    await userEvent.click(screen.getByRole("tab", { name: "Fee Ledger" }));
     expect(
       await screen.findByText(/Imported ₹5,000, corrected by the Admin/),
     ).toBeInTheDocument();
+    await userEvent.click(
+      screen.getByRole("tab", { name: "Adjustments & Edits" }),
+    );
     expect(screen.getByText("Joined mid session")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Edit Old Fees" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("Admin only")).toBeInTheDocument();
   });
 
   it("Cashier does not see Edit Old Fees", async () => {
@@ -161,5 +214,100 @@ describe("Student fee details", () => {
     api.mockRejectedValue(new Error("Server is down"));
     show();
     expect(await screen.findByText(/Server is down/)).toBeInTheDocument();
+  });
+
+  const oldFee = (over = {}) => ({
+    billedPaise: 500000,
+    importedPaise: 500000,
+    paidPaise: 100000,
+    concessionPaise: 0,
+    outstandingPaise: 400000,
+    ...over,
+  });
+  const editReply = {
+    fy: "2026-27",
+    summary: {
+      ...details().summary,
+      oldSchool: oldFee(),
+      oldTransport: oldFee({ billedPaise: 0, importedPaise: 0, paidPaise: 0 }),
+    },
+  };
+
+  it("Admin edits the old fee: types the new total, a reason is compulsory, and the server gets paise", async () => {
+    api.mockImplementation(async (url) => {
+      if (String(url).includes("/fee-details"))
+        return { ...details(), ...editReply };
+      return { id: "a1" };
+    });
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Edit Old Fees" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      await within(dialog).findByText(/Already paid or rebated/),
+    ).toBeInTheDocument();
+    const save = within(dialog).getByRole("button", {
+      name: "Save correction",
+    });
+    expect(save).toBeDisabled();
+    await userEvent.type(
+      within(dialog).getByLabelText(/New total old fee/),
+      "3000",
+    );
+    expect(save).toBeDisabled(); // reason missing
+    await userEvent.type(
+      within(dialog).getByLabelText(/Reason/),
+      "Joined mid session",
+    );
+    await userEvent.selectOptions(
+      within(dialog).getByLabelText("Fee category"),
+      "transport",
+    );
+    await userEvent.click(save);
+    const call = api.mock.calls.find((c) =>
+      String(c[0]).endsWith("/old-fee-adjustments"),
+    );
+    expect(call[1].body).toMatchObject({
+      fy: "2026-27",
+      category: "transport",
+      newTotalPaise: 300000,
+      reason: "Joined mid session",
+    });
+  });
+
+  it("shows the server message when the new total is below what was paid", async () => {
+    api.mockImplementation(async (url, opts) => {
+      if (String(url).includes("/fee-details"))
+        return { ...details(), ...editReply };
+      if (opts?.method === "POST")
+        throw Object.assign(
+          new Error("Rs 1,000 has already been paid against this old fee."),
+          {
+            status: 409,
+            fields: { newTotalPaise: "Lower than already paid" },
+          },
+        );
+      return {};
+    });
+    show();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Edit Old Fees" }),
+    );
+    const dialog = await screen.findByRole("dialog");
+    await userEvent.type(
+      await within(dialog).findByLabelText(/New total old fee/),
+      "500",
+    );
+    await userEvent.type(
+      within(dialog).getByLabelText(/Reason/),
+      "Wrong import",
+    );
+    await userEvent.click(
+      within(dialog).getByRole("button", { name: "Save correction" }),
+    );
+    expect(
+      await within(dialog).findByText("Lower than already paid"),
+    ).toBeInTheDocument();
   });
 });

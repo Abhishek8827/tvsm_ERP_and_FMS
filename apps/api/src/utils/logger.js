@@ -16,7 +16,6 @@ export function createLogger(level) {
         "*.token",
         "*.accessToken",
         "*.phone",
-        "*.whatsappNumber",
         "*.accountNumber",
       ],
       censor: "[REDACTED]",

@@ -2,6 +2,8 @@
  * Tailwind is mapped to the Figma design tokens (styles/tokens.css). Pages never use raw
  * colours or one-off spacing - only these semantic names ("no one-off styling").
  */
+import { palette } from "./tailwind.palette.js";
+
 const v = (name) => `rgb(var(--${name}) / <alpha-value>)`;
 
 export default {
@@ -9,6 +11,7 @@ export default {
   theme: {
     extend: {
       colors: {
+        ...palette,
         app: v("bg-app"),
         surface: v("bg-surface"),
         sidebar: v("bg-sidebar"),
@@ -24,9 +27,9 @@ export default {
       borderRadius: { card: "14px" },
       // One shadow scale for the whole app (soft, layered, blue-tinted): pages never invent their own.
       boxShadow: {
-        card: "0 1px 2px rgb(31 58 138 / 0.06), 0 8px 24px -8px rgb(31 58 138 / 0.14)",
-        lift: "0 2px 4px rgb(31 58 138 / 0.08), 0 16px 32px -10px rgb(31 58 138 / 0.26)",
-        glow: "0 6px 18px -4px rgb(36 87 197 / 0.55)",
+        card: "0 1px 2px rgb(30 58 138 / 0.06), 0 8px 24px -8px rgb(30 58 138 / 0.14)",
+        lift: "0 2px 4px rgb(30 58 138 / 0.08), 0 16px 32px -10px rgb(30 58 138 / 0.26)",
+        glow: "0 6px 18px -4px rgb(37 99 235 / 0.55)",
         bar: "0 10px 30px -12px rgb(15 30 80 / 0.7)",
       },
     },

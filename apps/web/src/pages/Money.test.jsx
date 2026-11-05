@@ -112,13 +112,15 @@ describe("Expenses register", () => {
       expect(screen.getByRole("columnheader", { name: h })).toBeInTheDocument();
   });
 
-  it('only the Admin gets "New voucher" and the Heads tab', async () => {
+  it('only the Admin gets "New voucher"; the Heads tab moved to System Settings', async () => {
     route(lists);
     show(<Expenses />, "/expenses");
     expect(
       await screen.findByRole("button", { name: "New voucher" }),
     ).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Heads" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "Heads" }),
+    ).not.toBeInTheDocument();
   });
 
   it("the Principal sees the register but cannot make vouchers or heads", async () => {

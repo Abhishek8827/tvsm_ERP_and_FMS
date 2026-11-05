@@ -1,11 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-  within,
-} from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider } from "../components/ui";
@@ -114,57 +108,23 @@ describe("Cashbook screen", () => {
       ),
     ).toBe(true);
   });
-  it("only the Admin gets the transport settings button; others see a message", async () => {
+  it("the transport settings moved to System Settings; the Cashbook only shows a message", async () => {
     route({ "/api/cashbook?": book() });
     const { unmount } = show();
     await screen.findByText("Day closed");
     expect(
-      screen.getByRole("button", { name: "Transport account settings" }),
+      screen.queryByRole("button", { name: "Transport account settings" }),
+    ).toBeNull();
+    expect(
+      screen.getByText(/System Settings > Transport account/),
     ).toBeInTheDocument();
     unmount();
     mockRole = "cashier";
     show();
     await screen.findByText("Day closed");
     expect(
-      screen.queryByRole("button", { name: "Transport account settings" }),
-    ).toBeNull();
-    expect(
       screen.getByText("The Admin has not set up the transport account yet."),
     ).toBeInTheDocument();
-  });
-  it("saves the transport account settings with a reason", async () => {
-    route({
-      "/api/cashbook/settings": (u, o) =>
-        o?.method === "PUT"
-          ? { ok: true }
-          : {
-              transportOpeningPaise: 0,
-              transportStartDate: null,
-              transportHeads: [],
-              history: [],
-              expenseHeads: ["Bus Diesel"],
-            },
-      "/api/cashbook?": book(),
-    });
-    show();
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Transport account settings" }),
-    );
-    const dlg = within(await screen.findByRole("dialog"));
-    const save = dlg.getByRole("button", { name: "Save" });
-    await dlg.findByLabelText("Bus Diesel");
-    expect(save).toBeDisabled();
-    await userEvent.clear(dlg.getByLabelText(/Opening amount/));
-    await userEvent.type(dlg.getByLabelText(/Opening amount/), "3000");
-    await userEvent.click(dlg.getByLabelText("Bus Diesel"));
-    await userEvent.type(dlg.getByLabelText(/Reason/), "start");
-    await userEvent.click(save);
-    const put = api.mock.calls.find((c) => c[1]?.method === "PUT");
-    expect(put[1].body).toMatchObject({
-      openingRupees: "3000",
-      heads: ["Bus Diesel"],
-      reason: "start",
-    });
   });
   it("shows an error state with retry", async () => {
     api.mockRejectedValue(new Error("server down"));

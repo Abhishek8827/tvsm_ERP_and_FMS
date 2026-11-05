@@ -33,7 +33,7 @@ export function NotificationBell() {
           ? `${waiting} waiting for a decision`
           : "Nothing is waiting for a decision"
       }
-      className="relative flex h-10 w-10 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/15"
+      className="relative flex h-10 w-10 items-center justify-center rounded-xl text-ink transition-colors hover:bg-blue-100"
     >
       <svg
         width="22"
@@ -53,7 +53,7 @@ export function NotificationBell() {
       {waiting > 0 && (
         <span
           data-testid="bell-dot"
-          className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-sidebar"
+          className="absolute right-2 top-2 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-white"
         />
       )}
     </Link>

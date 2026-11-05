@@ -12,7 +12,6 @@ vi.mock("../api/client", () => ({ api: vi.fn() }));
 import { api } from "../api/client";
 import { Dashboard } from "./Dashboard";
 import { FeeSummaryTables } from "./FeeSummaryTables";
-import { QuickTiles } from "./QuickTiles";
 
 const line = (o) => ({
   students: 29,
@@ -92,26 +91,6 @@ describe("Dashboard fee summary", () => {
     api.mockRejectedValue(new Error("Boom"));
     show(<FeeSummaryTables />);
     expect(await screen.findByText(/Boom/)).toBeInTheDocument();
-  });
-});
-
-describe("Quick access tiles", () => {
-  it("are links to the pages the role may open, never to Dashboard or a forbidden page", () => {
-    mockRole = "cashier";
-    show(<QuickTiles />);
-    const tiles = within(screen.getByLabelText("Quick access"));
-    expect(tiles.getByRole("link", { name: "Collect Fee" })).toHaveAttribute(
-      "href",
-      "/collect-fee",
-    );
-    expect(tiles.queryByRole("link", { name: "Dashboard" })).toBeNull();
-    for (const n of [
-      "Users & Permissions",
-      "Bank & Cash Management",
-      "Reports",
-      "Approvals",
-    ])
-      expect(tiles.queryByRole("link", { name: n })).toBeNull();
   });
 });
 

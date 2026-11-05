@@ -22,9 +22,6 @@ import { makeCashbookStore } from "./services/cashbookStore.js";
 import { makeReportsStore } from "./services/reportsStore.js";
 import { makeCertificateStore } from "./services/certificateStore.js";
 import { makeMoneyStore } from "./services/moneyStore.js";
-import { makeWhatsappClient } from "./services/whatsappClient.js";
-import { makeWhatsappService } from "./services/whatsappService.js";
-import { makeWhatsappStore } from "./services/whatsappStore.js";
 import { createLogger } from "./utils/logger.js";
 async function main() {
   const env = loadEnv(); // throws with a readable list if config is bad
@@ -41,20 +38,8 @@ async function main() {
   const studentStore = makeStudentStore();
   const receiptStore = makeReceiptStore();
   const certificateStore = makeCertificateStore();
-  const whatsapp = makeWhatsappService({
-    store: makeWhatsappStore(),
-    client: makeWhatsappClient(env),
-    env,
-    studentStore,
-    receiptStore,
-    certificateStore,
-    logger,
-  });
-  if (!whatsapp.configured)
-    logger.info("WhatsApp is not set up: no messages will be sent.");
   const auth = firebaseAuth
     ? {
-        whatsapp,
         verifyToken: createTokenVerifier(firebaseAuth),
         firebaseAuth, // used by the Admin Users screen to create accounts and reset passwords
         userStore: makeUserStore(),

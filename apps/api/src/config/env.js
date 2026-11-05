@@ -1,7 +1,7 @@
 import { z } from "zod";
 /**
  * Environment validation (Step 1 requirement): the API refuses to start on bad config.
- * Secrets live only in environment variables (rule 16). Firebase/WhatsApp/Razorpay keys
+ * Secrets live only in environment variables (rule 16). Firebase keys
  * are optional for now: they are required from the step that uses them, and that step
  * will tighten this schema. Nothing is faked when a key is missing.
  */
@@ -41,17 +41,6 @@ const schema = z.object({
   HARD_RESET_ANSWER: z.string().optional(),
   // The Firebase web API key (the same public key the web app uses) to re-check the Admin's password.
   FIREBASE_WEB_API_KEY: z.string().optional(),
-  // WhatsApp Cloud API (Meta). Both the id and the token must be set, or nothing is sent and the
-  // screens say "WhatsApp is not set up". The token is a secret: environment only, never logged.
-  WHATSAPP_PHONE_NUMBER_ID: z.string().optional(),
-  WHATSAPP_ACCESS_TOKEN: z.string().optional(),
-  WHATSAPP_API_VERSION: z
-    .string()
-    .regex(/^v\d+\.\d+$/, "like v21.0")
-    .default("v21.0"),
-  WHATSAPP_TEMPLATE_RECEIPT: z.string().min(1).default("fee_receipt_text"),
-  WHATSAPP_TEMPLATE_TC: z.string().min(1).default("tc_issued"),
-  WHATSAPP_TEMPLATE_LANG: z.string().min(2).default("en"),
 });
 export function loadEnv(source = process.env) {
   const parsed = schema.safeParse(source);

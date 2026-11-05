@@ -34,7 +34,6 @@ import { studentImportRouter } from "./routes/studentImport.js";
 import { studentsRouter } from "./routes/students.js";
 import { transportRouter } from "./routes/transport.js";
 import { usersRouter } from "./routes/users.js";
-import { whatsappRouter } from "./routes/whatsapp.js";
 
 // Every protected area. Used for the 503 answer when sign-in is not configured.
 const PROTECTED_PREFIXES = [
@@ -69,7 +68,6 @@ const PROTECTED_PREFIXES = [
   "/api/transport",
   "/api/users",
   "/api/vouchers",
-  "/api/whatsapp",
 ];
 
 /**
@@ -147,7 +145,6 @@ export function createApp(env, logger, auth) {
       backupRouter,
       hardResetRouter,
       admissionsRouter,
-      whatsappRouter,
     ];
     for (const make of routers) app.use("/api", make(deps, authenticate));
   } else {

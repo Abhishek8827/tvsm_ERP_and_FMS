@@ -12,6 +12,10 @@ import {
 } from "../components/ui";
 import { errorText } from "../lib/rupees";
 import { istStamp, saveBlob } from "../lib/saveFile";
+import { AccountSettings } from "./settings/AccountSettings";
+import { ExpenseHeadSettings } from "./settings/ExpenseHeadSettings";
+import { TcNumberingSettings } from "./settings/TcNumberingSettings";
+import { TransportAccountSettings } from "./settings/TransportAccountSettings";
 
 export const RESTORE_PHRASE = "RESTORE BACKUP";
 const when = (d) =>
@@ -21,16 +25,54 @@ const when = (d) =>
     timeStyle: "short",
   });
 
-/** Admin: system-wide settings. Today that is Backup & Restore. */
+const TABS = [
+  ["accounts", "Accounts & opening balances"],
+  ["heads", "Expense heads"],
+  ["transport", "Transport account"],
+  ["tc", "TC numbering"],
+  ["backup", "Backup & safety"],
+];
+
+/**
+ * Admin: EVERY setting of the system on one page. Opening balances and bank accounts, expense
+ * heads, the transport account, TC numbering, and Backup / Restore / Reset.
+ */
 export function SystemSettings() {
+  const [tab, setTab] = useState("accounts");
   return (
     <div className="flex flex-col gap-4">
       <div>
         <h1 className="text-2xl font-semibold text-ink">System Settings</h1>
       </div>
-      <BackupCard />
-      <RestoreCard />
-      <HardResetCard />
+      <div
+        role="tablist"
+        aria-label="Settings"
+        className="flex flex-wrap gap-2 border-b border-line"
+      >
+        {TABS.map(([key, label]) => (
+          <button
+            key={key}
+            role="tab"
+            type="button"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === key ? "border-brand text-brand" : "border-transparent text-ink-muted hover:text-ink"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {tab === "accounts" && <AccountSettings />}
+      {tab === "heads" && <ExpenseHeadSettings />}
+      {tab === "transport" && <TransportAccountSettings />}
+      {tab === "tc" && <TcNumberingSettings />}
+      {tab === "backup" && (
+        <>
+          <BackupCard />
+          <RestoreCard />
+          <HardResetCard />
+        </>
+      )}
     </div>
   );
 }

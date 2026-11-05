@@ -101,7 +101,9 @@ describe("TC & Bonafide screen: Admin", () => {
     ).toBeInTheDocument();
     const row = await screen.findByRole("row", { name: /Aarav/ });
     expect(within(row).getByText("Waiting")).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "Settings" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("tab", { name: "Settings" }),
+    ).not.toBeInTheDocument(); // moved to System Settings
     // the search at the top finds students and lets the Admin choose one
     await user.type(screen.getByLabelText(/Find student/), "Aarav");
     expect(
@@ -454,24 +456,6 @@ describe("TC & Bonafide screen: Admin", () => {
     await vi.waitFor(() =>
       expect(sent).toEqual([{ reason: "Name was wrong" }]),
     );
-  });
-
-  it("Settings: the start Sl. No. is locked once a TC exists", async () => {
-    const user = userEvent.setup();
-    route({
-      "/api/certificate-requests?": reqList(),
-      "/api/certificates/settings": {
-        tcBookNo: "7",
-        tcStartSl: 143,
-        fy: "2026-27",
-        startLocked: true,
-        history: [],
-      },
-    });
-    show();
-    await user.click(screen.getByRole("tab", { name: "Settings" }));
-    expect(await screen.findByLabelText(/First Sl. No./)).toBeDisabled();
-    expect(screen.getByLabelText("Book No.")).toBeEnabled();
   });
 
   it("shows empty and error states (with retry)", async () => {

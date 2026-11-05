@@ -10,7 +10,13 @@ import { NavIcon } from "../layout/NavIcon";
  */
 export function QuickTiles() {
   const { role } = useAuth();
-  const items = navForRole(role).filter((i) => i.path !== "/");
+  // Collect Fee is the favourite: it is always the first tile.
+  const items = navForRole(role)
+    .filter((i) => i.path !== "/")
+    .sort(
+      (a, b) =>
+        Number(b.key === "collect-fee") - Number(a.key === "collect-fee"),
+    );
   if (items.length === 0) return null;
   return (
     <section aria-label="Quick access">
@@ -22,7 +28,11 @@ export function QuickTiles() {
           <Link
             key={i.key}
             to={i.path}
-            className="group flex aspect-square flex-col items-center justify-center gap-2 rounded-card border border-line bg-surface p-2 text-center shadow-sm transition hover:-translate-y-0.5 hover:border-brand/40 hover:shadow-md"
+            className={`group flex aspect-square flex-col items-center justify-center gap-2 glass rounded-card p-2 text-center shadow-card transition hover:-translate-y-0.5 hover:shadow-lift ${
+              i.key === "collect-fee"
+                ? "col-span-3 !aspect-auto min-h-24 ring-2 ring-brand/40"
+                : ""
+            }`}
           >
             <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-brand/10 text-brand transition-colors group-hover:bg-brand group-hover:text-white">
               <NavIcon name={i.key} size={24} />

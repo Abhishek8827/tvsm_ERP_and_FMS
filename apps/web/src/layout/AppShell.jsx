@@ -14,7 +14,6 @@ const ROLE_LABEL = {
   principal: "Principal",
   cashier: "Cashier",
 };
-const SIDEBAR_KEY = "erp.sidebarCollapsed";
 const GROUPS_KEY = "erp.navOpen";
 
 // localStorage can throw (private window, blocked data), so these choices are conveniences only.
@@ -38,7 +37,7 @@ function Hamburger({ className = "", ...props }) {
   return (
     <button
       type="button"
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/15 ${className}`}
+      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-ink transition-colors hover:bg-blue-100 ${className}`}
       {...props}
     >
       <svg
@@ -59,61 +58,15 @@ function Hamburger({ className = "", ...props }) {
   );
 }
 
-function PinIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      aria-hidden="true"
-    >
-      <path
-        d="M9 4h6l-1 6 3 3v2H7v-2l3-3-1-6zM12 15v5"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-/** Pin icon + label. Pinned = the sidebar stays open; unpinned = it hides and floats on demand. */
-function PinButton({ pinned, className = "", onClick }) {
-  return (
-    <button
-      type="button"
-      aria-label={pinned ? "Unpin sidebar" : "Pin sidebar"}
-      aria-pressed={pinned}
-      title={
-        pinned
-          ? "Unpin sidebar (it will hide by itself)"
-          : "Pin sidebar (keep it open)"
-      }
-      onClick={onClick}
-      className={`items-center justify-center gap-2 rounded-xl border px-3 text-xs font-semibold uppercase tracking-wider text-white transition-colors min-h-10 ${
-        pinned
-          ? "border-white/40 bg-white/20"
-          : "border-white/25 text-white/80 hover:bg-white/10"
-      } ${className}`}
-    >
-      <PinIcon />
-      {pinned ? "Pinned" : "Pin sidebar"}
-    </button>
-  );
-}
-
 /**
- * App shell. The sidebar and the top bar are ONE blue frame; the page sits in a light panel with
- * a round corner against it. Sidebar = menu only (no logo): standalone links and collapsible
- * categories, the signed-in person and Sign out at the bottom. Top bar = menu button, greeting,
+ * App shell. A fixed deep-blue sidebar (never hides on desktop) and a separate white top bar with
+ * its own shadow; the page sits below the bar. Sidebar = menu only (no logo): standalone links and collapsible
+ * categories, the signed-in person and Sign out at the bottom. Top bar = phone menu button, greeting,
  * school name in the middle, Home, the Approvals bell (Admin) and the live IST clock. On phones the sidebar is a drawer.
  */
 export function AppShell() {
   const { user, role, signOut } = useAuth();
   const [drawer, setDrawer] = useState(false);
-  const [hidden, setHidden] = useState(() => read(SIDEBAR_KEY, false) === true);
   const [openGroups, setOpenGroups] = useState(() => read(GROUPS_KEY, {}));
   const { pathname } = useLocation();
   const layout = useMemo(() => (role ? navLayoutForRole(role) : []), [role]);
@@ -139,14 +92,14 @@ export function AppShell() {
     if (!drawer) return undefined;
     const onKey = (e) => e.key === "Escape" && setDrawer(false);
     const mq = window.matchMedia?.("(min-width: 768px)");
-    const onWide = (e) => e.matches && !hidden && setDrawer(false);
+    const onWide = (e) => e.matches && setDrawer(false);
     window.addEventListener("keydown", onKey);
     mq?.addEventListener?.("change", onWide);
     return () => {
       window.removeEventListener("keydown", onKey);
       mq?.removeEventListener?.("change", onWide);
     };
-  }, [drawer, hidden]);
+  }, [drawer]);
   const isOpen = (key) => openGroups[key] ?? key === activeKey;
 
   if (!role) return null;
@@ -156,11 +109,6 @@ export function AppShell() {
       const next = { ...cur, [key]: !(cur[key] ?? key === activeKey) };
       write(GROUPS_KEY, next);
       return next;
-    });
-  const toggleSidebar = () =>
-    setHidden((h) => {
-      write(SIDEBAR_KEY, !h);
-      return !h;
     });
 
   const menu = (
@@ -230,17 +178,15 @@ export function AppShell() {
   );
 
   return (
-    <div className="flex h-dvh bg-linear-to-b from-sidebar to-brand">
-      {!hidden && (
-        <aside
-          aria-label="Sidebar"
-          className="hidden w-64 shrink-0 flex-col gap-3 px-3 pb-4 pt-4 md:flex"
-        >
-          <PinButton pinned className="flex" onClick={toggleSidebar} />
-          {menu}
-          {account}
-        </aside>
-      )}
+    <div className="flex h-dvh bg-app">
+      {/* The sidebar is always there on desktop (it never hides). Its own deep-blue panel and shadow. */}
+      <aside
+        aria-label="Sidebar"
+        className="relative z-20 hidden w-64 shrink-0 flex-col gap-3 bg-linear-to-b from-blue-900 to-blue-800 px-3 pb-4 pt-5 shadow-[10px_0_30px_-14px_rgb(30_58_138/0.75)] md:flex"
+      >
+        {menu}
+        {account}
+      </aside>
 
       {drawer && (
         <div className="fixed inset-0 z-40">
@@ -252,17 +198,8 @@ export function AppShell() {
           />
           <div
             id="mobile-menu"
-            className="relative flex h-full w-72 max-w-[85%] flex-col gap-3 bg-linear-to-b from-sidebar to-brand px-3 pb-4 pt-4"
+            className="relative flex h-full w-72 max-w-[85%] flex-col gap-3 bg-linear-to-b from-blue-900 to-blue-800 px-3 pb-4 pt-4"
           >
-            <PinButton
-              pinned={false}
-              className="hidden md:flex"
-              onClick={() => {
-                write(SIDEBAR_KEY, false);
-                setHidden(false);
-                setDrawer(false);
-              }}
-            />
             {menu}
             {account}
           </div>
@@ -270,7 +207,7 @@ export function AppShell() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 px-3 text-white md:px-5">
+        <header className="relative z-10 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-line bg-white/95 px-3 text-ink shadow-[0_8px_24px_-10px_rgb(15_23_42/0.28)] backdrop-blur md:px-5">
           <div className="flex min-w-0 items-center gap-2">
             <Hamburger
               className="md:hidden"
@@ -279,15 +216,9 @@ export function AppShell() {
               aria-controls="mobile-menu"
               onClick={() => setDrawer(true)}
             />
-            <Hamburger
-              className="hidden md:flex"
-              aria-label={hidden ? "Show sidebar" : "Hide sidebar"}
-              aria-expanded={!hidden || drawer}
-              onClick={() => (hidden ? setDrawer(true) : toggleSidebar())}
-            />
             <span
               aria-hidden="true"
-              className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-base font-medium text-sidebar shadow-bar sm:flex"
+              className="hidden h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-base font-medium text-white shadow-glow sm:flex"
             >
               {(user.name ?? "?").trim().charAt(0).toUpperCase()}
             </span>
@@ -301,7 +232,7 @@ export function AppShell() {
           </div>
           <h1
             data-testid="school-name"
-            className="max-w-[56vw] truncate text-center text-sm font-bold tracking-wide drop-shadow-sm sm:text-base md:max-w-none lg:text-xl"
+            className="max-w-[56vw] truncate text-center text-sm font-bold tracking-wide text-brand-dark sm:text-base md:max-w-none lg:text-xl"
           >
             <span className="sm:hidden">TVSM School</span>
             <span className="hidden sm:inline">{SCHOOL.name}</span>
@@ -311,7 +242,7 @@ export function AppShell() {
               to="/"
               aria-label="Home"
               title="Home: go to the Dashboard"
-              className="flex h-10 w-10 items-center justify-center rounded-xl text-white transition-colors hover:bg-white/15"
+              className="flex h-10 w-10 items-center justify-center rounded-xl text-ink transition-colors hover:bg-blue-100"
             >
               <svg
                 width="22"
@@ -335,7 +266,7 @@ export function AppShell() {
             </div>
           </div>
         </header>
-        <div className="page-bg flex min-h-0 flex-1 flex-col overflow-y-auto rounded-t-3xl shadow-[inset_0_8px_18px_-12px_rgb(15_30_80/0.45)] md:rounded-tl-[2rem] md:rounded-tr-none">
+        <div className="page-bg flex min-h-0 flex-1 flex-col overflow-y-auto">
           <main className="min-w-0 flex-1 p-4 md:p-8">
             <Breadcrumbs />
             <Outlet />

@@ -78,20 +78,16 @@ describe("Shell", () => {
       sidebar().getByRole("link", { name: "Cashbook" }),
     ).toBeInTheDocument();
   });
-  it("a hidden sidebar opens as a floating menu that hides again by itself; Pin brings it back", () => {
+  it("the sidebar always stays open: no hide or pin button anywhere", () => {
     at("/");
-    fireEvent.click(screen.getByRole("button", { name: "Hide sidebar" }));
-    expect(screen.queryByLabelText("Sidebar")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show sidebar" }));
-    const menu = () => document.getElementById("mobile-menu");
-    expect(menu()).not.toBeNull();
-    fireEvent.click(within(menu()).getByRole("link", { name: "Dashboard" }));
-    expect(menu()).toBeNull();
-    expect(screen.queryByLabelText("Sidebar")).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Show sidebar" }));
-    fireEvent.click(screen.getByRole("button", { name: "Pin sidebar" }));
-    expect(menu()).toBeNull();
     expect(screen.getByLabelText("Sidebar")).toBeInTheDocument();
+    for (const n of [
+      "Hide sidebar",
+      "Show sidebar",
+      "Pin sidebar",
+      "Unpin sidebar",
+    ])
+      expect(screen.queryByRole("button", { name: n })).toBeNull();
   });
   it("the Cashier has no Rebates link and no Administration & Setup category", () => {
     role = "cashier";
@@ -130,16 +126,6 @@ describe("Shell", () => {
       within(screen.getByRole("banner")).getByRole("link", { name: "Home" }),
     ).toHaveAttribute("href", "/");
   });
-  it("the docked sidebar has a pin button; unpinning hides it", () => {
-    at("/");
-    fireEvent.click(
-      within(screen.getByLabelText("Sidebar")).getByRole("button", {
-        name: "Unpin sidebar",
-      }),
-    );
-    expect(screen.queryByLabelText("Sidebar")).toBeNull();
-  });
-
   it("the phone menu closes by itself: on choosing a page, on Escape, and on the backdrop", () => {
     role = "cashier";
     at("/");

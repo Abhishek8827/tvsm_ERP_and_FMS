@@ -212,7 +212,7 @@ describe.skipIf(!haveDb)("money store on a real database", () => {
       input: {
         amountPaise: rs(500),
         reason: "Discount",
-        remark: "Vendor agreed to the discount",
+        remark: "Vendor agreed to a small discount",
       },
       user,
     });

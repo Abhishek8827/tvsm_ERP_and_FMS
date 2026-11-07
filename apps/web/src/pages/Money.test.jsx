@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -392,7 +392,7 @@ describe("Petty cash", () => {
     ],
   };
 
-  it("Admin can add an entry (idempotent) and top up from cash; entries show serial numbers", async () => {
+  it("Admin can add an entry (idempotent); there is no manual top-up button; entries show serial numbers", async () => {
     route({
       "/api/petty/summary": summary,
       "/api/money/overview": { cashPaise: 1000000 },
@@ -404,9 +404,10 @@ describe("Petty cash", () => {
     expect(
       await screen.findByRole("button", { name: "New entry" }),
     ).toBeInTheDocument();
+    // Petty cash is filled only by paying a voucher under the Petty Cash head.
     expect(
-      screen.getByRole("button", { name: "Top up from cash" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("button", { name: /Top up/ }),
+    ).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "New entry" }));
     const dlg = within(await screen.findByRole("dialog"));
     await userEvent.type(dlg.getByLabelText("Payee name"), "Raju");
@@ -453,9 +454,60 @@ describe("Bank & Cash", () => {
     show(<BankCash />);
     expect((await screen.findAllByText("₹50,000")).length).toBeGreaterThan(0);
     expect(
-      screen.getByRole("button", { name: "Transfer money" }),
+      screen.getByRole("button", { name: "Deposit cash to bank" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Withdraw from bank to cash" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Bank to bank" }),
     ).toBeInTheDocument();
     expect(screen.queryByText("Cashier PIN")).not.toBeInTheDocument();
+    // School funds = cash + banks; petty cash is a separate fund and is not shown here.
+    expect(screen.getByText("School funds").nextSibling).toHaveTextContent(
+      "₹60,000",
+    );
+    expect(screen.queryByText("Petty cash")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹500")).not.toBeInTheDocument();
+  });
+
+  it("Deposit opens with cash as the source and the only bank as the target; petty cash is not offered", async () => {
+    route({
+      "/api/money/overview": overview,
+      "/api/transfers": { rows: [], total: 0 },
+    });
+    show(<BankCash />);
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Deposit cash to bank" }),
+    );
+    const dlg = within(await screen.findByRole("dialog"));
+    expect(dlg.getByLabelText("From")).toHaveValue("cash");
+    expect(dlg.getByLabelText("To")).toHaveValue("bank:b1");
+    expect(dlg.getByText("Available: ₹10,000")).toBeInTheDocument();
+    expect(
+      dlg.queryByRole("option", { name: "Petty cash" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("the transfers list asks for school transfers only and can be filtered by account", async () => {
+    route({
+      "/api/money/overview": overview,
+      "/api/transfers": { rows: [], total: 0 },
+    });
+    show(<BankCash />);
+    await userEvent.selectOptions(
+      await screen.findByLabelText("Account"),
+      "bank:b1",
+    );
+    await waitFor(() =>
+      expect(
+        api.mock.calls.some(
+          (c) =>
+            String(c[0]).includes("scope=school") &&
+            String(c[0]).includes("account=bank%3Ab1"),
+        ),
+      ).toBe(true),
+    );
   });
 
   it("Principal has no transfer or bank controls", async () => {
@@ -467,7 +519,7 @@ describe("Bank & Cash", () => {
     show(<BankCash />);
     expect(await screen.findByText("₹50,000")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Transfer money" }),
+      screen.queryByRole("button", { name: "Deposit cash to bank" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("Cashier PIN")).not.toBeInTheDocument();
   });

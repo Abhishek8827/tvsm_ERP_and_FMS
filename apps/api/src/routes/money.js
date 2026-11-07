@@ -344,6 +344,7 @@ export function moneyRouter(deps, authenticate) {
           id: String(h._id),
           name: h.name,
           active: h.active,
+          system: h.system === true,
         })),
       });
     }),
@@ -781,7 +782,14 @@ export function moneyRouter(deps, authenticate) {
     "/transfers",
     ...adminOrPrincipal,
     wrap(async (req, res) => {
-      const f = z.object(pageQuery).parse(req.query);
+      const f = z
+        .object({
+          ...pageQuery,
+          ...rangeQuery,
+          account: accountKey.optional(), // only transfers that touch this account
+          scope: z.enum(["all", "school"]).default("all"), // school = leave out petty cash top-ups
+        })
+        .parse(req.query);
       const out = await store().listTransfers({ tenantId: tenant(req), ...f });
       res.json({ ...out, page: f.page, pageSize: f.pageSize });
     }),

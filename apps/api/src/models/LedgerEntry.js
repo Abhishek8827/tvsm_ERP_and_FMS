@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 import { registerGlobalPlugins } from "../db.js";
-import { makeImmutable } from "./Immutable.js";
+import { makeImmutable } from "./immutable.js";
 
 registerGlobalPlugins();
 
@@ -16,6 +16,8 @@ export const LEDGER_TYPES = [
   "transfer",
   "petty_entry",
   "petty_reversal",
+  "petty_topup", // a voucher paid under the "Petty Cash" head fills the petty fund
+  "petty_topup_reversal", // that payment was reversed
   "expense_payment",
   "payment_reversal",
 ];

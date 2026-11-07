@@ -219,7 +219,7 @@ describe("collecting fees", () => {
   beforeEach(() => {
     // Only the clock is faked: 10 June 2026, 10:30 IST (June fee due, nothing overdue yet).
     vi.useFakeTimers({ toFake: ["Date"] });
-    vi.setSystemTime(new Date("2026-06-10T05:00:00Z"));
+    vi.setSystemTime(new Date("2026-06-09T05:00:00Z"));
   });
   afterEach(() => vi.useRealTimers());
 
@@ -431,7 +431,7 @@ describe("collecting fees", () => {
         .set(as(who));
       expect(r.status).toBe(200);
       expect(r.body.remaining.tuition).toBe(rs(10000));
-      expect(r.body.dueNowPaise).toBe(0); // June is due only from the 15th
+      expect(r.body.dueNowPaise).toBe(0); // June is due only from the 10th
     }
     expect(
       (

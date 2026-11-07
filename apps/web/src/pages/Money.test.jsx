@@ -98,6 +98,30 @@ describe("Expenses register", () => {
     );
   });
 
+  it('the system "Petty Cash" head is in the Heads table and in the New voucher form', async () => {
+    route({
+      ...lists,
+      "/api/expense-heads/summary": { heads: [] },
+      "/api/expense-heads": {
+        heads: [
+          { id: "h1", name: "Repairs", active: true },
+          { id: "hp", name: "Petty Cash", active: true, system: true },
+        ],
+      },
+    });
+    show(<Expenses />, "/expenses");
+    expect(
+      await screen.findByRole("button", { name: "Petty Cash" }),
+    ).toBeInTheDocument();
+    await userEvent.click(
+      await screen.findByRole("button", { name: "New voucher" }),
+    );
+    const dlg = within(await screen.findByRole("dialog"));
+    expect(
+      await dlg.findByRole("option", { name: "Petty Cash" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows the voucher register with the school columns", async () => {
     route(lists);
     show(<Expenses />, "/expenses");
@@ -396,7 +420,12 @@ describe("Petty cash", () => {
     route({
       "/api/petty/summary": summary,
       "/api/money/overview": { cashPaise: 1000000 },
-      "/api/expense-heads": { heads: [] },
+      "/api/expense-heads": {
+        heads: [
+          { id: "h1", name: "Tea", active: true },
+          { id: "hp", name: "Petty Cash", active: true, system: true },
+        ],
+      },
       "/api/petty?": { rows: summary.last, total: 1 },
       "/api/petty": { seq: 8 },
     });
@@ -410,6 +439,10 @@ describe("Petty cash", () => {
     ).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "New entry" }));
     const dlg = within(await screen.findByRole("dialog"));
+    // The system "Petty Cash" head only fills the fund; it is not something to spend under.
+    expect(
+      dlg.queryByRole("option", { name: "Petty Cash" }),
+    ).not.toBeInTheDocument();
     await userEvent.type(dlg.getByLabelText("Payee name"), "Raju");
     await userEvent.type(dlg.getByLabelText("Particulars"), "Chalk");
     await userEvent.type(dlg.getByLabelText("Amount (₹)"), "150");

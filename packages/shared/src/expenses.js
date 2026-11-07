@@ -165,7 +165,7 @@ export function checkPettyEntry({
   if (pettyBalance < amountPaise)
     fail(
       "PETTY_EMPTY",
-      "Petty cash balance is not enough. Top it up from cash in hand first.",
+      'Petty cash balance is not enough. Pay a voucher under the "Petty Cash" head to top it up.',
       "amountPaise",
     );
 }

@@ -9,6 +9,7 @@ const headSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true },
     nameLower: { type: String, required: true },
     active: { type: Boolean, default: true },
+    system: { type: Boolean, default: false }, // made by the system and locked (the "Petty Cash" head)
     createdBy: { type: String },
   },
   { timestamps: true },

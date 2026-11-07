@@ -58,15 +58,18 @@ export function ExpenseHeadSettings() {
     {
       key: "act",
       header: "",
-      render: (h) => (
-        <Button
-          variant="secondary"
-          loading={toggle.isPending && toggle.variables?.id === h.id}
-          onClick={() => toggle.mutate(h)}
-        >
-          {h.active ? "Stop using" : "Use again"}
-        </Button>
-      ),
+      render: (h) =>
+        h.system ? (
+          <Badge tone="info">Made by the system: fills petty cash</Badge>
+        ) : (
+          <Button
+            variant="secondary"
+            loading={toggle.isPending && toggle.variables?.id === h.id}
+            onClick={() => toggle.mutate(h)}
+          >
+            {h.active ? "Stop using" : "Use again"}
+          </Button>
+        ),
     },
   ];
   return (

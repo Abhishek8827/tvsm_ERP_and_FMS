@@ -456,6 +456,13 @@ export function makeStudentStore() {
 export function makeFeeStore() {
   return {
     get: (tenantId, fy) => FeeStructure.findOne({ tenantId, fy }).lean(),
+    // Only the due day changes; everything else in the chart is left alone.
+    setDueDay: (tenantId, fy, dueDay) =>
+      FeeStructure.findOneAndUpdate(
+        { tenantId, fy },
+        { $set: { dueDay } },
+        { new: true },
+      ).lean(),
     save: (tenantId, fy, data) =>
       FeeStructure.findOneAndUpdate(
         { tenantId, fy },
@@ -477,6 +484,33 @@ const adjustmentsFor = (tenantId, fy, studentIds) =>
 
 export function makeChargeStore() {
   return {
+    /**
+     * Moves the due date of monthly charges that are NOT yet due (their stored date is after
+     * `today`) to `dueDay` of their own month. Past months, once-only and opening charges are
+     * never touched. Returns how many charges were moved.
+     */
+    async moveMonthlyDueDay(tenantId, fy, dueDay, today) {
+      const rows = await Charge.find({
+        tenantId,
+        fy,
+        period: /^\d{4}-\d{2}$/,
+        dueDate: { $gt: today },
+      })
+        .select("period dueDate")
+        .lean();
+      const dd = String(dueDay).padStart(2, "0");
+      const ops = rows
+        .filter((c) => c.dueDate !== `${c.period}-${dd}`)
+        .map((c) => ({
+          updateOne: {
+            filter: { tenantId, _id: c._id },
+            update: { $set: { dueDate: `${c.period}-${dd}` } },
+          },
+        }));
+      if (ops.length === 0) return 0;
+      await Charge.bulkWrite(ops, { ordered: false });
+      return ops.length;
+    },
     // Used only when students are permanently deleted: their unpaid fee plan goes with them.
     deleteForStudents: (tenantId, studentIds) =>
       Charge.deleteMany({ tenantId, studentId: { $in: studentIds } }),

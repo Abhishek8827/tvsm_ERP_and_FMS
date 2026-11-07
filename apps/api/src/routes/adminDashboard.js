@@ -2,7 +2,11 @@ import { Router } from "express";
 import { z } from "zod";
 import { CLASS_KEYS, getFinancialYear, todayIst } from "@erp/shared";
 import { requireRole } from "../middleware/requireRole.js";
-import { buildFeeRows, totalsOf } from "../services/feesDatabase.js";
+import {
+  buildFeeRows,
+  totalsByKind,
+  totalsOf,
+} from "../services/feesDatabase.js";
 import { summarizeByClass } from "../services/feeSummary.js";
 import { lastPlanRun } from "../services/monthlyPlan.js";
 
@@ -83,6 +87,8 @@ export function adminDashboardRouter(deps, authenticate) {
           fy,
           funds,
           fees: totalsOf(rows),
+          // School and Bus apart: billed - collected - rebate = due, so the two rows add up.
+          feesByKind: totalsByKind(rows),
           noPlanStudents: rows.filter((r) => !r.planPosted).length,
           // Students the automatic monthly posting could not price (grouped by reason), or null.
           feePlan: lastPlanRun(),

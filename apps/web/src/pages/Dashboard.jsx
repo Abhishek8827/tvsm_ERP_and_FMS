@@ -175,6 +175,46 @@ function WaitingRow({ icon, label, count, caption, to }) {
   );
 }
 
+/** One kind of fee (School or Bus): a vertical label on the left, then four figures that add up. */
+function FeeRow({ label, tone, t }) {
+  const bar = tone === "teal" ? "bg-teal-600" : "bg-brand";
+  return (
+    <div
+      className="flex overflow-hidden rounded-card shadow-card"
+      data-testid={`fees-${label.toLowerCase()}`}
+    >
+      <div
+        className={`flex w-6 shrink-0 items-center justify-center ${bar} text-white`}
+        aria-hidden="true"
+      >
+        <span className="text-[10px] font-bold uppercase tracking-widest [writing-mode:vertical-rl] rotate-180">
+          {label}
+        </span>
+      </div>
+      <div className="grid flex-1 gap-3 bg-white/70 p-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard
+          label={`${label}: billed (till today)`}
+          value={money(t.billedPaise)}
+        />
+        <StatCard
+          label={`${label}: collected`}
+          value={money(t.paidPaise)}
+          caption={`Rebate ${money(t.rebatePaise)}`}
+        />
+        <StatCard
+          label={`${label}: due till today`}
+          value={money(t.dueNowPaise)}
+          caption={`Overdue ${money(t.overduePaise)}`}
+        />
+        <StatCard
+          label={`${label}: not yet due`}
+          value={money(t.notYetDuePaise)}
+        />
+      </div>
+    </div>
+  );
+}
+
 /** One balance in the Funds strip: icon, label (a <p>), then the amount (the next <p>). */
 function FundTile({ icon, label, value, extra }) {
   return (
@@ -268,26 +308,15 @@ function Overview() {
         </p>
       </Card>
       <Card title={`Fees ${d.fy}`}>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <StatCard
-            label="Billed (till this month)"
-            value={money(d.fees.billedPaise)}
-          />
-          <StatCard
-            label="Collected"
-            value={money(d.fees.paidPaise)}
-            caption={`Rebate ${money(d.fees.rebatePaise)}`}
-          />
-          <StatCard
-            label="Due till today"
-            value={money(d.fees.dueNowPaise)}
-            caption={`Overdue ${money(d.fees.overduePaise)}`}
-          />
-          <StatCard
-            label="Outstanding"
-            value={money(d.fees.outstandingPaise)}
-          />
+        <div className="flex flex-col gap-3">
+          <FeeRow label="School" tone="blue" t={d.feesByKind.school} />
+          <FeeRow label="Bus" tone="teal" t={d.feesByKind.bus} />
         </div>
+        <p className="mt-2 text-xs text-ink-muted">
+          Billed and collected count only the months whose due date has passed.
+          Billed - collected - rebate = due till today. "Not yet due" is already
+          posted but its due date is still to come.
+        </p>
         {d.noPlanStudents > 0 && (
           <p className="mt-3 text-sm text-warning">
             {d.noPlanStudents} students have no fees posted yet.{" "}

@@ -1,5 +1,5 @@
 import request from "supertest";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createApp } from "../app.js";
 import { loadEnv } from "../config/env.js";
 import { createLogger } from "../utils/logger.js";
@@ -26,7 +26,7 @@ const users = {
 };
 const as = (t) => ({ Authorization: `Bearer ${t}` });
 
-function build(forFees = async () => []) {
+function build(forFees = async () => [], charges = []) {
   const deps = {
     verifyToken: async (t) => ({ uid: t, role: t, tenantId: TENANT }),
     userStore: {
@@ -40,7 +40,7 @@ function build(forFees = async () => []) {
     },
     studentStore: { forFees },
     feeStore: { get: async () => null },
-    chargeStore: { listForStudents: async () => [] },
+    chargeStore: { listForStudents: async () => charges },
     receiptStore: {
       linesForStudents: async () => [],
       // Same shape as the real store: groups of kind x mode, not "totals".
@@ -80,6 +80,46 @@ describe("dashboard overview", () => {
       cancellations: 4,
     });
     expect(r.body.funds.cashPaise).toBe(1);
+  });
+});
+
+describe("dashboard fees by kind", () => {
+  afterEach(() => vi.useRealTimers());
+  it('School and Bus rows: billed - collected - rebate = due, and "not yet due" is separate', async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-11-06T05:00:00Z")); // 6 Nov: June-Oct are due (10th), Nov is not yet
+    const sid = "a".repeat(24);
+    const month = (head, m, amountPaise) => ({
+      _id: `${head}${m}`.padEnd(24, "0"),
+      studentId: sid,
+      fy: "2026-27",
+      head,
+      period: `2026-${String(m).padStart(2, "0")}`,
+      dueDate: `2026-${String(m).padStart(2, "0")}-10`,
+      amountPaise,
+    });
+    const charges = [6, 7, 8, 9, 10, 11].flatMap((m) => [
+      month("tuition", m, 77000),
+      month("transport", m, 30000),
+    ]);
+    const student = { _id: sid, admissionNo: '1', name: 'A', classKey: 'LKG', status: 'active', usesTransport: true }; // prettier-ignore
+    const r = await request(build(async () => [student], charges)).get('/api/dashboard/overview').set(as('admin')); // prettier-ignore
+    expect(r.body.feesByKind.school).toMatchObject({
+      billedPaise: 5 * 77000,
+      paidPaise: 0,
+      rebatePaise: 0,
+      dueNowPaise: 5 * 77000,
+      notYetDuePaise: 77000,
+    });
+    expect(r.body.feesByKind.bus).toMatchObject({
+      billedPaise: 5 * 30000,
+      dueNowPaise: 5 * 30000,
+      notYetDuePaise: 30000,
+    });
+    for (const k of ["school", "bus"]) {
+      const t = r.body.feesByKind[k];
+      expect(t.billedPaise - t.paidPaise - t.rebatePaise).toBe(t.dueNowPaise);
+    }
   });
 });
 

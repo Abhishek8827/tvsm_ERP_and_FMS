@@ -105,6 +105,10 @@ describe("Dashboard (Admin)", () => {
         { id: 'b2', name: 'Kotak', balancePaise: 1500000 },
       ],
     },
+    feesByKind: {
+      school: { billedPaise: 1000000, paidPaise: 300000, rebatePaise: 50000, dueNowPaise: 650000, overduePaise: 400000, notYetDuePaise: 100000 },
+      bus: { billedPaise: 200000, paidPaise: 50000, rebatePaise: 0, dueNowPaise: 150000, overduePaise: 90000, notYetDuePaise: 20000 },
+    }, // prettier-ignore
     fees: { students: 10, billedPaise: 0, paidPaise: 0, rebatePaise: 0, dueNowPaise: 0, overduePaise: 0, outstandingPaise: 0 },
     noPlanStudents: 0,
     feePlan: null,
@@ -125,6 +129,27 @@ describe("Dashboard (Admin)", () => {
       return {};
     });
   });
+  it("fees are in two rows, School then Bus, each with a vertical label, and billed - collected - rebate = due", async () => {
+    show(<Dashboard />);
+    const school = within(await screen.findByTestId("fees-school"));
+    const bus = within(screen.getByTestId("fees-bus"));
+    expect(
+      screen.getAllByTestId(/^fees-/).map((n) => n.dataset.testid),
+    ).toEqual(["fees-school", "fees-bus"]);
+    expect(
+      school.getByText("School: billed (till today)").nextSibling,
+    ).toHaveTextContent("₹10,000");
+    expect(
+      school.getByText("School: due till today").nextSibling,
+    ).toHaveTextContent("₹6,500"); // 10,000 - 3,000 - 500
+    expect(bus.getByText("Bus: due till today").nextSibling).toHaveTextContent(
+      "₹1,500",
+    ); // 2,000 - 500
+    expect(bus.getByText("Bus: not yet due").nextSibling).toHaveTextContent(
+      "₹200",
+    );
+  });
+
   it("funds: each bank by name, then total cash + total online = total funds", async () => {
     show(<Dashboard />);
     expect(await screen.findByText("IDFC")).toBeInTheDocument();

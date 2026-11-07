@@ -61,7 +61,7 @@ export const NAV_ITEMS = [
   {
     key: "rebates",
     group: "fees",
-    label: "Fee Rebates & Concessions",
+    label: "Rebate & Concession",
     path: "/rebates",
     // Admin gives, imports and reverses; the Principal can look and export. Not for the Cashier.
     roles: ["admin", "principal"],

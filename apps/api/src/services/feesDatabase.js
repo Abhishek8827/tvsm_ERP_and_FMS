@@ -108,6 +108,14 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       // old fees paid / rebated are already taken off by `dueNow`, so old is what is STILL owed
       hasAny: sum([...newHeads, ...oldHeads], "billed") > 0,
     });
+    // One kind (School / Bus), every head incl. old fees, up to the chosen day. These always satisfy
+    // billed - paid - rebate = due, so the Dashboard rows reconcile.
+    const kindTill = (heads) => ({
+      billedPaise: sumHeads(heads, "tillBilled"),
+      paidPaise: sumHeads(heads, "tillPaid"),
+      rebatePaise: sumHeads(heads, "tillRebate"),
+      dueNowPaise: sumHeads(heads, "dueNow"),
+    });
     const school = moduleDues({
       kind: "school",
       charges,
@@ -178,10 +186,14 @@ export async function buildFeeRows({ deps, tenantId, fy, filters, asOf }) {
       school: {
         outstandingPaise: school.outstanding,
         dueNowPaise: school.dueNow,
+        overduePaise: school.overdue,
+        ...kindTill(["old_fees", "tuition", "admission", "form"]),
       },
       transport: {
         outstandingPaise: transport.outstanding,
         dueNowPaise: transport.dueNow,
+        overduePaise: transport.overdue,
+        ...kindTill(["transport_old", "transport"]),
       },
     };
   });
@@ -243,4 +255,35 @@ export function totalsOf(rows) {
     t.lateFeePaise += r.lateFeePaise;
   }
   return t;
+}
+
+/**
+ * School and Bus separately, up to the chosen day: billed, collected, rebate, due, and what is
+ * posted but not yet due. billed - collected - rebate = due, row by row.
+ */
+export function totalsByKind(rows) {
+  const make = () => ({
+    billedPaise: 0,
+    paidPaise: 0,
+    rebatePaise: 0,
+    dueNowPaise: 0,
+    overduePaise: 0,
+    notYetDuePaise: 0,
+  });
+  const out = { school: make(), bus: make() };
+  for (const r of rows) {
+    for (const [key, k] of [
+      ["school", r.school],
+      ["bus", r.transport],
+    ]) {
+      const t = out[key];
+      t.billedPaise += k.billedPaise;
+      t.paidPaise += k.paidPaise;
+      t.rebatePaise += k.rebatePaise;
+      t.dueNowPaise += k.dueNowPaise;
+      t.overduePaise += k.overduePaise;
+      t.notYetDuePaise += Math.max(0, k.outstandingPaise - k.dueNowPaise);
+    }
+  }
+  return out;
 }

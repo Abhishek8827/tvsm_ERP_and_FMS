@@ -3,7 +3,7 @@ import { assertPaise } from "./money.js";
 
 /**
  * Fee rules confirmed by the school (see DECISIONS.md):
- *  - Monthly instalments for 10 months, June to March, due on the 15th.
+ *  - Monthly instalments for 10 months, June to March, due on the 10th.
  *  - Tuition and transport are monthly. Admission and form fee are charged once (not monthly).
  *  - Late fee: a flat amount (Rs 100), once for each overdue month, after a 10 day grace period.
  *    It applies to tuition and transport only. It is shown separately from the fee itself.
@@ -15,7 +15,7 @@ export const ONE_TIME_HEADS = ["admission", "form"];
 export const LATE_FEE_HEADS = MONTHLY_HEADS;
 
 export const DEFAULT_FEE_CONFIG = {
-  dueDay: 15,
+  dueDay: 10,
   graceDays: 10,
   lateFeePaise: 10_000,
 };

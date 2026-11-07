@@ -34,7 +34,7 @@ const feeStructureSchema = new mongoose.Schema(
     classFees: [classFeeSchema],
     formFeePaise: { type: Number, required: true, min: 0 },
     villages: [villageSchema],
-    dueDay: { type: Number, default: 15 },
+    dueDay: { type: Number, default: 10 },
     graceDays: { type: Number, default: 10 },
     lateFeePaise: { type: Number, default: 10000 },
   },

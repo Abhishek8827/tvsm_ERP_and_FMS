@@ -218,8 +218,9 @@ function FeeForm({ fy, initial }) {
               label="Due day of month"
               inputMode="numeric"
               value={form.dueDay}
-              error={errors.dueDay}
-              onChange={(e) => setForm({ ...form, dueDay: e.target.value })}
+              disabled
+              hint="Change it in System Settings > Fee due date."
+              readOnly
             />
             <Input
               label="Grace days"

@@ -1,11 +1,21 @@
-export function Card({ title, subtitle, actions, center = false, children }) {
+import { IconTile } from "../Icons";
+
+export function Card({
+  title,
+  subtitle,
+  actions,
+  icon,
+  center = false,
+  children,
+}) {
   return (
     <section className="glass rounded-card p-5 shadow-card">
       {(title || actions) && (
         <header
           className={`mb-4 flex items-start gap-3 ${center ? "justify-center text-center" : "justify-between"}`}
         >
-          <div>
+          {icon && <IconTile name={icon} />}
+          <div className="min-w-0 flex-1">
             {title && (
               <h2 className="text-base font-semibold text-ink">{title}</h2>
             )}

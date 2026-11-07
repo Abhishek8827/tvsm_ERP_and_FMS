@@ -146,83 +146,6 @@ function EntryDialog({ open, onClose }) {
   );
 }
 
-/** Top-up = a transfer from cash in hand to petty cash (not an expense, not income). */
-function TopUpDialog({ open, onClose, cashPaise }) {
-  const { notify } = useToast();
-  const queryClient = useQueryClient();
-  const key = useRef(newIdempotencyKey());
-  const [amountText, setAmountText] = useState("");
-  const [error, setError] = useState("");
-  const amount = parseRupees(amountText);
-  const top = useMutation({
-    mutationFn: () =>
-      api("/api/transfers", {
-        method: "POST",
-        idempotencyKey: key.current,
-        body: {
-          from: "cash",
-          to: "petty",
-          amountPaise: amount.paise,
-          note: "Petty cash top-up",
-        },
-      }),
-    onSuccess: async () => {
-      key.current = newIdempotencyKey();
-      await queryClient.invalidateQueries({ queryKey: ["petty"] });
-      await queryClient.invalidateQueries({ queryKey: ["money"] });
-      notify("Petty cash topped up from cash in hand.", "success");
-      setAmountText("");
-      setError("");
-      onClose();
-    },
-    onError: (e) => {
-      setError(e.fields?.amountPaise ?? e.message);
-      if (e.status >= 400 && e.status < 500) key.current = newIdempotencyKey();
-      notify(errorText(e), "error");
-    },
-  });
-  return (
-    <Dialog
-      open={open}
-      title="Top up petty cash"
-      onClose={onClose}
-      footer={
-        <>
-          <Button
-            variant="secondary"
-            onClick={onClose}
-            disabled={top.isPending}
-          >
-            Cancel
-          </Button>
-          <Button
-            loading={top.isPending}
-            disabled={!(amount.paise > 0) || !!amount.error}
-            onClick={() => top.mutate()}
-          >
-            Move to petty cash
-          </Button>
-        </>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <p className="text-ink-muted">
-          Money moves from cash in hand
-          {cashPaise !== undefined ? ` (${money(cashPaise)})` : ""} to petty
-          cash.
-        </p>
-        <Input
-          label="Amount (₹)"
-          inputMode="decimal"
-          value={amountText}
-          error={amount.error ?? error}
-          onChange={(e) => setAmountText(e.target.value)}
-        />
-      </div>
-    </Dialog>
-  );
-}
-
 function RegisterView({ isAdmin }) {
   const { notify } = useToast();
   const queryClient = useQueryClient();
@@ -231,16 +154,11 @@ function RegisterView({ isAdmin }) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const [adding, setAdding] = useState(false);
-  const [topping, setTopping] = useState(false);
   const [reversing, setReversing] = useState(null);
   const [reason, setReason] = useState("");
   const balance = useQuery({
     queryKey: ["petty", "summary"],
     queryFn: () => api("/api/petty/summary"),
-  });
-  const overview = useQuery({
-    queryKey: ["money", "overview"],
-    queryFn: () => api("/api/money/overview"),
   });
   const list = useQuery({
     queryKey: ["petty", "list", { page, pageSize, from, to }],
@@ -300,18 +218,12 @@ function RegisterView({ isAdmin }) {
   ];
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="grid gap-3 sm:max-w-md">
         <StatCard
           label="Petty cash remaining"
           value={balance.data ? money(balance.data.balancePaise) : "-"}
+          caption="A separate fund. It fills when a voucher is paid under the Petty Cash head."
         />
-        {isAdmin && (
-          <StatCard
-            label="Cash in hand"
-            value={overview.data ? money(overview.data.cashPaise) : "-"}
-            caption="Petty cash is topped up from here"
-          />
-        )}
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <Input
@@ -332,14 +244,7 @@ function RegisterView({ isAdmin }) {
             setPage(1);
           }}
         />
-        {isAdmin && (
-          <>
-            <Button onClick={() => setAdding(true)}>New entry</Button>
-            <Button variant="secondary" onClick={() => setTopping(true)}>
-              Top up from cash
-            </Button>
-          </>
-        )}
+        {isAdmin && <Button onClick={() => setAdding(true)}>New entry</Button>}
       </div>
       <Table
         columns={columns}
@@ -351,7 +256,7 @@ function RegisterView({ isAdmin }) {
         emptyTitle="No petty cash entries"
         emptyDescription={
           isAdmin
-            ? "Set the opening petty cash on the Bank & Cash screen, then add entries under ₹500."
+            ? "Pay an expense voucher under the Petty Cash head to fill it, then add entries under ₹500."
             : undefined
         }
       />
@@ -369,13 +274,6 @@ function RegisterView({ isAdmin }) {
       )}
       {isAdmin && (
         <EntryDialog open={adding} onClose={() => setAdding(false)} />
-      )}
-      {isAdmin && (
-        <TopUpDialog
-          open={topping}
-          onClose={() => setTopping(false)}
-          cashPaise={overview.data?.cashPaise}
-        />
       )}
       <ConfirmDialog
         open={!!reversing}

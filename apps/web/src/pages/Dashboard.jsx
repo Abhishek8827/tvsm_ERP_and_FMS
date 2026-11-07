@@ -14,6 +14,7 @@ import {
   StatCard,
 } from "../components/ui";
 import { BackupReminder } from "../components/BackupReminder";
+import { Icon, IconTile } from "../components/Icons";
 /**
  * Step 1 dashboard intentionally shows NO business numbers: there is no data yet, and rule 1
  * forbids placeholders. The only live information is the API/database health from /api/health.
@@ -79,6 +80,7 @@ function ClassStrength() {
   return (
     <Card
       title="Class strength"
+      icon="users"
       subtitle={q.data ? `${q.data.totalStudents} students` : undefined}
       actions={
         <Select
@@ -102,29 +104,47 @@ function ClassStrength() {
             No {status === "all" ? "" : status} students.
           </p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-hidden rounded-xl border border-line">
             <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase text-ink-muted">
+              <thead className="bg-blue-200 text-xs font-semibold uppercase tracking-wide text-blue-800">
                 <tr>
-                  <th className="py-2 pr-4 font-medium">Class</th>
-                  <th className="py-2 text-right font-medium">Students</th>
+                  <th className="px-3 py-2.5">
+                    <span className="inline-flex items-center gap-2">
+                      <Icon name="cap" size={18} /> Class
+                    </span>
+                  </th>
+                  <th className="px-3 py-2.5 text-right">
+                    <span className="inline-flex items-center gap-2">
+                      <Icon name="users" size={18} /> Students
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
                 {q.data.rows.map((c) => (
-                  <tr key={c.classKey}>
-                    <td className="py-1.5 pr-4">{classLabel(c.classKey)}</td>
-                    <td className="py-1.5 text-right tabular-nums">
+                  <tr key={c.classKey} className="even:bg-slate-200/60">
+                    <td className="px-3 py-1.5">
+                      <span className="inline-block rounded-full bg-blue-200 px-3 py-0.5 text-xs font-semibold text-blue-800">
+                        {classLabel(c.classKey)}
+                      </span>
+                    </td>
+                    <td className="px-3 py-1.5 text-right font-semibold tabular-nums text-ink">
                       {c.students}
                     </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr className="border-t border-line font-semibold">
-                  <td className="py-2 pr-4">Total</td>
-                  <td className="py-2 text-right tabular-nums">
-                    {q.data.totalStudents}
+                <tr className="bg-blue-100">
+                  <td className="px-3 py-2.5 font-semibold text-blue-800">
+                    <span className="inline-flex items-center gap-2">
+                      <Icon name="layers" size={20} /> Total
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <span className="inline-block rounded-full bg-brand px-4 py-1 font-semibold tabular-nums text-white">
+                      {q.data.totalStudents}
+                    </span>
                   </td>
                 </tr>
               </tfoot>
@@ -132,6 +152,41 @@ function ClassStrength() {
           </div>
         ))}
     </Card>
+  );
+}
+
+/** One "waiting" row: big count, caption and a link to where the decision is made. */
+function WaitingRow({ icon, label, count, caption, to }) {
+  const { role } = useAuth();
+  const Wrap = role === "admin" ? Link : "div"; // the Principal only looks: no Approvals page for them
+  return (
+    <Wrap
+      {...(role === "admin" ? { to } : {})}
+      className="glass glass-lift flex items-center gap-4 rounded-card p-4 shadow-card transition hover:shadow-lift"
+    >
+      <IconTile name={icon} box="h-16 w-16" size={30} />
+      <div className="min-w-0 flex-1">
+        <p className="font-medium text-ink">{label}</p>
+        <p className="text-3xl font-bold leading-tight text-ink">{count}</p>
+        <p className="text-sm text-ink-muted">{caption}</p>
+      </div>
+      {role === "admin" && <Icon name="chevron" className="text-slate-600" />}
+    </Wrap>
+  );
+}
+
+/** One balance in the Funds strip: icon, label (a <p>), then the amount (the next <p>). */
+function FundTile({ icon, label, value, extra }) {
+  return (
+    <div
+      className={`flex min-w-44 flex-1 items-center gap-3 px-4 py-3 ${extra ? "border-l border-line" : ""}`}
+    >
+      <IconTile name={icon} box="h-12 w-12" />
+      <div className="min-w-0">
+        <p className="truncate text-sm text-ink-muted">{label}</p>
+        <p className="text-2xl font-bold text-ink">{value}</p>
+      </div>
+    </div>
   );
 }
 
@@ -153,53 +208,59 @@ function Overview() {
     );
   const d = q.data;
   const bankTotal = d.funds.banks.reduce((n, b) => n + b.balancePaise, 0);
-  const cashTotal = (d.funds.cashPaise ?? 0) + (d.funds.pettyPaise ?? 0);
+  const cashTotal = d.funds.cashPaise ?? 0; // school cash only: petty cash is a separate fund
   return (
     <>
-      <Card title="Funds">
-        <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-ink-muted">
-          Bank accounts
-        </p>
-        {d.funds.banks.length === 0 ? (
-          <p className="text-sm text-ink-muted">No bank account added yet.</p>
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Card title="Funds" subtitle="ACCOUNTS & BALANCES">
+        <div
+          className="grid items-stretch gap-4 xl:grid-cols-[minmax(0,1fr)_17rem]"
+          data-testid="funds-total"
+        >
+          <div className="glass flex flex-wrap items-center rounded-card p-2 shadow-card">
+            <FundTile icon="cash" label="Total cash" value={money(cashTotal)} />
             {d.funds.banks.map((b) => (
-              <StatCard
+              <FundTile
                 key={b.id ?? b.name}
+                icon="bank"
                 label={b.name}
                 value={money(b.balancePaise)}
               />
             ))}
+            {d.funds.banks.length === 0 && (
+              <p className="px-4 text-sm text-ink-muted">
+                No bank account added yet.
+              </p>
+            )}
+            <FundTile
+              icon="bank"
+              label="Total online"
+              value={money(bankTotal)}
+              extra
+            />
           </div>
-        )}
-        <div
-          className="mt-4 grid items-stretch gap-3 sm:grid-cols-[1fr_auto_1fr_auto_1fr]"
-          data-testid="funds-total"
-        >
-          <StatCard
-            label="Total cash"
-            value={money(cashTotal)}
-            caption={`Cash in hand ${money(d.funds.cashPaise)} + petty cash ${money(d.funds.pettyPaise)}`}
-          />
-          <span
-            aria-hidden="true"
-            className="hidden self-center text-2xl text-ink-muted sm:block"
-          >
-            +
-          </span>
-          <StatCard
-            label="Total online"
-            value={money(bankTotal)}
-            caption="All bank accounts"
-          />
-          <span
-            aria-hidden="true"
-            className="hidden self-center text-2xl text-ink-muted sm:block"
-          >
-            =
-          </span>
-          <StatCard label="Total funds" value={money(cashTotal + bankTotal)} />
+          <div className="flex items-center gap-4 rounded-card bg-linear-to-br from-blue-600 to-blue-800 p-5 text-white shadow-glow">
+            <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/20">
+              <Icon name="layers" size={26} />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-white/90">Total funds</p>
+              <p className="text-3xl font-bold leading-tight">
+                {money(cashTotal + bankTotal)}
+              </p>
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 flex items-center gap-4 rounded-card bg-linear-to-r from-purple-100 to-purple-200/70 px-4 py-3">
+          <IconTile name="coins" tone="purple" box="h-10 w-10" size={20} />
+          <p className="flex-1 font-medium text-ink">
+            Petty cash{" "}
+            <span className="text-sm font-normal text-ink-muted">
+              (separate fund, not part of Total funds)
+            </span>
+          </p>
+          <p className="text-xl font-bold text-purple-700">
+            {money(d.funds.pettyPaise)}
+          </p>
         </div>
         <p className="mt-3 text-sm text-ink-muted">
           Collected today: <b className="text-ink">{money(d.today?.paise)}</b> (
@@ -253,26 +314,34 @@ function Overview() {
           </div>
         )}
       </Card>
-      <Card title="Waiting for a decision">
-        <div className="grid gap-3 sm:grid-cols-3">
-          <StatCard
-            label="Receipt cancellations"
-            value={String(d.pending.cancellations)}
-            caption="awaiting a decision"
-          />
-          <StatCard
-            label="Expense vouchers"
-            value={String(d.pending.vouchers)}
-            caption="awaiting approval"
-          />
-          <StatCard
-            label="Reversal requests"
-            value={String(d.pending.reversals)}
-            caption="awaiting a decision"
-          />
-        </div>
-      </Card>
-      <ClassStrength />
+      <div className="grid items-start gap-4 lg:grid-cols-[24rem_minmax(0,1fr)]">
+        <ClassStrength />
+        <Card title="Waiting for a decision" icon="doc">
+          <div className="flex flex-col gap-3">
+            <WaitingRow
+              icon="receipt"
+              label="Receipt cancellations"
+              count={d.pending.cancellations}
+              caption="awaiting a decision"
+              to="/approvals"
+            />
+            <WaitingRow
+              icon="wallet"
+              label="Expense vouchers"
+              count={d.pending.vouchers}
+              caption="awaiting approval"
+              to="/approvals"
+            />
+            <WaitingRow
+              icon="refresh"
+              label="Reversal requests"
+              count={d.pending.reversals}
+              caption="awaiting a decision"
+              to="/approvals"
+            />
+          </div>
+        </Card>
+      </div>
     </>
   );
 }

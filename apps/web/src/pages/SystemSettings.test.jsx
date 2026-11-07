@@ -345,3 +345,50 @@ describe("System Settings: all settings on one page", () => {
     expect(screen.getByLabelText("Book No.")).toBeEnabled();
   });
 });
+
+describe("System Settings: Fee due date", () => {
+  it("shows the warning and needs reason + typed phrase before it saves", async () => {
+    const base = api.getMockImplementation();
+    api.mockImplementation(async (url, opts) => {
+      if (url.startsWith("/api/fee-structure/") && url.endsWith("/due-day"))
+        return { dueDay: opts.body.dueDay, chargesMoved: 3 };
+      if (url.startsWith("/api/fee-structure/")) return { dueDay: 10 };
+      return base(url, opts);
+    });
+    wrap(<SystemSettings />);
+    await userEvent.click(screen.getByRole("tab", { name: "Fee due date" }));
+    expect(
+      await screen.findByText(/changes money figures/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/10th of every month/)).toBeInTheDocument();
+    const button = screen.getByRole("button", { name: "Change due date" });
+    expect(button).toBeDisabled();
+    const day = screen.getByLabelText(/Due day of the month/);
+    await userEvent.clear(day);
+    await userEvent.type(day, "5");
+    await userEvent.type(
+      screen.getByLabelText("Why are you changing it?"),
+      "Board decision",
+    );
+    expect(button).toBeDisabled();
+    await userEvent.type(
+      screen.getByLabelText(/Type CHANGE DUE DATE/),
+      "CHANGE DUE DATE",
+    );
+    expect(button).toBeEnabled();
+    await userEvent.click(button);
+    await waitFor(() =>
+      expect(api).toHaveBeenCalledWith(
+        expect.stringMatching(/\/due-day$/),
+        expect.objectContaining({
+          method: "PUT",
+          body: {
+            dueDay: 5,
+            reason: "Board decision",
+            confirm: "CHANGE DUE DATE",
+          },
+        }),
+      ),
+    );
+  });
+});

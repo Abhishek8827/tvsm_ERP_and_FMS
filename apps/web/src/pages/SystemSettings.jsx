@@ -13,6 +13,7 @@ import {
 import { errorText } from "../lib/rupees";
 import { istStamp, saveBlob } from "../lib/saveFile";
 import { AccountSettings } from "./settings/AccountSettings";
+import { DueDateSettings } from "./settings/DueDateSettings";
 import { ExpenseHeadSettings } from "./settings/ExpenseHeadSettings";
 import { TcNumberingSettings } from "./settings/TcNumberingSettings";
 import { TransportAccountSettings } from "./settings/TransportAccountSettings";
@@ -29,6 +30,7 @@ const TABS = [
   ["accounts", "Accounts & opening balances"],
   ["heads", "Expense heads"],
   ["transport", "Transport account"],
+  ["due", "Fee due date"],
   ["tc", "TC numbering"],
   ["backup", "Backup & safety"],
 ];
@@ -65,6 +67,7 @@ export function SystemSettings() {
       {tab === "accounts" && <AccountSettings />}
       {tab === "heads" && <ExpenseHeadSettings />}
       {tab === "transport" && <TransportAccountSettings />}
+      {tab === "due" && <DueDateSettings />}
       {tab === "tc" && <TcNumberingSettings />}
       {tab === "backup" && (
         <>

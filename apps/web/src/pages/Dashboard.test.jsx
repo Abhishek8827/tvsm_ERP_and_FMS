@@ -131,13 +131,17 @@ describe("Dashboard (Admin)", () => {
     expect(screen.getByText("Kotak")).toBeInTheDocument();
     const totals = within(screen.getByTestId("funds-total"));
     expect(totals.getByText("Total cash").nextSibling).toHaveTextContent(
-      "₹12,000",
+      "₹10,000",
     );
     expect(totals.getByText("Total online").nextSibling).toHaveTextContent(
       "₹65,000",
     );
     expect(totals.getByText("Total funds").nextSibling).toHaveTextContent(
-      "₹77,000",
+      "₹75,000",
+    );
+    // Petty cash is its own fund: shown apart, never added into the total.
+    expect(screen.getByText(/Petty cash/).closest("div")).toHaveTextContent(
+      "₹2,000",
     );
   });
   it("the School / Bus fee summary tables are no longer on the Dashboard", async () => {

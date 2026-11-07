@@ -44,7 +44,7 @@ function EntryDialog({ open, onClose }) {
   const [errors, setErrors] = useState({});
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
   const amount = parseRupees(f.amount);
-  const active = (heads.data?.heads ?? []).filter((h) => h.active);
+  const active = (heads.data?.heads ?? []).filter((h) => h.active && !h.system);
   const save = useMutation({
     mutationFn: () =>
       api("/api/petty", {

@@ -1,211 +1,334 @@
-import mongoose from "mongoose";
-import { Counter } from "../models/Counter.js";
+import { addDaysToDateString, istStartOfDay } from "@erp/shared";
+import { Charge } from "../models/Charge.js";
+import { ExpensePayment } from "../models/ExpensePayment.js";
+import { ExpenseVoucher } from "../models/ExpenseVoucher.js";
+import { LedgerEntry } from "../models/LedgerEntry.js";
+import { OldFeeAdjustment } from "../models/OldFeeAdjustment.js";
+import { PettyEntry } from "../models/PettyEntry.js";
 import { Rebate } from "../models/Rebate.js";
 import { Receipt } from "../models/Receipt.js";
 import { ReceiptCancellation } from "../models/ReceiptCancellation.js";
+import { ReportSettings } from "../models/ReportSettings.js";
+import { SPLIT_STAGES, splitsOf } from "./receiptSplits.js";
 
-/**
- * Data access for rebates (concessions) and late-fee waivers. Kept in its own file so the
- * Rebates screen (list, import, export) does not grow the big stores file.
- */
+const EXPENSE_TYPES = ["expense_payment", "payment_reversal"];
+const BEGINNING = "2000-01-01";
+const accountOf = (r) =>
+  r.mode === "cash"
+    ? "cash"
+    : r.bankId
+      ? `bank:${r.bankId}`
+      : "online:unassigned";
 
-// Active rebates as ONE pseudo receipt that carries only concession lines. WHY: the fee engine
-// reads `receipts`; a rebate lowers what a charge asks for but is not a payment, so it has no
-// receipt `lines` (no money) - only `concessionLines`.
-async function rebateCredits(tenantId, studentId, fy, session = null) {
-  const rows = await Rebate.find({ tenantId, studentId, fy, status: "active" })
-    .session(session)
-    .lean();
-  const concessionLines = rows.flatMap((r) => r.lines);
-  // A waived month counts as "late fee already dealt with", exactly like one settled on a receipt.
-  const periods = rows.flatMap((r) => r.periods ?? []);
-  return concessionLines.length || periods.length
-    ? [{ lines: [], concessionLines, lateFee: { periods } }]
-    : [];
+/** Cancelled receipts never counted as money (same rule as the Cashbook and bank balances). */
+async function liveFilter(tenantId) {
+  const gone = (
+    await ReceiptCancellation.find({ tenantId, status: "cancelled" })
+      .select("receiptId")
+      .lean()
+  ).map((r) => r.receiptId);
+  return { tenantId, _id: { $nin: gone } };
 }
+const range = (from, to) => ({
+  $gte: istStartOfDay(from),
+  $lt: istStartOfDay(addDaysToDateString(to, 1)),
+});
 
-// Receipts that were cancelled no longer count as payments (their money is not "paid").
-async function cancelledReceiptIds(tenantId, studentId, session = null) {
-  const rows = await ReceiptCancellation.find({
-    tenantId,
-    studentId,
-    status: "cancelled",
-  })
-    .session(session)
-    .select("receiptId")
-    .lean();
-  return rows.map((r) => r.receiptId);
-}
-
-const escapeRx = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-function rebateFilter({ tenantId, q, type, status }) {
-  const f = { tenantId };
-  if (status) f.status = status;
-  if (type === "late_fee") f.kind = "late_fee";
-  else if (type) f.rebateType = type;
-  if (q) {
-    const rx = new RegExp(escapeRx(q), "i");
-    f.$or = [{ "student.name": rx }, { "student.admissionNo": rx }];
-  }
-  return f;
-}
-
-export function makeRebateStore() {
+/** Data access for the Reports screen. Read-only, apart from the opening-balance settings. */
+export function makeReportsStore() {
   return {
-    activeForStudents: (tenantId, studentIds, fy) =>
-      Rebate.find({
-        tenantId,
-        fy,
-        studentId: { $in: studentIds },
-        status: "active",
-      })
-        .select("studentId kind rebateType lines periods totalPaise")
-        .lean(),
-    /**
-     * Saves a rebate inside a transaction under the student's lock, after `build` has worked
-     * out the lines from the freshly read receipts + rebates (so two Admins cannot both
-     * rebate the same unpaid amount).
-     */
-    async create({
-      tenantId,
-      studentId,
-      fy,
-      kind,
-      reason,
-      student,
-      user,
-      build,
-      audit,
-      rebateType = null,
-      adjustOn = "oldest",
-      category = null,
-      sibling = undefined,
-      receiptNo = undefined,
-    }) {
-      const session = await mongoose.startSession();
-      try {
-        let saved;
-        await session.withTransaction(async () => {
-          await Counter.updateOne(
-            { tenantId, key: `lock:${studentId}` },
-            { $inc: { seq: 1 } },
-            { upsert: true, session },
-          );
-          const gone = await cancelledReceiptIds(tenantId, studentId, session);
-          const prior = [
-            ...(await Receipt.find({
-              tenantId,
-              studentId,
-              fy,
-              _id: { $nin: gone },
-            })
-              .session(session)
-              .lean()),
-            ...(await rebateCredits(tenantId, studentId, fy, session)),
-          ];
-          const built = build(prior);
-          // A rebate returns its lines; a late-fee waiver returns { lines: [], periods, totalPaise }.
-          const lines = Array.isArray(built) ? built : built.lines;
-          const periods = Array.isArray(built) ? [] : built.periods;
-          const totalPaise = Array.isArray(built)
-            ? lines.reduce((n, l) => n + l.amountPaise, 0)
-            : built.totalPaise;
-          const [doc] = await Rebate.create(
-            [
-              {
-                tenantId,
-                studentId,
-                fy,
-                kind,
-                rebateType,
-                adjustOn,
-                category,
-                sibling,
-                receiptNo,
-                reason,
-                lines,
-                periods,
-                totalPaise,
-                student,
-                createdBy: String(user.id),
-                createdByName: user.name,
-              },
-            ],
-            { session, ordered: true },
-          );
-          saved = doc.toObject();
-          if (audit) await audit(saved, session);
-        });
-        return saved;
-      } finally {
-        await session.endSession();
-      }
+    getSettings: (tenantId) => ReportSettings.findOne({ tenantId }).lean(),
+    saveSettings({ tenantId, fixedAssetsPaise, capitalPaise, reason, user }) {
+      return ReportSettings.findOneAndUpdate(
+        { tenantId },
+        {
+          $set: { fixedAssetsPaise, capitalPaise },
+          $push: {
+            history: {
+              at: new Date(),
+              byName: user.name,
+              reason,
+              fixedAssetsPaise,
+              capitalPaise,
+            },
+          },
+        },
+        { upsert: true, new: true },
+      ).lean();
     },
-    listForStudent: (tenantId, studentId) =>
-      Rebate.find({ tenantId, studentId })
-        .sort({ createdAt: -1 })
-        .limit(100)
-        .lean(),
-    findById: (tenantId, id) => Rebate.findOne({ tenantId, _id: id }).lean(),
-    /**
-     * The Rebates screen list. Late-fee waivers are listed too (type "late_fee") so every
-     * concession the Admin gave is in one place. `q` matches the student's name or SCH. no.
-     * `all: true` returns every row (for the Excel export).
-     */
-    async list({
-      tenantId,
-      page = 1,
-      pageSize = 25,
-      q,
-      type,
-      status,
-      all = false,
-    }) {
-      const filter = rebateFilter({ tenantId, q, type, status });
-      const cursor = Rebate.find(filter).sort({ createdAt: -1 });
-      if (!all) cursor.skip((page - 1) * pageSize).limit(pageSize);
-      const [rows, total, sums] = await Promise.all([
-        cursor.lean(),
-        Rebate.countDocuments(filter),
-        Rebate.aggregate([
-          { $match: { ...filter, status: "active" } },
+
+    /** Fee money received between two IST dates, by receipt head, plus late fees charged. */
+    async income(tenantId, from, to) {
+      const match = {
+        ...(await liveFilter(tenantId)),
+        issuedAt: range(from, to),
+      };
+      const [heads, late] = await Promise.all([
+        Receipt.aggregate([
+          { $match: match },
+          { $unwind: "$lines" },
+          {
+            $group: {
+              _id: "$lines.head",
+              paise: { $sum: "$lines.amountPaise" },
+            },
+          },
+        ]),
+        Receipt.aggregate([
+          { $match: match },
           {
             $group: {
               _id: null,
-              paise: { $sum: "$totalPaise" },
-              count: { $sum: 1 },
+              paise: { $sum: { $ifNull: ["$lateFee.chargedPaise", 0] } },
             },
           },
         ]),
       ]);
-      return { rows, total, active: sums[0] ?? { paise: 0, count: 0 } };
+      return {
+        byHead: Object.fromEntries(heads.map((h) => [h._id, h.paise])),
+        latePaise: late[0]?.paise ?? 0,
+      };
     },
-    // Same student + type + amount + reason already given (and not reversed): an import repeat.
-    async hasSame({ tenantId, studentId, fy, rebateType, totalPaise, reason }) {
-      return !!(await Rebate.exists({
-        tenantId,
-        studentId,
-        fy,
-        rebateType,
-        totalPaise,
-        reason,
-        status: "active",
-      }));
+
+    /** Money paid out between two IST dates, by expense head: vouchers (net of reversals) + petty cash. */
+    async expenses(tenantId, from, to) {
+      const [paid, petty] = await Promise.all([
+        LedgerEntry.aggregate([
+          {
+            $match: {
+              tenantId,
+              type: { $in: EXPENSE_TYPES },
+              entryDate: { $gte: from, $lte: to },
+            },
+          },
+          { $group: { _id: "$refId", paise: { $sum: "$amountPaise" } } },
+        ]),
+        PettyEntry.aggregate([
+          {
+            $match: {
+              tenantId,
+              status: "active",
+              date: { $gte: from, $lte: to },
+            },
+          },
+          { $group: { _id: "$headName", paise: { $sum: "$amountPaise" } } },
+        ]),
+      ]);
+      const ids = paid.map((p) => p._id).filter(Boolean);
+      const payments = ids.length
+        ? await ExpensePayment.find({ tenantId, _id: { $in: ids } })
+            .select("headName")
+            .lean()
+        : [];
+      const headOf = new Map(payments.map((p) => [String(p._id), p.headName]));
+      return [
+        // Ledger amounts are signed (a payment is negative), so the spend is the negative sum.
+        ...paid.map((p) => ({
+          head: headOf.get(String(p._id)) ?? "",
+          paise: -p.paise,
+        })),
+        ...petty.map((p) => ({ head: p._id ?? "", paise: p.paise })),
+      ];
     },
-    // Reversing is allowed once; the record stays, it just stops counting.
-    reverse: ({ tenantId, id, reason, user }) =>
-      Rebate.findOneAndUpdate(
-        { tenantId, _id: id, status: "active" },
+
+    /** Money held in each account on the end of `asOn`. */
+    async balances(tenantId, asOn) {
+      const live = await liveFilter(tenantId);
+      const [ledger, receipts] = await Promise.all([
+        LedgerEntry.aggregate([
+          { $match: { tenantId, entryDate: { $lte: asOn } } },
+          { $group: { _id: "$account", paise: { $sum: "$amountPaise" } } },
+        ]),
+        Receipt.aggregate([
+          {
+            $match: {
+              ...live,
+              issuedAt: { $lt: istStartOfDay(addDaysToDateString(asOn, 1)) },
+            },
+          },
+          ...SPLIT_STAGES,
+          {
+            $group: {
+              _id: { mode: "$pay.mode", bankId: "$pay.bankId" },
+              paise: { $sum: "$pay.amountPaise" },
+            },
+          },
+        ]),
+      ]);
+      const out = { cash: 0, petty: 0 };
+      for (const e of ledger) out[e._id] = (out[e._id] ?? 0) + e.paise;
+      for (const r of receipts) {
+        const k = accountOf(r._id);
+        out[k] = (out[k] ?? 0) + r.paise;
+      }
+      return out;
+    },
+
+    /** Memo: fee dues still unpaid on `asOn` (charges due by then - paid - rebates). Late fee excluded. */
+    async receivable(tenantId, asOn) {
+      const live = await liveFilter(tenantId);
+      const end = istStartOfDay(addDaysToDateString(asOn, 1));
+      const chargeColl = Charge.collection.name;
+      const viaCharge = (lines) => [
         {
-          $set: {
-            status: "reversed",
-            reversedReason: reason,
-            reversedAt: new Date(),
-            reversedByName: user.name,
+          $lookup: {
+            from: chargeColl,
+            localField: `${lines}.chargeId`,
+            foreignField: "_id",
+            as: "c",
           },
         },
-        { new: true },
-      ).lean(),
+        { $unwind: "$c" },
+        { $match: { "c.dueDate": { $lte: asOn } } },
+        { $group: { _id: null, paise: { $sum: `$${lines}.amountPaise` } } },
+      ];
+      const [billed, corrected, paid, rebated] = await Promise.all([
+        Charge.aggregate([
+          { $match: { tenantId, dueDate: { $lte: asOn } } },
+          { $group: { _id: null, paise: { $sum: "$amountPaise" } } },
+        ]),
+        // The Admin's old-fee corrections (positive or negative) on top of the imported charges.
+        OldFeeAdjustment.aggregate([
+          { $match: { tenantId, dueDate: { $lte: asOn } } },
+          { $group: { _id: null, paise: { $sum: "$deltaPaise" } } },
+        ]),
+        Receipt.aggregate([
+          { $match: { ...live, issuedAt: { $lt: end } } },
+          { $unwind: "$lines" },
+          { $match: { "lines.chargeId": { $exists: true } } },
+          ...viaCharge("lines"),
+        ]),
+        Rebate.aggregate([
+          { $match: { tenantId, status: "active", createdAt: { $lt: end } } },
+          { $unwind: "$lines" },
+          ...viaCharge("lines"),
+        ]),
+      ]);
+      return Math.max(
+        0,
+        (billed[0]?.paise ?? 0) +
+          (corrected[0]?.paise ?? 0) -
+          (paid[0]?.paise ?? 0) -
+          (rebated[0]?.paise ?? 0),
+      );
+    },
+
+    /** Memo: approved vouchers not yet paid, on `asOn`. */
+    async payables(tenantId, asOn) {
+      const approved = await ExpenseVoucher.find({
+        tenantId,
+        status: "approved",
+        date: { $lte: asOn },
+      })
+        .select("_id amountPaise")
+        .lean();
+      const approvedTotal = approved.reduce(
+        (sum, row) => sum + (row.amountPaise ?? 0),
+        0,
+      );
+      if (approved.length === 0) return 0;
+      const paid = await ExpensePayment.find({
+        tenantId,
+        status: "active",
+        date: { $lte: asOn },
+        voucherId: { $in: approved.map((row) => row._id) },
+      })
+        .select("voucherId amountPaise")
+        .lean();
+      const paidTotal = paid.reduce(
+        (sum, row) => sum + (row.amountPaise ?? 0),
+        0,
+      );
+      return Math.max(0, approvedTotal - paidTotal);
+    },
+
+    /** Every money movement of the range as Day Book entries (receipts + the money ledger). */
+    async dayBookEntries(tenantId, from, to, banks) {
+      const live = await liveFilter(tenantId);
+      const bankName = new Map(banks.map((b) => [String(b._id), b.name]));
+      const label = (a) =>
+        a === "cash"
+          ? "Cash"
+          : a === "petty"
+            ? "Petty cash"
+            : (bankName.get(a.replace("bank:", "")) ?? "Bank");
+      const [receipts, ledger] = await Promise.all([
+        Receipt.find({ ...live, issuedAt: range(from, to) }).lean(),
+        LedgerEntry.find({
+          tenantId,
+          entryDate: { $gte: from, $lte: to },
+        }).lean(),
+      ]);
+      const refs = ledger.map((e) => e.refId).filter(Boolean);
+      const [payments, petty] = refs.length
+        ? await Promise.all([
+            ExpensePayment.find({
+              tenantId,
+              _id: { $in: refs.filter((r) => /^[a-f0-9]{24}$/i.test(r)) },
+            })
+              .select("headName payeeName voucherNumber")
+              .lean(),
+            PettyEntry.find({
+              tenantId,
+              _id: { $in: refs.filter((r) => /^[a-f0-9]{24}$/i.test(r)) },
+            })
+              .select("headName payeeName seq")
+              .lean(),
+          ])
+        : [[], []];
+      const pay = new Map(payments.map((p) => [String(p._id), p]));
+      const pet = new Map(petty.map((p) => [String(p._id), p]));
+      const TYPE = {
+        opening: "Opening balance",
+        opening_change: "Opening balance change",
+        transfer: "Transfer",
+        petty_entry: "Petty cash spent",
+        petty_reversal: "Petty cash reversed",
+        petty_topup: "Petty cash topped up (voucher)",
+        petty_topup_reversal: "Petty cash top-up reversed",
+        expense_payment: "Expense paid",
+        payment_reversal: "Expense payment reversed",
+      };
+      return [
+        // One Day Book line per payment, so each account's money is on its own line.
+        ...receipts.flatMap((r) =>
+          splitsOf(r).map((s, i) => ({
+            id: `${r._id}${i ? `-${i}` : ""}`,
+            at: r.issuedAt,
+            date: undefined,
+            type: "Fee receipt",
+            ref: r.number,
+            particulars:
+              `${r.student?.name ?? ""} (${r.student?.admissionNo ?? ""})`.trim(),
+            account:
+              s.mode === "cash"
+                ? "Cash"
+                : (s.bankName ?? "Online (no bank chosen)"),
+            inPaise: s.amountPaise,
+            outPaise: 0,
+          })),
+        ),
+        ...ledger.map((e) => {
+          const p = pay.get(String(e.refId));
+          const q = pet.get(String(e.refId));
+          const who = p
+            ? `${p.headName} - ${p.payeeName}`
+            : q
+              ? `${q.headName ?? ""} - ${q.payeeName}`
+              : (e.note ?? "");
+          return {
+            id: String(e._id),
+            at: e.createdAt,
+            type: TYPE[e.type] ?? e.type,
+            ref: p?.voucherNumber ?? (q ? `Petty #${q.seq}` : (e.note ?? "")),
+            particulars: who,
+            account: label(e.account),
+            inPaise: e.amountPaise > 0 ? e.amountPaise : 0,
+            outPaise: e.amountPaise < 0 ? -e.amountPaise : 0,
+          };
+        }),
+      ];
+    },
   };
 }
+export const REPORT_BEGINNING = BEGINNING;

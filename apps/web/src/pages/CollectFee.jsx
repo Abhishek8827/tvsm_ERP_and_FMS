@@ -8,6 +8,7 @@ import {
   rupeesToPaise,
 } from "@erp/shared";
 import { api, newIdempotencyKey } from "../api/client";
+import { Icon, IconTile } from "../components/Icons";
 import {
   Badge,
   Button,
@@ -40,11 +41,6 @@ function periodLabel(period) {
   const [y, m] = period.split("-");
   return `${MONTHS[Number(m) - 1]} ${y}`;
 }
-const MODES = [
-  { value: "cash", label: "Cash" },
-  { value: "upi", label: "UPI / QR" },
-];
-
 /** Doodle shown before a student is chosen, so the screen is not blank. Drawn inline (no download). */
 function FindStudentArt() {
   return (
@@ -154,7 +150,10 @@ export function CollectFee() {
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-      <h1 className="text-center text-2xl font-semibold text-ink">
+      <h1 className="flex items-center gap-3 text-2xl font-bold text-ink">
+        <span className="text-brand">
+          <Icon name="stack" size={28} />
+        </span>
         Collect Fee
       </h1>
       {preId && pre.isError && (
@@ -168,20 +167,28 @@ export function CollectFee() {
         </p>
       )}
 
-      <Card title="Student" center>
+      <Card title={student ? undefined : "Student"} center={!student}>
         {student ? (
-          <div className="flex flex-col items-center gap-3 text-center">
-            <div>
-              <p className="font-medium text-ink">
-                {student.name}{" "}
-                <span className="text-ink-muted">
-                  · Sch. {student.admissionNo}
-                </span>
+          <div className="flex flex-wrap items-center gap-4">
+            <IconTile name="cap" box="h-16 w-16" size={32} />
+            <div className="min-w-0 flex-1">
+              <p className="flex flex-wrap items-center gap-3 text-xl font-bold uppercase text-ink">
+                {student.name}
+                <Badge tone="success">Active</Badge>
               </p>
-              <p className="text-sm text-ink-muted">
-                Class {classLabel(student.classKey)}
-                {student.section ? ` - ${student.section}` : ""}
-                {student.fatherName ? ` · Father: ${student.fatherName}` : ""}
+              <p className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-muted">
+                <span>Adm. No. {student.admissionNo}</span>
+                <span className="h-4 w-px bg-line" aria-hidden="true" />
+                <span>
+                  Class {classLabel(student.classKey)}
+                  {student.section ? ` - ${student.section}` : ""}
+                </span>
+                {student.fatherName && (
+                  <>
+                    <span className="h-4 w-px bg-line" aria-hidden="true" />
+                    <span>Father: {student.fatherName}</span>
+                  </>
+                )}
               </p>
             </div>
             <Button
@@ -256,27 +263,24 @@ export function CollectFee() {
 
       {student && (
         <>
-          <div
-            role="tablist"
-            aria-label="Fee type"
-            className="flex justify-center gap-2"
-          >
+          <div role="tablist" aria-label="Fee type" className="flex gap-3">
             {[
-              ["school", "School Fees"],
-              ["transport", "Transport Fees"],
-            ].map(([k, label]) => (
+              ["school", "School Fees", "cap"],
+              ["transport", "Transport Fees", "bus"],
+            ].map(([k, label, icon]) => (
               <button
                 key={k}
                 type="button"
                 role="tab"
                 aria-selected={kind === k}
                 onClick={() => setKind(k)}
-                className={`min-h-10 rounded-lg px-4 text-sm font-medium ${
+                className={`inline-flex min-h-12 items-center gap-2 rounded-xl px-5 text-sm font-semibold transition ${
                   kind === k
-                    ? "bg-brand text-white"
-                    : "border border-line bg-surface text-ink"
+                    ? "bg-brand text-white shadow-glow"
+                    : "glass border border-line text-ink hover:shadow-lift"
                 }`}
               >
+                <Icon name={icon} size={20} />
                 {label}
               </button>
             ))}
@@ -302,24 +306,22 @@ function CollectForm({ student, kind }) {
   });
   // One key per open form: a double click or a retry can never make two receipts (rule 5).
   const keyRef = useRef(newIdempotencyKey());
+  // null = "take the value the system worked out" (what is due today). Typing replaces it.
   const [f, setF] = useState({
-    old: "",
-    current: "",
-    admission: "",
-    form: "",
+    old: null,
+    current: null,
+    admission: null,
+    form: null,
     tc: "",
     other: "",
     otherNote: "",
     late: null, // null = take the calculated late fee
     lateRemark: "",
-    mode: "cash",
-    received: "",
-    reference: "",
-    bankId: "", // '' = use the bank the Admin set as default for this mode
-    // Split payment: one receipt paid with cash + one or more UPI / QR parts.
-    split: false,
-    cashPart: "",
-    upiParts: [{ amount: "", bankId: "", reference: "" }],
+    // How the parent pays. Cash and UPI / QR can both be on: that is a split receipt.
+    useCash: true,
+    cashAmt: null, // null = whatever is left after the typed amounts
+    useUpi: false,
+    upiParts: [{ amount: null, bankId: "", reference: "" }],
   });
   const [fieldErrors, setFieldErrors] = useState({});
   const set = (patch) => setF((p) => ({ ...p, ...patch }));
@@ -330,9 +332,28 @@ function CollectForm({ student, kind }) {
   const curHead = kind === "school" ? "tuition" : "transport";
   const lateCalc = d?.lateFeeCalculatedPaise ?? 0;
 
+  // What is due today, per fee head: this is what the amount boxes start with.
+  const dueTodayOf = (head) =>
+    (d?.instalments ?? [])
+      .filter((i) => i.isDue || i.isOverdue)
+      .flatMap((i) => i.items ?? [])
+      .filter((x) => x.head === head)
+      .reduce((n, x) => n + x.due, 0);
+  const rupees = (paise) =>
+    paise > 0 ? paiseToRupeesString(paise).replace(/\.00$/, "") : "";
+  const defaults = {
+    old: rupees(rem[oldHead] ?? 0),
+    current: rupees(dueTodayOf(curHead)),
+    admission: rupees(rem.admission ?? 0),
+    form: rupees(rem.form ?? 0),
+    tc: "",
+    other: "",
+  };
+  const eff = (key) => f[key] ?? defaults[key];
+
   // Amount boxes are typed in rupees. A bad box makes the total unknown and blocks Collect.
   const parse = (v) => {
-    if (v.trim() === "") return { paise: 0 };
+    if (String(v).trim() === "") return { paise: 0 };
     try {
       const paise = rupeesToPaise(v);
       return paise < 0 ? { error: "Cannot be negative" } : { paise };
@@ -341,12 +362,12 @@ function CollectForm({ student, kind }) {
     }
   };
   const p = {
-    old: parse(f.old),
-    current: parse(f.current),
-    admission: parse(f.admission),
-    form: parse(f.form),
-    tc: parse(f.tc),
-    other: parse(f.other),
+    old: parse(eff("old")),
+    current: parse(eff("current")),
+    admission: parse(eff("admission")),
+    form: parse(eff("form")),
+    tc: parse(eff("tc")),
+    other: parse(eff("other")),
     late: f.late === null ? { paise: lateCalc } : parse(f.late),
   };
   const bad = Object.values(p).some((x) => x.error);
@@ -360,59 +381,78 @@ function CollectForm({ student, kind }) {
       p.tc.paise +
       p.other.paise +
       p.late.paise;
-  const needsRef = f.mode !== "cash" && !f.split;
+
+  // ----- how it is paid -----
   // UPI / QR money lands in a bank account: the Cashier picks it (the Admin's default is preselected).
   const banks = useQuery({
     queryKey: ["banks", "options"],
     queryFn: () => api("/api/banks/options"),
-    enabled: needsRef || f.split,
+    enabled: f.useUpi,
   });
   const bankList = banks.data?.banks ?? [];
   const defaultBank =
     bankList.find((b) => b.defaultForModes.includes("upi"))?.id || "";
-  const bankId =
-    f.bankId ||
-    bankList.find((b) => b.defaultForModes.includes(f.mode))?.id ||
-    "";
-  // Split payment parts (amounts are typed in rupees, like every other box on this screen).
-  const cashSplit = parse(f.cashPart);
-  const upiSplit = f.upiParts.map((u) => ({
-    ...u,
-    amt: parse(u.amount),
-    bank: u.bankId || defaultBank,
-  }));
-  const splitBad =
-    f.split && (cashSplit.error || upiSplit.some((u) => u.amt.error));
-  const splitSum =
-    f.split && !splitBad
-      ? cashSplit.paise + upiSplit.reduce((n, u) => n + u.amt.paise, 0)
-      : 0;
-  const splitLeft =
-    f.split && total !== null && !splitBad ? total - splitSum : null;
   const setPart = (i, patch) =>
     set({
       upiParts: f.upiParts.map((u, j) => (j === i ? { ...u, ...patch } : u)),
     });
-  const splitMissing =
-    (splitBad && "Enter valid amounts in the payment boxes.") ||
-    (splitLeft !== null &&
-      splitLeft !== 0 &&
-      (splitLeft > 0
-        ? `Payments are short by ${formatINR(splitLeft, { hideZeroPaise: true })}.`
-        : `Payments are more than the total by ${formatINR(-splitLeft, { hideZeroPaise: true })}.`)) ||
-    (upiSplit.some((u) => u.amt.paise > 0 && !u.bank) &&
-      "Choose the bank account for each UPI part.") ||
-    (upiSplit.some((u) => u.amt.paise > 0 && u.reference.trim().length < 4) &&
-      "Enter the UPI / QR reference for each UPI part.") ||
-    null;
+  // Every payment box: typed ones are fixed, the first untyped one takes what is left of the total.
+  const boxes = [
+    ...(f.useCash
+      ? [{ key: "cash", typed: f.cashAmt === null ? null : parse(f.cashAmt) }]
+      : []),
+    ...(f.useUpi
+      ? f.upiParts.map((u, i) => ({
+          key: `u${i}`,
+          typed: u.amount === null ? null : parse(u.amount),
+        }))
+      : []),
+  ];
+  const payBad = boxes.some((b) => b.typed?.error);
+  const typedSum = boxes.reduce(
+    (n, b) => n + (b.typed && !b.typed.error ? b.typed.paise : 0),
+    0,
+  );
+  const autoKey = boxes.find((b) => !b.typed)?.key;
+  const leftOver = total === null || payBad ? 0 : Math.max(0, total - typedSum);
+  const amountOf = (key) => {
+    const b = boxes.find((x) => x.key === key);
+    if (!b) return 0;
+    if (b.typed) return b.typed.error ? 0 : b.typed.paise;
+    return key === autoKey ? leftOver : 0;
+  };
+  const shown = (key, typedText) =>
+    typedText !== null ? typedText : rupees(amountOf(key));
+  const cashPaise = f.useCash ? amountOf("cash") : 0;
+  const upiRows = f.useUpi
+    ? f.upiParts.map((u, i) => ({
+        ...u,
+        paise: amountOf(`u${i}`),
+        bank: u.bankId || defaultBank,
+      }))
+    : [];
+  const upiUsed = upiRows.filter((u) => u.paise > 0);
+  const paidSum = cashPaise + upiRows.reduce((n, u) => n + u.paise, 0);
+  const cashOnly = f.useCash && upiUsed.length === 0;
+  // Cash alone may be more than the total (the parent hands a bigger note): that is "change".
+  const diff = total === null || payBad ? null : paidSum - total;
+  const change = cashOnly && diff !== null && diff > 0 ? diff : 0;
+  const payMismatch = diff !== null && (cashOnly ? diff < 0 : diff !== 0);
+
   const missing =
-    (f.split && splitMissing) ||
-    (needsRef &&
-      !bankId &&
-      "Choose the bank account that received the money.") ||
-    (needsRef &&
-      f.reference.trim().length < 4 &&
-      "Enter the UPI / QR reference number.") ||
+    (!f.useCash &&
+      !f.useUpi &&
+      "Choose how the parent is paying: Cash, UPI / QR, or both.") ||
+    (payBad && "Enter valid amounts in the payment boxes.") ||
+    (total > 0 &&
+      payMismatch &&
+      (diff < 0
+        ? `Payments are short by ${formatINR(-diff, { hideZeroPaise: true })}.`
+        : `Payments are more than the total by ${formatINR(diff, { hideZeroPaise: true })}.`)) ||
+    (upiUsed.some((u) => !u.bank) &&
+      "Choose the bank account for each UPI / QR amount.") ||
+    (upiUsed.some((u) => u.reference.trim().length < 4) &&
+      "Enter the UPI / QR reference for each UPI / QR amount.") ||
     (lateWaived > 0 &&
       f.lateRemark.trim().length < 3 &&
       "Write the reason for reducing the late fee.") ||
@@ -422,6 +462,28 @@ function CollectForm({ student, kind }) {
     null;
   const canSubmit = !bad && total > 0 && !missing;
 
+  // The server gets the legacy single-mode shape when one payment pays it all, else payments[].
+  const paymentBody = () => {
+    if (upiUsed.length === 0) return { mode: "cash" };
+    if (cashPaise === 0 && upiUsed.length === 1)
+      return {
+        mode: "upi",
+        bankId: upiUsed[0].bank,
+        reference: upiUsed[0].reference.trim(),
+      };
+    return {
+      payments: [
+        ...(cashPaise > 0 ? [{ mode: "cash", amountPaise: cashPaise }] : []),
+        ...upiUsed.map((u) => ({
+          mode: "upi",
+          amountPaise: u.paise,
+          bankId: u.bank,
+          reference: u.reference.trim(),
+        })),
+      ],
+    };
+  };
+
   const collect = useMutation({
     mutationFn: () =>
       api("/api/receipts", {
@@ -430,27 +492,7 @@ function CollectForm({ student, kind }) {
         body: {
           studentId: student.id,
           kind,
-          ...(f.split
-            ? {
-                payments: [
-                  ...(cashSplit.paise > 0
-                    ? [{ mode: "cash", amountPaise: cashSplit.paise }]
-                    : []),
-                  ...upiSplit
-                    .filter((u) => u.amt.paise > 0)
-                    .map((u) => ({
-                      mode: "upi",
-                      amountPaise: u.amt.paise,
-                      bankId: u.bank,
-                      reference: u.reference.trim(),
-                    })),
-                ],
-              }
-            : {
-                mode: f.mode,
-                reference: needsRef ? f.reference.trim() : undefined,
-                bankId: needsRef ? bankId : undefined,
-              }),
+          ...paymentBody(),
           input: {
             oldPaise: p.old.paise,
             newPaise: p.current.paise,
@@ -467,10 +509,15 @@ function CollectForm({ student, kind }) {
     onSuccess: async (receipt) => {
       await queryClient.invalidateQueries({ queryKey: ["dues"] });
       await queryClient.invalidateQueries({ queryKey: ["ledger"] });
-      // WHY: Fees Database, dashboards and the receipts list must show this payment at once.
+      // WHY: Fees Database, dashboards, bank and cash balances and the receipts list must show this payment at once.
       await queryClient.invalidateQueries({ queryKey: ["fees-database"] });
       await queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       await queryClient.invalidateQueries({ queryKey: ["receipts"] });
+      await queryClient.invalidateQueries({ queryKey: ["money"] });
+      await queryClient.invalidateQueries({ queryKey: ["cashbook"] });
+      await queryClient.invalidateQueries({ queryKey: ["fee-details"] });
+      await queryClient.invalidateQueries({ queryKey: ["day-close"] });
+      await queryClient.invalidateQueries({ queryKey: ["report"] });
       notify(`Receipt ${receipt.number} created.`, "success");
       navigate(`/receipts/${receipt.id}`, { state: { fresh: true } });
     },
@@ -515,7 +562,7 @@ function CollectForm({ student, kind }) {
       label={label}
       inputMode="decimal"
       placeholder="0"
-      value={f[key]}
+      value={eff(key)}
       hint={
         pending !== undefined
           ? `Pending ${formatINR(pending, { hideZeroPaise: true })}`
@@ -525,24 +572,58 @@ function CollectForm({ student, kind }) {
       onChange={(e) => set({ [key]: e.target.value })}
     />
   );
+  const bankOptions = [
+    {
+      value: "",
+      label: banks.isPending
+        ? "Loading banks..."
+        : bankList.length
+          ? "Choose a bank"
+          : "No bank account yet. Ask the Admin to add one.",
+    },
+    ...bankList.map((b) => ({
+      value: b.id,
+      label: `${b.name}${b.last4 ? ` ••••${b.last4}` : ""}`,
+    })),
+  ];
 
-  // Month rows. Transport always shows the whole year; months with no fee posted yet are "Not due yet".
-  const rows = monthRows(d.instalments, kind, d.fy);
-  const received = f.received.trim() === "" ? null : parse(f.received);
-  const receivedPaise = received && !received.error ? received.paise : null;
-  const shortBy = receivedPaise !== null && total > 0 && receivedPaise < total;
-  const change =
-    receivedPaise !== null && total !== null ? receivedPaise - total : null;
-  const cashShort = f.mode === "cash" && !f.split && shortBy;
-  const blocker =
-    missing || (cashShort && "Amount received is less than the total.") || null;
-  const ready = canSubmit && !cashShort && !(received && received.error);
+  // Month rows: the whole financial year, April to March. Months with no fee posted say so.
+  const rows = monthRows(d.instalments, d.fy, d.asOf);
+  const totalPending = rows.reduce(
+    (n, i) => n + (i.notPosted ? 0 : (i.due ?? 0)),
+    0,
+  );
+  const modeTile = (on, toggle, icon, label) => (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      aria-label={label}
+      onClick={toggle}
+      className={`relative flex min-h-20 flex-col items-center justify-center gap-1 rounded-xl border-2 text-sm font-semibold transition ${
+        on
+          ? "border-brand bg-blue-100 text-brand shadow-glow"
+          : "border-line bg-white text-ink hover:border-blue-400"
+      }`}
+    >
+      {on && (
+        <span className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white">
+          <Icon name="check" size={13} />
+        </span>
+      )}
+      <Icon name={icon} size={24} />
+      {label}
+    </button>
+  );
+  const money = (n) => formatINR(n, { hideZeroPaise: true });
 
   return (
-    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+    <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_440px]">
       <div className="flex min-w-0 flex-col gap-4">
         <Card
-          title={kind === "school" ? "School fees" : "Transport fees"}
+          icon="calendar"
+          title="Fee Schedule"
+          subtitle={`${kind === "school" ? "School fees" : "Transport fees"} · all 12 months, April to March`}
           actions={
             kind === "transport" && !student.usesTransport && !rem[oldHead] ? (
               <Badge tone="warning">Student does not use the bus</Badge>
@@ -555,9 +636,9 @@ function CollectForm({ student, kind }) {
               description="No fees are posted for this student in this year. The Admin posts the fee plan from the student's profile."
             />
           ) : (
-            <div className="overflow-x-auto rounded-card border border-line">
+            <div className="overflow-x-auto rounded-xl border border-line">
               <table className="w-full text-left text-sm">
-                <thead className="bg-app text-xs uppercase text-ink-muted">
+                <thead className="bg-blue-200 text-xs uppercase text-blue-800">
                   <tr>
                     <th className="px-4 py-2 font-medium">Month</th>
                     <th className="px-4 py-2 font-medium">Due date</th>
@@ -582,7 +663,9 @@ function CollectForm({ student, kind }) {
                       </td>
                       <td className="px-4 py-2">
                         {i.notPosted ? (
-                          <Badge>Not due yet</Badge>
+                          <Badge>
+                            {i.past ? "No fee posted" : "Not due yet"}
+                          </Badge>
                         ) : i.due === 0 ? (
                           <Badge tone="success">Paid</Badge>
                         ) : i.isOverdue ? (
@@ -599,41 +682,85 @@ function CollectForm({ student, kind }) {
               </table>
             </div>
           )}
+          {rows.length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-xl bg-blue-100 px-4 py-3">
+              <div>
+                <p className="text-xs text-ink-muted">
+                  Total pending (whole year)
+                </p>
+                <p className="text-xl font-bold text-ink">
+                  {money(totalPending)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-ink-muted">Due till today</p>
+                <p className="text-xl font-bold text-ink">
+                  {money(d.dueNowPaise ?? 0)}
+                </p>
+              </div>
+              <div>
+                <p className="text-xs text-ink-muted">Collecting now</p>
+                <p className="text-xl font-bold text-brand">
+                  {total === null ? "-" : money(total)}
+                </p>
+              </div>
+            </div>
+          )}
           {nothingPending && rows.length > 0 && (
             <p className="mt-3 text-sm text-ink-muted">
-              Everything posted for this year is paid.
+              Everything posted for this year is paid. Parents like this deserve
+              a medal.
             </p>
           )}
         </Card>
+      </div>
 
-        <Card title="Fees to collect" center>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {rem[oldHead] > 0 &&
-              amountBox("old", "Old fees (₹)", rem[oldHead], {
-                field: "oldPaise",
-              })}
-            {amountBox(
-              "current",
-              kind === "school" ? "Tuition fees (₹)" : "Transport fees (₹)",
-              rem[curHead] ?? 0,
-              { field: "newPaise" },
+      <div className="lg:sticky lg:top-4">
+        <Card
+          icon="card"
+          title="Collect & Pay"
+          subtitle="Fees in, receipt out. No haggling, no hide-and-seek."
+        >
+          <div className="flex flex-col gap-4">
+            <p className="rounded-xl bg-blue-200 px-4 py-3 text-2xl font-bold text-brand">
+              Total to collect:{" "}
+              {total === null ? "-" : formatINR(total, { hideZeroPaise: true })}
+            </p>
+            {total === 0 && !nothingPending && (
+              <p className="-mt-2 text-sm text-ink-muted">
+                Zero rupees so far. The school bell is ringing, not the cash
+                box.
+              </p>
             )}
-            {kind === "school" &&
-              rem.admission > 0 &&
-              amountBox("admission", "Admission fees (₹)", rem.admission, {
-                field: "admissionPaise",
-              })}
-            {kind === "school" &&
-              rem.form > 0 &&
-              amountBox("form", "Form fees (₹)", rem.form, {
-                field: "formPaise",
-              })}
-            {kind === "school" &&
-              amountBox("tc", "T.C. (₹)", undefined, { field: "tcPaise" })}
-            {kind === "school" &&
-              amountBox("other", "Other (₹)", undefined, {
-                field: "otherPaise",
-              })}
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {rem[oldHead] > 0 &&
+                amountBox("old", "Old fees (₹)", rem[oldHead], {
+                  field: "oldPaise",
+                })}
+              {amountBox(
+                "current",
+                kind === "school" ? "Tuition fees (₹)" : "Transport fees (₹)",
+                rem[curHead] ?? 0,
+                { field: "newPaise" },
+              )}
+              {kind === "school" &&
+                rem.admission > 0 &&
+                amountBox("admission", "Admission fees (₹)", rem.admission, {
+                  field: "admissionPaise",
+                })}
+              {kind === "school" &&
+                rem.form > 0 &&
+                amountBox("form", "Form fees (₹)", rem.form, {
+                  field: "formPaise",
+                })}
+              {kind === "school" &&
+                amountBox("tc", "T.C. (₹)", undefined, { field: "tcPaise" })}
+              {kind === "school" &&
+                amountBox("other", "Other (₹)", undefined, {
+                  field: "otherPaise",
+                })}
+            </div>
             {kind === "school" && p.other.paise > 0 && (
               <Input
                 label="Other: what is it for?"
@@ -643,208 +770,146 @@ function CollectForm({ student, kind }) {
                 onChange={(e) => set({ otherNote: e.target.value })}
               />
             )}
-          </div>
-          {lateCalc > 0 && (
-            <div className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-2">
-              <Input
-                label="Late fee to charge (₹)"
-                inputMode="decimal"
-                hint={`Calculated ${formatINR(lateCalc, { hideZeroPaise: true })}`}
-                value={f.late === null ? paiseToRupeesString(lateCalc) : f.late}
-                error={p.late.error ?? fieldErrors.lateFeePaise}
-                onChange={(e) => set({ late: e.target.value })}
-              />
-              {lateWaived > 0 && (
+            {lateCalc > 0 && (
+              <div className="grid gap-3 sm:grid-cols-2">
                 <Input
-                  label="Reason for reducing"
-                  required
-                  value={f.lateRemark}
-                  error={fieldErrors.lateFeeRemark}
-                  onChange={(e) => set({ lateRemark: e.target.value })}
-                />
-              )}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <div className="lg:sticky lg:top-4">
-        <Card title="Payment" center>
-          <div className="flex flex-col gap-3">
-            <p className="text-center text-2xl font-semibold text-ink">
-              Total to collect:{" "}
-              {total === null ? "-" : formatINR(total, { hideZeroPaise: true })}
-            </p>
-            <label className="flex items-center gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={f.split}
-                onChange={(e) => set({ split: e.target.checked })}
-              />
-              Pay with more than one mode (split payment)
-            </label>
-            {f.split && (
-              <div className="flex flex-col gap-3 rounded-lg border border-line p-3">
-                <Input
-                  label="Cash amount (₹)"
+                  label="Late fee to charge (₹)"
                   inputMode="decimal"
-                  placeholder="0"
-                  value={f.cashPart}
-                  error={cashSplit.error}
-                  onChange={(e) => set({ cashPart: e.target.value })}
+                  hint={`Calculated ${formatINR(lateCalc, { hideZeroPaise: true })}`}
+                  value={
+                    f.late === null ? paiseToRupeesString(lateCalc) : f.late
+                  }
+                  error={p.late.error ?? fieldErrors.lateFeePaise}
+                  onChange={(e) => set({ late: e.target.value })}
                 />
-                {f.upiParts.map((u, i) => (
-                  <div
-                    key={i}
-                    className="flex flex-col gap-2 border-t border-line pt-3"
-                  >
-                    <Input
-                      label={`UPI / QR amount ${f.upiParts.length > 1 ? i + 1 : ""} (₹)`}
-                      inputMode="decimal"
-                      placeholder="0"
-                      value={u.amount}
-                      error={upiSplit[i].amt.error}
-                      onChange={(e) => setPart(i, { amount: e.target.value })}
-                    />
-                    <Select
-                      label="Bank account"
-                      value={u.bankId || defaultBank}
-                      onChange={(e) => setPart(i, { bankId: e.target.value })}
-                      options={[
-                        {
-                          value: "",
-                          label: banks.isPending
-                            ? "Loading banks..."
-                            : bankList.length
-                              ? "Choose a bank"
-                              : "No bank account yet. Ask the Admin to add one.",
-                        },
-                        ...bankList.map((b) => ({
-                          value: b.id,
-                          label: `${b.name}${b.last4 ? ` ••••${b.last4}` : ""}`,
-                        })),
-                      ]}
-                    />
-                    <Input
-                      label="UPI / QR reference no."
-                      value={u.reference}
-                      onChange={(e) =>
-                        setPart(i, { reference: e.target.value })
-                      }
-                    />
-                    {f.upiParts.length > 1 && (
-                      <Button
-                        variant="secondary"
-                        onClick={() =>
-                          set({
-                            upiParts: f.upiParts.filter((_, j) => j !== i),
-                          })
-                        }
-                      >
-                        Remove this UPI part
-                      </Button>
-                    )}
-                  </div>
-                ))}
-                {f.upiParts.length < 3 && (
-                  <Button
-                    variant="secondary"
-                    onClick={() =>
-                      set({
-                        upiParts: [
-                          ...f.upiParts,
-                          { amount: "", bankId: "", reference: "" },
-                        ],
-                      })
-                    }
-                  >
-                    Add another UPI / QR part
-                  </Button>
-                )}
-                {splitLeft !== null && (
-                  <p
-                    className={`text-sm font-medium ${splitLeft === 0 ? "text-ink" : "text-danger"}`}
-                  >
-                    {splitLeft === 0
-                      ? "Payments match the total."
-                      : splitLeft > 0
-                        ? `Still to assign: ${formatINR(splitLeft, { hideZeroPaise: true })}`
-                        : `Over by: ${formatINR(-splitLeft, { hideZeroPaise: true })}`}
-                  </p>
+                {lateWaived > 0 && (
+                  <Input
+                    label="Reason for reducing"
+                    required
+                    value={f.lateRemark}
+                    error={fieldErrors.lateFeeRemark}
+                    onChange={(e) => set({ lateRemark: e.target.value })}
+                  />
                 )}
               </div>
             )}
-            {!f.split && (
-              <Select
-                label="Payment mode"
-                options={MODES}
-                value={f.mode}
-                onChange={(e) => set({ mode: e.target.value, bankId: "" })}
+
+            <div className="border-t border-line pt-4">
+              <p className="mb-2 text-sm font-semibold text-ink">
+                How is the parent paying?{" "}
+                <span className="font-normal text-ink-muted">
+                  (pick one, or both)
+                </span>
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                {modeTile(
+                  f.useCash,
+                  () => set({ useCash: !f.useCash, cashAmt: null }),
+                  "cash",
+                  "Cash",
+                )}
+                {modeTile(
+                  f.useUpi,
+                  () => set({ useUpi: !f.useUpi }),
+                  "qr",
+                  "UPI / QR",
+                )}
+              </div>
+            </div>
+
+            {f.useCash && (
+              <Input
+                label="Cash amount (₹)"
+                inputMode="decimal"
+                placeholder="0"
+                value={shown("cash", f.cashAmt)}
+                error={boxes.find((b) => b.key === "cash")?.typed?.error}
+                onChange={(e) => set({ cashAmt: e.target.value })}
               />
             )}
-            {f.mode === "cash" && !f.split && (
-              <>
-                <Input
-                  label="Amount received (₹)"
-                  inputMode="decimal"
-                  placeholder="0"
-                  value={f.received}
-                  error={received?.error}
-                  onChange={(e) => set({ received: e.target.value })}
-                />
-                {change !== null && total > 0 && (
-                  <p
-                    className={`text-sm font-medium ${change >= 0 ? "text-ink" : "text-danger"}`}
-                  >
-                    {change >= 0
-                      ? `Change to return: ${formatINR(change, { hideZeroPaise: true })}`
-                      : `Balance due: ${formatINR(-change, { hideZeroPaise: true })}`}
-                  </p>
-                )}
-              </>
+            {f.useUpi &&
+              f.upiParts.map((u, i) => (
+                <div
+                  key={i}
+                  className="flex flex-col gap-3 rounded-xl border border-line bg-blue-100/60 p-3"
+                >
+                  <Select
+                    label={`Bank account${f.upiParts.length > 1 ? ` ${i + 1}` : ""}`}
+                    value={u.bankId || defaultBank}
+                    onChange={(e) => setPart(i, { bankId: e.target.value })}
+                    options={bankOptions}
+                  />
+                  <Input
+                    label={`Bank amount${f.upiParts.length > 1 ? ` ${i + 1}` : ""} (₹)`}
+                    inputMode="decimal"
+                    placeholder="0"
+                    value={shown(`u${i}`, u.amount)}
+                    error={boxes.find((b) => b.key === `u${i}`)?.typed?.error}
+                    onChange={(e) => setPart(i, { amount: e.target.value })}
+                  />
+                  <Input
+                    label="UPI / QR reference no."
+                    value={u.reference}
+                    onChange={(e) => setPart(i, { reference: e.target.value })}
+                  />
+                  {f.upiParts.length > 1 && (
+                    <Button
+                      variant="secondary"
+                      onClick={() =>
+                        set({ upiParts: f.upiParts.filter((_, j) => j !== i) })
+                      }
+                    >
+                      Remove this bank
+                    </Button>
+                  )}
+                </div>
+              ))}
+            {f.useUpi && f.upiParts.length < 3 && (
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  set({
+                    upiParts: [
+                      ...f.upiParts,
+                      { amount: null, bankId: "", reference: "" },
+                    ],
+                  })
+                }
+              >
+                + Add another bank account
+              </Button>
             )}
-            {needsRef && (
-              <>
-                <Select
-                  label="Bank account"
-                  value={bankId}
-                  error={fieldErrors.bankId}
-                  onChange={(e) => set({ bankId: e.target.value })}
-                  options={[
-                    {
-                      value: "",
-                      label: banks.isPending
-                        ? "Loading banks..."
-                        : bankList.length
-                          ? "Choose a bank"
-                          : "No bank account yet. Ask the Admin to add one.",
-                    },
-                    ...bankList.map((b) => ({
-                      value: b.id,
-                      label: `${b.name}${b.last4 ? ` ••••${b.last4}` : ""}`,
-                    })),
-                  ]}
-                />
-                <Input
-                  label="UPI / QR reference no."
-                  required
-                  value={f.reference}
-                  error={fieldErrors.reference}
-                  onChange={(e) => set({ reference: e.target.value })}
-                />
-              </>
+
+            {total > 0 && diff !== null && (
+              <p
+                className={`rounded-xl px-4 py-2 text-sm font-medium ${
+                  payMismatch
+                    ? "bg-red-100 text-danger"
+                    : "bg-green-100 text-success"
+                }`}
+              >
+                {payMismatch
+                  ? diff < 0
+                    ? `${money(-diff)} still missing. Check the other pocket?`
+                    : `${money(diff)} extra. Generous parent, or a typo?`
+                  : change > 0
+                    ? `Change to return: ${money(change)}. Please do not keep it as a tip.`
+                    : "Payments match the total. The accountant is smiling."}
+              </p>
             )}
+
             <Button
+              className="w-full"
               loading={collect.isPending}
-              disabled={!ready}
+              disabled={!canSubmit}
               onClick={() => collect.mutate()}
             >
               {total
-                ? `Collect ${formatINR(total, { hideZeroPaise: true })} and create receipt`
-                : "Collect and create receipt"}
+                ? `Collect ${money(total)} & Generate Receipt`
+                : "Collect & Generate Receipt"}
             </Button>
-            {blocker && total > 0 && (
-              <p className="text-sm text-danger">{blocker}</p>
+            {missing && total > 0 && (
+              <p className="text-sm text-danger">{missing}</p>
             )}
           </div>
         </Card>
@@ -853,18 +918,27 @@ function CollectForm({ student, kind }) {
   );
 }
 
-/** Month rows for the dues table. Transport lists all 12 months of the year; unposted ones are "Not due yet". */
-function monthRows(instalments, kind, fy) {
-  if (kind !== "transport" || !/^\d{4}-\d{2}$/.test(fy ?? ""))
-    return instalments;
+/**
+ * Month rows for the dues table: the whole financial year, April to March, for school and transport.
+ * A month with no fee posted is "Not due yet" when it is still to come and "No fee posted" when it has passed.
+ */
+function monthRows(instalments, fy, asOf) {
+  if (!/^\d{4}-\d{2}$/.test(fy ?? "")) return instalments;
   const start = Number(fy.slice(0, 4));
   const byPeriod = new Map(instalments.map((i) => [i.period, i]));
+  const nowPeriod = /^\d{4}-\d{2}/.test(asOf ?? "") ? asOf.slice(0, 7) : null;
   const rows = [];
   for (let n = 0; n < 12; n += 1) {
     const month = ((3 + n) % 12) + 1; // April first
     const year = month >= 4 ? start : start + 1;
     const period = `${year}-${String(month).padStart(2, "0")}`;
-    rows.push(byPeriod.get(period) ?? { period, notPosted: true });
+    rows.push(
+      byPeriod.get(period) ?? {
+        period,
+        notPosted: true,
+        past: nowPeriod !== null && period < nowPeriod,
+      },
+    );
   }
   // Old-fee / one-time rows stay visible too.
   const extra = instalments.filter(

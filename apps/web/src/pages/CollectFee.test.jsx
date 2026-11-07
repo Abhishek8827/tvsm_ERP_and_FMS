@@ -147,7 +147,8 @@ describe("Collect Fee", () => {
     show();
     await pickStudent();
     await userEvent.type(await screen.findByLabelText(/Tuition fees/), "1000");
-    await userEvent.selectOptions(screen.getByLabelText("Payment mode"), "upi");
+    await userEvent.click(screen.getByRole("checkbox", { name: "Cash" })); // cash off
+    await userEvent.click(screen.getByRole("checkbox", { name: "UPI / QR" })); // UPI on
     expect(screen.getByRole("button", { name: /Collect/ })).toBeDisabled();
     await userEvent.type(
       screen.getByLabelText(/UPI \/ QR reference/),
@@ -167,7 +168,7 @@ describe("Collect Fee", () => {
     });
   });
 
-  it("split payment: cash + UPI must add up to the total, then posts payments[]", async () => {
+  it("cash + UPI (no checkbox): the UPI box takes what cash leaves, must add up, then posts payments[]", async () => {
     api.mockImplementation(async (url) => {
       if (String(url).startsWith("/api/students?")) return { rows: [student] };
       if (url === "/api/banks/options") return banksReply();
@@ -178,21 +179,27 @@ describe("Collect Fee", () => {
     show();
     await pickStudent();
     await userEvent.type(await screen.findByLabelText(/Tuition fees/), "3500");
-    await userEvent.click(screen.getByLabelText(/more than one mode/));
+    await userEvent.click(screen.getByRole("checkbox", { name: "UPI / QR" }));
+    await userEvent.clear(screen.getByLabelText(/Cash amount/));
     await userEvent.type(screen.getByLabelText(/Cash amount/), "2000");
-    await userEvent.type(screen.getByLabelText(/UPI \/ QR amount/), "1000");
+    // The bank box fills itself with the rest.
+    expect(screen.getByLabelText(/Bank amount/)).toHaveValue("1500");
     await userEvent.type(
       screen.getByLabelText(/UPI \/ QR reference/),
       "UTR123456",
     );
-    expect(
-      await screen.findByText(/Still to assign: ₹500/),
-    ).toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(screen.getByLabelText("Bank account")).toHaveValue("b1"),
+    );
+    // A typed bank amount that does not add up is refused.
+    await userEvent.clear(screen.getByLabelText(/Bank amount/));
+    await userEvent.type(screen.getByLabelText(/Bank amount/), "1000");
+    expect(await screen.findByText(/₹500 still missing/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Collect/ })).toBeDisabled();
-    await userEvent.clear(screen.getByLabelText(/UPI \/ QR amount/));
-    await userEvent.type(screen.getByLabelText(/UPI \/ QR amount/), "1500");
+    await userEvent.clear(screen.getByLabelText(/Bank amount/));
+    await userEvent.type(screen.getByLabelText(/Bank amount/), "1500");
     expect(
-      await screen.findByText("Payments match the total."),
+      await screen.findByText(/Payments match the total/),
     ).toBeInTheDocument();
     await vi.waitFor(() =>
       expect(screen.getByRole("button", { name: /Collect/ })).toBeEnabled(),
@@ -212,6 +219,45 @@ describe("Collect Fee", () => {
     ]);
   });
 
+  it('there is no split checkbox and no separate "Payment Details" window any more', async () => {
+    api.mockImplementation(async (url) =>
+      String(url).startsWith("/api/students?") ? { rows: [student] } : dues(),
+    );
+    show();
+    await pickStudent();
+    await screen.findByLabelText(/Tuition fees/);
+    expect(screen.queryByLabelText(/more than one mode/)).toBeNull();
+    expect(screen.queryByText("Payment Details")).toBeNull();
+    expect(screen.queryByText("Fees to collect")).toBeNull();
+    expect(screen.getByText("Collect & Pay")).toBeInTheDocument();
+  });
+
+  it("the amount boxes start with what is due today (old fees + due months), and can be lowered", async () => {
+    api.mockImplementation(
+      async (url) =>
+      String(url).startsWith('/api/students?')
+        ? { rows: [student] }
+        : dues({
+            remaining: { tuition: 450000, old_fees: 200000 },
+            dueNowPaise: 300000,
+            instalments: [
+              { period: '2026-06', dueDate: '2026-06-15', due: 150000, isDue: false, isOverdue: true, items: [{ head: 'tuition', due: 150000 }] },
+              { period: '2026-07', dueDate: '2026-07-15', due: 150000, isDue: true, isOverdue: false, items: [{ head: 'tuition', due: 150000 }] },
+              { period: '2026-08', dueDate: '2026-08-15', due: 150000, isDue: false, isOverdue: false, items: [{ head: 'tuition', due: 150000 }] },
+            ],
+          }), // prettier-ignore
+    );
+    show();
+    await pickStudent();
+    expect(await screen.findByLabelText(/Tuition fees/)).toHaveValue("3000");
+    expect(screen.getByLabelText(/Old fees/)).toHaveValue("2000");
+    expect(screen.getByText("Total to collect: ₹5,000")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Cash amount/)).toHaveValue("5000");
+    await userEvent.clear(screen.getByLabelText(/Tuition fees/));
+    await userEvent.type(screen.getByLabelText(/Tuition fees/), "1500");
+    expect(screen.getByText("Total to collect: ₹3,500")).toBeInTheDocument();
+  });
+
   it("without a default bank the Cashier must choose one for UPI / QR", async () => {
     api.mockImplementation(async (url) => {
       if (String(url).startsWith("/api/students?")) return { rows: [student] };
@@ -221,7 +267,8 @@ describe("Collect Fee", () => {
     show();
     await pickStudent();
     await userEvent.type(await screen.findByLabelText(/Tuition fees/), "1000");
-    await userEvent.selectOptions(screen.getByLabelText("Payment mode"), "upi");
+    await userEvent.click(screen.getByRole("checkbox", { name: "Cash" }));
+    await userEvent.click(screen.getByRole("checkbox", { name: "UPI / QR" }));
     await userEvent.type(
       screen.getByLabelText(/UPI \/ QR reference/),
       "QR12345678",
@@ -292,21 +339,37 @@ describe("Collect Fee", () => {
       await screen.findByText(/Old fees are still pending/),
     ).toBeInTheDocument();
   });
-  it("cash: shows change when the parent pays more and blocks Collect when less is received", async () => {
+  it("cash: shows change when the parent pays more and blocks Collect when less is given", async () => {
     api.mockImplementation(async (url) =>
       String(url).startsWith("/api/students?") ? { rows: [student] } : dues(),
     );
     show();
     await pickStudent();
     await userEvent.type(await screen.findByLabelText(/Tuition fees/), "1000");
-    const received = screen.getByLabelText(/Amount received/);
-    await userEvent.type(received, "1500");
-    expect(screen.getByText("Change to return: ₹500")).toBeInTheDocument();
+    const cash = screen.getByLabelText(/Cash amount/);
+    await userEvent.clear(cash);
+    await userEvent.type(cash, "1500");
+    expect(screen.getByText(/Change to return: ₹500/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Collect/ })).toBeEnabled();
-    await userEvent.clear(received);
-    await userEvent.type(received, "800");
-    expect(screen.getByText("Balance due: ₹200")).toBeInTheDocument();
+    await userEvent.clear(cash);
+    await userEvent.type(cash, "800");
+    expect(screen.getByText(/₹200 still missing/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Collect/ })).toBeDisabled();
+  });
+
+  it('school also shows all 12 months; passed months with no fee say "No fee posted"', async () => {
+    api.mockImplementation(async (url) =>
+      String(url).startsWith("/api/students?")
+        ? { rows: [student] }
+        : dues({ asOf: "2026-11-06" }),
+    );
+    show();
+    await pickStudent();
+    await screen.findByLabelText(/Tuition fees/);
+    expect(screen.getByText("Apr 2026")).toBeInTheDocument();
+    expect(screen.getByText("Mar 2027")).toBeInTheDocument();
+    expect(screen.getAllByText("No fee posted")).toHaveLength(6); // Apr-May and Jul-Oct
+    expect(screen.getAllByText("Not due yet")).toHaveLength(5); // Nov-Mar
   });
 
   it('transport shows all 12 months; months with no fee posted are "Not due yet"', async () => {

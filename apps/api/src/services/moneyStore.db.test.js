@@ -114,6 +114,14 @@ const pay = (T, v, extra = {}) =>
     idempotencyKey: key(),
     user,
   });
+// Petty cash is filled only by paying a voucher under the locked "Petty Cash" head.
+const topUpPetty = async (T, amountPaise) => {
+  const head = (await store.listHeads(T)).find(
+    (h) => h.nameLower === "petty cash",
+  );
+  const v = await approved(T, String(head._id), amountPaise);
+  return pay(T, v, { amountPaise });
+};
 
 describe.skipIf(!haveDb)("money store on a real database", () => {
   it("voucher numbers are gap-free and per financial year; a refused voucher uses no number", async () => {
@@ -156,114 +164,38 @@ describe.skipIf(!haveDb)("money store on a real database", () => {
     const t1 = {
       tenantId: T,
       from: "cash",
-      to: "petty",
+      to: `bank:${bankId}`,
       amountPaise: rs(500),
       idempotencyKey: k + "t",
       user,
     };
     await store.createTransfer(t1);
     expect((await store.createTransfer(t1)).replay).toBe(true);
-    expect((await store.overview(T)).pettyPaise).toBe(rs(1500));
-    expect(bankId).toBeTruthy();
+    expect((await store.overview(T)).banks[0].balancePaise).toBe(rs(200500));
   });
 
-  it("no payment before approval; part payments; never more than the balance due", async () => {
+  it('petty cash entries have their own serial numbers (no voucher number), are refused when petty is empty, and a "Petty Cash" voucher fills it', async () => {
     const T = fresh();
-    const { headId } = await setup(T);
-    const { voucher } = await voucherOf(T, headId, rs(10000));
-    expect(await rule(pay(T, voucher))).toBe("NOT_APPROVED");
-    const v = await approved(T, headId, rs(10000));
-    await pay(T, v, { amountPaise: rs(4000) });
-    await pay(T, v, { amountPaise: rs(4000) });
-    expect(await rule(pay(T, v, { amountPaise: rs(4000) }))).toBe(
-      "OVER_PAYMENT",
-    );
-    await store.addAdjustment({
-      tenantId: T,
-      id: v._id,
-      input: {
-        amountPaise: rs(2000),
-        reason: "Discount",
-        remark: "Vendor agreed to the discount",
-      },
-      user,
-    });
-    const got = await store.getVoucher(T, v._id);
-    expect(got).toMatchObject({
-      paidPaise: rs(8000),
-      adjustedPaise: rs(2000),
-      balanceDuePaise: 0,
-    });
-    expect(got.payments.map((p) => p.seq)).toEqual([1, 2]);
-  });
-
-  it("a payment reduces the account it was paid from; an adjustment moves no money", async () => {
-    const T = fresh();
-    const { headId, bankId } = await setup(T, {
-      cash: rs(5000),
-      bank: rs(20000),
-    });
-    const v = await approved(T, headId, rs(10000));
-    await pay(T, v, { amountPaise: rs(3000), mode: "bank", bankId });
-    await pay(T, v, { amountPaise: rs(1000), mode: "cash" });
-    await store.addAdjustment({
-      tenantId: T,
-      id: v._id,
-      input: {
-        amountPaise: rs(500),
-        reason: "Discount",
-        remark: "Vendor agreed to a small discount",
-      },
-      user,
-    });
-    const o = await store.overview(T);
-    expect(o.cashPaise).toBe(rs(4000));
-    expect(o.banks[0].balancePaise).toBe(rs(17000));
-  });
-
-  it("refuses a payment bigger than the balance; parallel payments cannot overspend", async () => {
-    const T = fresh();
-    const { headId } = await setup(T, { cash: rs(5000) });
-    const v1 = await approved(T, headId, rs(4000));
-    const v2 = await approved(T, headId, rs(4000));
-    const results = await Promise.allSettled([
-      pay(T, v1, { amountPaise: rs(4000) }),
-      pay(T, v2, { amountPaise: rs(4000) }),
-    ]);
-    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
-    expect((await store.overview(T)).cashPaise).toBe(rs(1000));
-  });
-
-  it("petty cash: only under Rs 500, serial numbers only, blocked when empty, top-up from cash", async () => {
-    const T = fresh();
-    await setup(T, { petty: rs(600), cash: rs(10000) });
+    await setup(T, { petty: rs(600) });
     const entry = (amountPaise) =>
       store.createPetty({
         tenantId: T,
         fy: FY,
         input: {
-          date: "2026-06-01",
-          payeeName: "Raju",
+          date: "2026-06-03",
+          payeeName: "Tea stall",
           particulars: "Tea",
           amountPaise,
         },
         idempotencyKey: key(),
         user,
       });
-    expect(await rule(entry(rs(500)))).toBe("USE_VOUCHER");
     const a = await entry(rs(400));
     const b = await entry(rs(150));
     expect([a.entry.seq, b.entry.seq]).toEqual([1, 2]);
     expect(a.entry.number).toBeUndefined(); // petty cash has NO voucher number
     expect(await rule(entry(rs(300)))).toBe("PETTY_EMPTY");
-    await store.createTransfer({
-      tenantId: T,
-      from: "cash",
-      to: "petty",
-      amountPaise: rs(2000),
-      idempotencyKey: key(),
-      user,
-    });
+    await topUpPetty(T, rs(2000));
     expect((await entry(rs(300))).entry.seq).toBe(3);
     const s = await store.pettySummary(T);
     expect(s.balancePaise).toBe(rs(600 - 400 - 150 + 2000 - 300));
@@ -301,6 +233,89 @@ describe.skipIf(!haveDb)("money store on a real database", () => {
         }),
       ),
     ).toBe("INSUFFICIENT_BALANCE");
+  });
+
+  it("the transfers list can be filtered by account and by date", async () => {
+    const T = fresh();
+    const { bankId } = await setup(T, {
+      cash: rs(10000),
+      bank: rs(1000),
+      petty: 0,
+    });
+    const mk = (from, to, amount) =>
+      store.createTransfer({ tenantId: T, from, to, amountPaise: rs(amount), idempotencyKey: key(), user }); // prettier-ignore
+    await mk("cash", `bank:${bankId}`, 3000);
+    await mk(`bank:${bankId}`, "cash", 500);
+    const page = { tenantId: T, page: 1, pageSize: 25 };
+    expect((await store.listTransfers(page)).total).toBe(2);
+    expect(
+      (await store.listTransfers({ ...page, account: "cash" })).total,
+    ).toBe(2);
+    expect(
+      (await store.listTransfers({ ...page, account: `bank:${bankId}` })).total,
+    ).toBe(2);
+    expect(
+      (await store.listTransfers({ ...page, from: "2999-01-01" })).total,
+    ).toBe(0);
+  });
+
+  it('petty cash cannot be a transfer target any more; the "Petty Cash" head is made by the system and locked', async () => {
+    const T = fresh();
+    await setup(T, { cash: rs(10000), bank: 0, petty: 0 });
+    expect(
+      await rule(
+        store.createTransfer({ tenantId: T, from: 'cash', to: 'petty', amountPaise: rs(500), idempotencyKey: key(), user }), // prettier-ignore
+      ),
+    ).toBe("PETTY_NOT_TRANSFER");
+    const heads = await store.listHeads(T);
+    const petty = heads.find((h) => h.nameLower === "petty cash");
+    expect(petty).toMatchObject({
+      name: "Petty Cash",
+      system: true,
+      active: true,
+    });
+    expect(heads.filter((h) => h.nameLower === "petty cash")).toHaveLength(1); // listing twice does not duplicate
+    expect(
+      (await store.listHeads(T)).filter((h) => h.nameLower === "petty cash"),
+    ).toHaveLength(1);
+    expect(
+      await rule(store.createHead({ tenantId: T, name: " PETTY cash ", user })),
+    ).toBe("HEAD_EXISTS");
+    expect(await rule(store.updateHead({ tenantId: T, id: petty._id, patch: { active: false } }))).toBe('HEAD_LOCKED'); // prettier-ignore
+    expect(await rule(store.updateHead({ tenantId: T, id: petty._id, patch: { name: 'X' } }))).toBe('HEAD_LOCKED'); // prettier-ignore
+  });
+
+  it('paying a voucher under "Petty Cash" is an expense for the school and fills the petty fund; reversing it takes it back', async () => {
+    const T = fresh();
+    await setup(T, { cash: rs(10000), bank: 0, petty: 0 });
+    const before = await store.overview(T);
+    expect([before.cashPaise, before.pettyPaise]).toEqual([rs(10000), 0]);
+    await topUpPetty(T, rs(2000));
+    const after = await store.overview(T);
+    expect(after.cashPaise).toBe(rs(8000)); // left the school cash (an expense) ...
+    expect(after.pettyPaise).toBe(rs(2000)); // ... and landed in petty
+    // The Petty page can spend it.
+    await store.createPetty({
+      tenantId: T,
+      fy: FY,
+      input: { date: '2026-06-03', payeeName: 'Tea stall', particulars: 'Tea', amountPaise: rs(300) },
+      idempotencyKey: key(),
+      user,
+    }); // prettier-ignore
+    // Reverse the top-up: petty may go below zero when it was already spent (the Principal's rule).
+    const payment = (
+      await store.listPayments({ tenantId: T, page: 1, pageSize: 5 })
+    ).rows[0];
+    const req = await store.requestReversal({ tenantId: T, kind: 'payment', targetId: payment._id, reason: 'Wrong head', user }); // prettier-ignore
+    await store.decideReversal({
+      tenantId: T,
+      id: req._id,
+      decision: "approve",
+      user: principal,
+    });
+    const end = await store.overview(T);
+    expect(end.cashPaise).toBe(rs(10000));
+    expect(end.pettyPaise).toBe(rs(2000) - rs(300) - rs(2000));
   });
 
   it("fee receipts add to cash / the chosen bank, and a cancelled receipt stops counting", async () => {

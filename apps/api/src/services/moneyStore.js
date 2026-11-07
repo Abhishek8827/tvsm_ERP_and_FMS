@@ -140,6 +140,27 @@ const dateRange = (field, from, to) =>
     ? { [field]: { ...(from && { $gte: from }), ...(to && { $lte: to }) } }
     : {};
 
+const PETTY_HEAD = "petty cash";
+const isPettyHeadName = (name) =>
+  String(name ?? "")
+    .trim()
+    .toLowerCase() === PETTY_HEAD;
+/** The one locked head that fills the petty fund. Made once per school; an old hand-made one is locked too. */
+async function ensurePettyHead(tenantId) {
+  try {
+    await ExpenseHead.updateOne(
+      { tenantId, nameLower: PETTY_HEAD },
+      {
+        $set: { system: true },
+        $setOnInsert: { name: "Petty Cash", active: true },
+      },
+      { upsert: true },
+    );
+  } catch (err) {
+    if (!isDuplicateKey(err)) throw err; // two screens opened at once: the other one made it
+  }
+}
+
 export function makeMoneyStore() {
   return {
     computeBalances,
@@ -353,11 +374,19 @@ export function makeMoneyStore() {
     },
 
     // ---------- expense heads ----------
-    listHeads: (tenantId, { onlyActive = false } = {}) =>
-      ExpenseHead.find({ tenantId, ...(onlyActive && { active: true }) })
+    async listHeads(tenantId, { onlyActive = false } = {}) {
+      await ensurePettyHead(tenantId);
+      return ExpenseHead.find({ tenantId, ...(onlyActive && { active: true }) })
         .sort({ nameLower: 1 })
-        .lean(),
+        .lean();
+    },
     async createHead({ tenantId, name, user, audit }) {
+      if (name.trim().toLowerCase() === PETTY_HEAD)
+        fail(
+          "HEAD_EXISTS",
+          'The "Petty Cash" head is made by the system already.',
+          "name",
+        );
       try {
         const head = await ExpenseHead.create({
           tenantId,
@@ -374,6 +403,21 @@ export function makeMoneyStore() {
       }
     },
     async updateHead({ tenantId, id, patch, audit }) {
+      const current = await ExpenseHead.findOne({ tenantId, _id: id }).lean();
+      if (current && (current.system || current.nameLower === PETTY_HEAD))
+        fail(
+          "HEAD_LOCKED",
+          'The "Petty Cash" head is made by the system and cannot be changed.',
+        );
+      if (
+        patch.name !== undefined &&
+        patch.name.trim().toLowerCase() === PETTY_HEAD
+      )
+        fail(
+          "HEAD_EXISTS",
+          'The name "Petty Cash" is kept for the system head.',
+          "name",
+        );
       const set = {};
       if (patch.name !== undefined) {
         set.name = patch.name.trim();
@@ -704,6 +748,19 @@ export function makeMoneyStore() {
               refId: String(payment._id),
               note: voucher.number,
             },
+            // Paid under the "Petty Cash" head: the money leaves the school fund (an expense) and
+            // lands in the petty fund in the same step.
+            ...(isPettyHeadName(voucher.headName)
+              ? [
+                  {
+                    account: "petty",
+                    amountPaise: input.amountPaise,
+                    type: "petty_topup",
+                    refId: String(payment._id),
+                    note: voucher.number,
+                  },
+                ]
+              : []),
           ]),
           { session, ordered: true },
         );
@@ -834,6 +891,18 @@ export function makeMoneyStore() {
                   refId: String(p._id),
                   note: `Reversal of ${p.voucherNumber}`,
                 },
+                // The petty top-up goes back too. If petty cash was already spent it may go below zero.
+                ...(isPettyHeadName(p.headName)
+                  ? [
+                      {
+                        account: "petty",
+                        amountPaise: -p.amountPaise,
+                        type: "petty_topup_reversal",
+                        refId: String(p._id),
+                        note: `Reversal of ${p.voucherNumber}`,
+                      },
+                    ]
+                  : []),
               ]),
               { session, ordered: true },
             );
@@ -1021,6 +1090,12 @@ export function makeMoneyStore() {
           .session(session)
           .lean();
         if (done.length) return { transferId: idempotencyKey, replay: true };
+        if (from === "petty" || to === "petty")
+          fail(
+            "PETTY_NOT_TRANSFER",
+            'Petty cash is filled by paying a voucher under the "Petty Cash" head, not by a transfer.',
+            "to",
+          );
         for (const key of [from, to]) {
           if (key.startsWith("bank:")) {
             const bank = await BankAccount.findOne({
@@ -1069,8 +1144,39 @@ export function makeMoneyStore() {
         return { ...result, replay: false };
       });
     },
-    async listTransfers({ tenantId, page, pageSize }) {
+    async listTransfers({
+      tenantId,
+      page,
+      pageSize,
+      from: fromDate,
+      to: toDate,
+      account,
+      scope,
+    }) {
       const match = { tenantId, type: "transfer", amountPaise: { $lt: 0 } };
+      if (fromDate || toDate)
+        match.entryDate = {
+          ...(fromDate && { $gte: fromDate }),
+          ...(toDate && { $lte: toDate }),
+        };
+      // Both legs of a transfer share a transferId, so "touches this account" and "involves petty
+      // cash" are answered by looking at the other leg too.
+      if (account) {
+        const hit = await LedgerEntry.distinct("transferId", {
+          tenantId,
+          type: "transfer",
+          account,
+        });
+        match.transferId = { $in: hit };
+      }
+      if (scope === "school") {
+        const petty = await LedgerEntry.distinct("transferId", {
+          tenantId,
+          type: "transfer",
+          account: "petty",
+        });
+        match.transferId = { ...match.transferId, $nin: petty };
+      }
       const [outs, total] = await Promise.all([
         LedgerEntry.find(match)
           .sort({ createdAt: -1 })
